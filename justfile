@@ -11,7 +11,7 @@ default:
     just --list
 
 [group('meta')]
-verify: fmt-check haskell-build plan-check cohort-check haskell-test schemas-check selftest
+verify: fmt-check haskell-build plan-check cohort-check graph-check haskell-test schemas-check selftest
 
 # Fails when Cabal's resolved plan contains a consumer layer package. The
 # generic packages must build without any of them.
@@ -20,6 +20,10 @@ plan-check:
     cabal build all --dry-run >/dev/null
     jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | sort -u | grep -E '^kenshou-'
     ! jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | grep -qE '^kenshou-(pgmq|kiroku|shibuya|kafka|keiro|runtime)$'
+
+[group('verification')]
+graph-check:
+    cabal run -v0 kenshou -- plan --graph-check
 
 [group('verification')]
 schemas-check:

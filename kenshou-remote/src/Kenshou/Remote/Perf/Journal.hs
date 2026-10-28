@@ -25,6 +25,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime, addUTCTime, diffUTCTime)
 import Kenshou.Core.Id (RunId)
+import Kenshou.Perf.Contracts (PerfContracts)
 import Kenshou.Perf.Plan
 import Kenshou.Perf.Prepared qualified as Prepared
 import Kenshou.Perf.Request (PerfRequest (..), strictObject)
@@ -92,9 +93,9 @@ initialSession identifier digest plan uri now = do
     Success _ -> pure ()
   pure (PerfSession identifier digest plan uri now [] Nothing)
 
-validateSessionInputs :: Prepared.PerfPrepared -> PerfSession -> Either Text ()
-validateSessionInputs prepared session = do
-  Prepared.validatePrepared prepared
+validateSessionInputs :: PerfContracts -> Prepared.PerfPrepared -> PerfSession -> Either Text ()
+validateSessionInputs contracts prepared session = do
+  Prepared.validatePrepared contracts prepared
   unless
     (session.preparedSha256 == Prepared.preparedDigest prepared && toJSON session.plan == toJSON prepared.plan)
     (Left "session inputs differ from the verified immutable preparation")

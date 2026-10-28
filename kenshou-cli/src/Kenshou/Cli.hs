@@ -1,7 +1,8 @@
 module Kenshou.Cli
   ( mainWith,
     runWithArgsWith,
-    CliAssembly (..),
+    CliAssembly,
+    Program (..),
     selfTestBundles,
     standardCommands,
     standardTopics,
@@ -10,4 +11,4 @@ module Kenshou.Cli
 where
 
 import Kenshou.Cli.Main (mainWith, runWithArgsWith)
-import Kenshou.Cli.Registry (CliAssembly (..), selfTestAssembly, selfTestBundles, standardCommands, standardTopics)
+import Kenshou.Cli.Registry (CliAssembly, Program (..), selfTestAssembly, selfTestBundles, standardCommands, standardTopics)

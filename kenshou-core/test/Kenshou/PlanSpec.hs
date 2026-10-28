@@ -7,6 +7,7 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Kenshou.ConsumerBaseline (consumerGraph)
 import Kenshou.Core.Dimension
 import Kenshou.Core.Id (Kind (..), mkSeed, parseRunId, parseScenarioId, renderScenarioId)
 import Kenshou.Core.Outcome (Outcome (..))
@@ -50,10 +51,10 @@ spec = do
 
   describe "Kenshou.Plan.Components" do
     it "validates the embedded graph" do
-      graph <- expectRight embeddedGraph
+      graph <- consumerGraph >>= expectRight
       validateGraph graph `shouldBe` []
     it "computes the pgmq dependent closure" do
-      graph <- expectRight embeddedGraph
+      graph <- consumerGraph >>= expectRight
       origin <- expectRight (parseRef graph "pgmq-hs")
       let affected = dependents graph (Set.singleton origin)
           present text = either (const False) (`Map.member` affected) (parseRef graph text)
@@ -62,7 +63,7 @@ spec = do
       present "kenshou-harness" `shouldBe` True
       present "runtime-assembly" `shouldBe` True
     it "keeps shibuya runner changes away from keiro contract consumers" do
-      graph <- expectRight embeddedGraph
+      graph <- consumerGraph >>= expectRight
       origin <- expectRight (parseRef graph "shibuya-core:runner")
       let affected = dependents graph (Set.singleton origin)
           present text = either (const False) (`Map.member` affected) (parseRef graph text)
@@ -73,7 +74,7 @@ spec = do
       present "keiro" `shouldBe` False
       present "keiro:router" `shouldBe` False
     it "routes shibuya contract changes to the three keiro consumers" do
-      graph <- expectRight embeddedGraph
+      graph <- consumerGraph >>= expectRight
       origin <- expectRight (parseRef graph "shibuya-core:contract")
       let affected = dependents graph (Set.singleton origin)
           present text = either (const False) (`Map.member` affected) (parseRef graph text)
@@ -86,7 +87,7 @@ spec = do
 
   describe "Kenshou.Plan.Components.Check" do
     it "resolves shortened unit ids and finds a planted missing edge" do
-      graph <- expectRight embeddedGraph
+      graph <- consumerGraph >>= expectRight
       result <- checkAgainstPlanJson graph "test/fixtures/plan/plan-missing-edge.json"
       findings <- expectRight result
       findings `shouldSatisfy` any isMissing
@@ -232,7 +233,7 @@ spec = do
 
 fixtureInputs :: IO (ComponentGraph, [ScenarioInfo])
 fixtureInputs = do
-  graph <- expectRight embeddedGraph
+  graph <- consumerGraph >>= expectRight
   catalog <- readCatalogFile "test/fixtures/plan/catalog-planned.json" >>= expectRight
   pure (graph, catalog)
 

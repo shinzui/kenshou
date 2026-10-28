@@ -65,9 +65,13 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
   dimensions pass with summary `{"ledgerComponents":["kenshou-selftest"],"rows":3}` and
   compatibility schemas `["kenshou-selftest"]`; all suites green; the consumer comparison
   key `sha256:dacb05fc…a843` reproduces from its recorded inputs.)
-- [ ] M3: Registry rules, the component graph, the performance validation contracts, and the
+- [x] M3: Registry rules, the component graph, the performance validation contracts, and the
   program name and header are supplied by the executable through `Kenshou.Core.Cli.Program`;
   the synthetic `acme` registry test passes; `kenshou --help` shows the generic header.
+  (2026-10-28; `open registry` group passes, 124 kernel examples; `kenshou --help` first
+  line `kenshou - run verification scenarios`; `kenshou plan --graph-check` exits 0 on the
+  5-component self-test graph; all suites green. `PerfContracts` gained a fourth field,
+  `lanePackages`; see Decision Log.)
 - [ ] M4: The coupling grep over `kenshou-core/src`, `kenshou-core/test`, and
   `kenshou-core/kenshou-core.cabal` returns no match outside the allow-list file
   `scripts/coupling-allowlist.txt`, and every test fixture under `kenshou-core/test` uses

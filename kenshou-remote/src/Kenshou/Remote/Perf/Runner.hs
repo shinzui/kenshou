@@ -15,6 +15,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime, addUTCTime, diffUTCTime)
+import Kenshou.Perf.Contracts (PerfContracts)
 import Kenshou.Perf.Plan (PerfPlan (..), PerfProfile (..), PlannedProfile (..))
 import Kenshou.Perf.Prepared qualified as Prepared
 import Kenshou.Perf.Request (PerfRequest (..))
@@ -38,7 +39,10 @@ data ComparisonHooks = ComparisonHooks
 data AdmissionHooks = AdmissionHooks {proposeClaim :: LeaseIdentity -> IO (), withdrawClaim :: IO ()}
 
 data RunnerHooks = RunnerHooks
-  { clock :: IO UTCTime,
+  { -- | The suite's performance contracts, against which the preparation is
+    -- re-validated before any work resumes.
+    contracts :: PerfContracts,
+    clock :: IO UTCTime,
     admit :: PlannedProfile -> Int -> Maybe (Text, LeaseIdentity, UTCTime) -> AdmissionHooks -> IO Admission,
     ownsLease :: LeaseIdentity -> IO Bool,
     canRunConfiguration :: LeaseIdentity -> PlannedProfile -> IO Bool,
@@ -58,7 +62,7 @@ data RunnerHooks = RunnerHooks
 runPerformance :: RunnerHooks -> Prepared.PerfPrepared -> FilePath -> IO PerfResult
 runPerformance hooks prepared path = do
   loaded <- readPerfSession path >>= require
-  require (validateSessionInputs prepared loaded)
+  require (validateSessionInputs hooks.contracts prepared loaded)
   retained <- require (journalState loaded)
   mapM_ verify (Map.elems retained.completed)
   current <- newIORef loaded

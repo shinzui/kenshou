@@ -41,7 +41,7 @@ commandParserInfo :: ParserInfo Command
 commandParserInfo =
   info
     (commandParser <**> helper <**> versionOption)
-    (fullDesc <> header "kenshou - verify the Keiro runtime")
+    (fullDesc <> header "kenshou - run verification scenarios")
   where
     versionOption = infoOption (Text.unpack appVersionWithGit) (long "version" <> help "Show version")
 

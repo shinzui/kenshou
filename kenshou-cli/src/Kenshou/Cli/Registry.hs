@@ -1,5 +1,6 @@
 module Kenshou.Cli.Registry
-  ( CliAssembly (..),
+  ( CliAssembly,
+    Program (..),
     selfTestBundles,
     standardCommands,
     standardTopics,
@@ -22,7 +23,7 @@ import Kenshou.Cli.Completions (completionsCommand)
 import Kenshou.Cli.Diagnose qualified as Diagnose
 import Kenshou.Cli.Help qualified as Help
 import Kenshou.Core.Bundle (LayerBundle)
-import Kenshou.Core.Cli (CliCommand, HelpTopic)
+import Kenshou.Core.Cli (CliCommand, HelpTopic, Program (..), defaultProgram)
 import Kenshou.Core.Selftest qualified as Selftest
 import Kenshou.Diagnose.SelfTest qualified as DiagnoseSelftest
 import Kenshou.Evidence.Attest (Recomputer)
@@ -33,15 +34,12 @@ import Kenshou.Measure.Selftest qualified as MeasureSelftest
 import Kenshou.Remote.Selftest qualified as RemoteSelftest
 import Kenshou.Telemetry.SelfTest qualified as TelemetrySelftest
 
--- | Everything an executable registers: the layer bundles whose scenarios and
--- roles it runs, the operator commands it exposes, and the help topics.
+-- | Everything an executable registers: its name and header, the layer bundles
+-- whose scenarios and roles it runs, the operator commands it exposes, the help
+-- topics, its component graph, and its performance contracts.
 -- Extension contract: a suite adds its bundles to 'bundles', and its own
 -- recomputers through 'standardCommands', without changing this library.
-data CliAssembly = CliAssembly
-  { bundles :: [LayerBundle],
-    commands :: [CliCommand],
-    topics :: [HelpTopic]
-  }
+type CliAssembly = Program
 
 -- | The self-test bundles the kernel and toolkits define for themselves.
 selfTestBundles :: [LayerBundle]
@@ -57,7 +55,7 @@ standardTopics = Help.topics
 -- | The self-test bundles with the standard commands and the generic recomputers.
 selfTestAssembly :: CliAssembly
 selfTestAssembly =
-  CliAssembly
+  defaultProgram
     { bundles = selfTestBundles,
       commands = standardCommands [runOutcomeRecomputer, measurementRecomputer, pairedComparisonRecomputer],
       topics = standardTopics

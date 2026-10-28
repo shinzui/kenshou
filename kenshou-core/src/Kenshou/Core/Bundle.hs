@@ -1,6 +1,8 @@
 module Kenshou.Core.Bundle
   ( LayerBundle (..),
     mkBundle,
+    ScenarioRule (..),
+    requirePgVersionsFor,
     Registry,
     registryMigrationSets,
     RegistryError (..),
@@ -18,13 +20,14 @@ module Kenshou.Core.Bundle
 where
 
 import Data.Aeson (Value, object, toJSON, (.=))
+import Data.Foldable (toList)
 import Data.List (group, sort, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), Support (..), Supported (..))
+import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), PgVersion (..), Support (..), Supported (..))
 import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName, PostgresRequirement (..), mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
 import Kenshou.Core.Knob (KnobSpec (..), renderKnobName)
@@ -41,11 +44,40 @@ data LayerBundle = LayerBundle
     roles :: [WorkerRole],
     -- | Migration sets this bundle defines. Any scenario in the registry may
     -- require them by name.
-    migrations :: [MigrationSet]
+    migrations :: [MigrationSet],
+    -- | Checks this bundle contributes. 'mkRegistry' applies every bundle's rules
+    -- to every scenario in the registry.
+    rules :: [ScenarioRule]
   }
 
 mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
-mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = []}
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = []}
+
+-- | A named registry check. Each message 'check' returns becomes a 'RegistryError'
+-- prefixed with the scenario identifier.
+data ScenarioRule = ScenarioRule
+  { name :: Text,
+    check :: Scenario -> [Text]
+  }
+
+-- | Require that a scenario using the migration set supports only the given
+-- PostgreSQL versions, for a set whose migrations need a particular server.
+requirePgVersionsFor :: MigrationSetName -> NonEmpty PgVersion -> ScenarioRule
+requirePgVersionsFor set versions =
+  ScenarioRule
+    { name = renderMigrationSetName set <> "-postgres-versions",
+      check = \scenario ->
+        [ renderMigrationSetName set <> " scenarios require PostgreSQL " <> Text.intercalate " or " (fmap versionText (toList versions))
+        | Just requirement <- [scenario.requires.postgres],
+          set `elem` requirement.schemas,
+          not (supportsOnly scenario.dimensions.pgVersion)
+        ]
+    }
+  where
+    supportsOnly (Supported support) = all (`elem` versions) support.values
+    supportsOnly NotApplicable = False
+    versionText Pg17 = "17"
+    versionText Pg18 = "18"
 
 newtype Registry = Registry [LayerBundle]
 
@@ -77,6 +109,7 @@ mkRegistry bundles = case errors of
         <> [RegistryError ("role layer differs from bundle: " <> renderRoleName role.name) | bundle <- bundles, role <- bundle.roles, not ((renderLayer bundle.layer <> "/") `Text.isPrefixOf` renderRoleName role.name)]
         <> concatMap validateScenario scenarios
         <> migrationErrors bundles
+        <> [RegistryError (renderScenarioId scenario.id <> ": " <> message) | rule <- concatMap (.rules) bundles, scenario <- scenarios, message <- rule.check scenario]
 
 -- Every set and required name is a valid pg-migrate component name, no two bundles
 -- define the same set, and every set a scenario or another set requires is defined.

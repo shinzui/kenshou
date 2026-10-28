@@ -112,7 +112,7 @@ runPlan options environment
   | options.graphShow && options.graphCheck = usage "choose only one of --graph-show or --graph-check"
   | options.suiteName /= Nothing && options.suiteSource /= Nothing = usage "choose only one of --suite or --suite-file"
   | otherwise = do
-      graphResult <- loadGraph options.graphSource
+      graphResult <- loadGraph environment options.graphSource
       catalogResult <- loadCatalog environment options.catalogSource
       suiteResult <- loadSuite options
       case (graphResult, catalogResult, suiteResult) of
@@ -290,9 +290,9 @@ renderSelection explain changes warnings selected = do
       let reason = NonEmpty.head selectedValue.reasons
       Text.IO.putStrLn ("selected   " <> Id.renderScenarioId selectedValue.scenario.id <> "  via " <> Text.intercalate " <- " (fmap renderRef reason.via) <> "  selector " <> renderSelector reason.selector)
 
-loadGraph :: Maybe InputSource -> IO (Either Text ComponentGraph)
-loadGraph Nothing = pure (firstGraph embeddedGraph)
-loadGraph (Just source) = firstGraph . decodeGraph <$> readInputSource source
+loadGraph :: CliEnv -> Maybe InputSource -> IO (Either Text ComponentGraph)
+loadGraph environment Nothing = pure (firstGraph (decodeGraph environment.componentGraph))
+loadGraph _ (Just source) = firstGraph . decodeGraph <$> readInputSource source
 
 firstGraph :: Either GraphError ComponentGraph -> Either Text ComponentGraph
 firstGraph = either (Left . (.errorText)) Right

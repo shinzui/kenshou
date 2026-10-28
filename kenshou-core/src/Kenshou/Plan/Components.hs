@@ -17,8 +17,8 @@ module Kenshou.Plan.Components
     Affected (..),
     GraphProblem (..),
     GraphError (..),
-    embeddedGraph,
-    embeddedGraphBytes,
+    selftestGraph,
+    selftestGraphBytes,
     loadGraphFile,
     decodeGraph,
     validateGraph,
@@ -127,11 +127,11 @@ newtype GraphProblem = GraphProblem {problemText :: Text}
 newtype GraphError = GraphError {errorText :: Text}
   deriving stock (Eq, Show)
 
-embeddedGraphBytes :: ByteString
-embeddedGraphBytes = $(embedFile "data/components.json")
+selftestGraphBytes :: ByteString
+selftestGraphBytes = $(embedFile "data/components.json")
 
-embeddedGraph :: Either GraphError ComponentGraph
-embeddedGraph = decodeGraph embeddedGraphBytes
+selftestGraph :: Either GraphError ComponentGraph
+selftestGraph = decodeGraph selftestGraphBytes
 
 loadGraphFile :: FilePath -> IO (Either GraphError ComponentGraph)
 loadGraphFile path = decodeGraph <$> ByteString.readFile path

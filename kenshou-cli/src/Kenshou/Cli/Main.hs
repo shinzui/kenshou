@@ -1,7 +1,7 @@
 module Kenshou.Cli.Main (mainWith, runWithArgsWith) where
 
 import Data.Text.IO qualified as Text.IO
-import Kenshou.Cli.Registry (CliAssembly (..))
+import Kenshou.Cli.Registry (CliAssembly)
 import Kenshou.Cli.Version (appVersionWithGit)
 import Kenshou.Core.Cli (runCli)
 import Kenshou.Diagnose.Profile.EventlogGuard (withEventlogGuard)
@@ -14,4 +14,4 @@ mainWith assembly = withGhcDebugIfRequested (withEventlogGuard (getArgs >>= runW
 
 runWithArgsWith :: CliAssembly -> [String] -> IO ExitCode
 runWithArgsWith _ ["--version"] = Text.IO.putStrLn appVersionWithGit >> pure ExitSuccess
-runWithArgsWith assembly arguments = runCli assembly.bundles assembly.commands assembly.topics arguments
+runWithArgsWith assembly arguments = runCli assembly arguments

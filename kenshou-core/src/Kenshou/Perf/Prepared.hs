@@ -13,7 +13,6 @@ module Kenshou.Perf.Prepared
     validatePrepared,
     validateArmInventories,
     renderBoundsProject,
-    isolatedShibuyaCohort,
   )
 where
 
@@ -29,6 +28,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cohort
+import Kenshou.Perf.Contracts (PerfContracts (..))
 import Kenshou.Perf.Plan (PerfPlan (..), PerfProfile (..), PlannedProfile (..), validateProfile, workloadDigest)
 import Kenshou.Perf.Request
 import Kenshou.Perf.Source (SourceSnapshot, descriptorForSnapshot, legacyDescriptorForSnapshot, targetPackages)
@@ -84,8 +84,8 @@ buildKeyFor revision descriptor lock inventory bounds =
 
 -- Recheck the relationships inside a sealed preparation before any cell action.
 -- The original files and their manifest are verified separately by the loader.
-validatePrepared :: PerfPrepared -> Either Text ()
-validatePrepared prepared = do
+validatePrepared :: PerfContracts -> PerfPrepared -> Either Text ()
+validatePrepared contracts prepared = do
   (request, template, before, after, catalog, policies) <-
     parse
       "pinned inputs"
@@ -122,7 +122,7 @@ validatePrepared prepared = do
     parse label parser value = either (Left . ((label <> ": ") <>) . Text.pack) Right (parseEither parser value)
     validateSelected :: [ScenarioInfo] -> Map FilePath Value -> PlannedProfile -> Either Text ()
     validateSelected catalog policies selected = do
-      effective <- validateProfile catalog selected.profile
+      effective <- validateProfile contracts catalog selected.profile
       unless (toJSON effective == toJSON selected.effectiveKnobs && toJSON effective == toJSON selected.profile.knobs) (Left "prepared effective workload differs from its profile")
       policy <- maybe (Left "pinned profile policy missing") Right (Map.lookup selected.profile.policy policies)
       unless (workloadDigest selected.profile (sha256Hex (canonicalEncode policy)) == selected.workloadSha256) (Left "prepared workload/policy digest mismatch")
@@ -287,18 +287,11 @@ compareInventories targets baseline candidate = do
         | previous /= current -> Left ("unrelated resolved dependency changed: " <> name)
         | otherwise -> Right ()
 
--- | Select the existing isolated lane by its component set, not the generated
--- cohort name. Full-runtime cohorts retain their ordinary package set and flags.
-isolatedShibuyaCohort :: CohortDescriptor -> Bool
-isolatedShibuyaCohort descriptor =
-  "shibuya" `elem` names && all (`elem` ["shibuya", "shibuya-pgmq-adapter", "pgmq-hs", "kiroku"]) names
-  where
-    names = map (unComponentId . (.componentId)) descriptor.descriptorComponents
-
 -- Standalone projects never import active.project or project.local. They pin
 -- every cohort package and use only already reviewed, package-scoped exceptions.
-renderBoundsProject :: [FilePath] -> CohortDescriptor -> Either Text Text
-renderBoundsProject harnessPackages descriptor = do
+-- The suite's lane stanzas follow the pins.
+renderBoundsProject :: PerfContracts -> [FilePath] -> CohortDescriptor -> Either Text Text
+renderBoundsProject contracts harnessPackages descriptor = do
   unless (not (null harnessPackages) && all safeAtom harnessPackages) (Left "unsafe or empty harness package paths")
   unless (all scopedException descriptor.descriptorAllowNewer) (Left "blanket bound lifting is forbidden in performance preparation")
   unless (all (safeAtom . Text.unpack) (descriptor.descriptorCompiler : descriptor.descriptorIndexState : map (.pinName) pins <> map (.pinVersion) pins)) (Left "unsafe cohort project field")
@@ -308,10 +301,7 @@ renderBoundsProject harnessPackages descriptor = do
         (["packages: " <> Text.intercalate ", " (map Text.pack harnessPackages), "with-compiler: " <> descriptor.descriptorCompiler, "index-state: " <> descriptor.descriptorIndexState, "tests: False", "benchmarks: False", "extra-packages: " <> Text.intercalate ", " (map (.pinName) pins), "constraints: " <> Text.intercalate ", " [pin.pinName <> " ==" <> pin.pinVersion | pin <- pins], "allow-newer: " <> (if null descriptor.descriptorAllowNewer then "none" else Text.intercalate ", " descriptor.descriptorAllowNewer)] <> laneFlags <> concat gitStanzas)
     )
   where
-    laneFlags =
-      if isolatedShibuyaCohort descriptor
-        then ["package kenshou-cli", "  flags: -runtime-suites", "package kenshou-core", "  flags: -keiro-schema"]
-        else []
+    laneFlags = contracts.laneStanzas descriptor
     pins = concatMap (.componentPackages) descriptor.descriptorComponents
     safeAtom value = not (null value) && all (`notElem` ['\n', '\r', '\t', ' ', ',', '"']) value
     scopedException value = case Text.splitOn ":" value of

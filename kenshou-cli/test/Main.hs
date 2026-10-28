@@ -7,6 +7,7 @@ import Data.Aeson (Value, object, (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString qualified as ByteString
 import Data.ByteString.Lazy qualified as LazyByteString
 import Data.Foldable (toList)
 import Data.List (find)
@@ -16,7 +17,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Time (addUTCTime, getCurrentTime)
-import Kenshou.Cli (runWithArgsWith, selfTestAssembly)
+import Kenshou.Cli (Program (..), runWithArgsWith, selfTestAssembly)
 import Kenshou.Cli.Cohort (resolveDefaultCohortIdentity)
 import Kenshou.Cli.Version (appVersionWithGit)
 import Kenshou.Core.Canonical (sha256Hex)
@@ -146,7 +147,7 @@ main = hspec do
         let input = directory </> "request.json"
             output = directory </> "plan"
         Aeson.encodeFile input (replacePerfField "targetComponents" (Aeson.toJSON (["shibuya", "pgmq-hs"] :: [Text])) raw)
-        withCurrentDirectory "fixtures/consumer-baseline" (runWithArgs ["perf", "plan", "--request", input, "--out", output]) `shouldReturnCode` ExitFailure 2
+        withConsumerBaseline ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
         doesPathExist output `shouldReturn` False
     it "rejects unknown profiles before fetching immutable sources" do
       withPerfRoot $ withSystemTempDirectory "kenshou-perf-profiles" \directory -> do
@@ -154,7 +155,7 @@ main = hspec do
         let input = directory </> "request.json"
             output = directory </> "plan"
         Aeson.encodeFile input (replacePerfField "profiles" (Aeson.toJSON (["missing"] :: [Text])) raw)
-        withCurrentDirectory "fixtures/consumer-baseline" (runWithArgs ["perf", "plan", "--request", input, "--out", output]) `shouldReturnCode` ExitFailure 2
+        withConsumerBaseline ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
         doesPathExist output `shouldReturn` False
     it "refuses to overwrite an existing planning directory" do
       withSystemTempDirectory "kenshou-perf-existing" \directory -> do
@@ -728,6 +729,14 @@ main = hspec do
 
 runWithArgs :: [String] -> IO ExitCode
 runWithArgs = runWithArgsWith selfTestAssembly
+
+-- Runs from the consumer-baseline bridge with the consumer's component graph, for the
+-- perf planning checks whose request names the consumer's packages. Called from the
+-- repository root.
+withConsumerBaseline :: [String] -> IO ExitCode
+withConsumerBaseline arguments = do
+  graph <- ByteString.readFile "fixtures/consumer-baseline/kenshou-core/data/components.json"
+  withCurrentDirectory "fixtures/consumer-baseline" (runWithArgsWith selfTestAssembly {componentGraph = graph} arguments)
 
 shouldReturnCode :: IO ExitCode -> ExitCode -> IO ()
 shouldReturnCode action expected = action >>= (`shouldBe` expected)

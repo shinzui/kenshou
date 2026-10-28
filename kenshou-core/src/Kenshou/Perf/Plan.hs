@@ -25,6 +25,7 @@ import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), renderDimensions, resolveDimensions)
 import Kenshou.Core.Id (Kind (..), ScenarioId (..), renderScenarioId)
 import Kenshou.Core.Knob
+import Kenshou.Perf.Contracts (PerfContracts (..))
 import Kenshou.Perf.Request
 import Kenshou.Plan.Catalog qualified as Catalog
 import Kenshou.Plan.Change
@@ -95,20 +96,16 @@ data PerfPlan = PerfPlan
 workloadDigest :: PerfProfile -> Text -> Text
 workloadDigest profile policyDigest = sha256Hex (canonicalEncode (object ["workload" .= profile {calibration = Nothing}, "policySha256" .= policyDigest]))
 
-validateProfile :: [Catalog.ScenarioInfo] -> PerfProfile -> Either Text ResolvedKnobs
-validateProfile catalog profile = do
+validateProfile :: PerfContracts -> [Catalog.ScenarioInfo] -> PerfProfile -> Either Text ResolvedKnobs
+validateProfile contracts catalog profile = do
   scenario <- case filter ((== profile.scenario) . renderScenarioId . (.id)) catalog of
     [value] -> Right value
     _ -> Left ("profile names an unknown or duplicate scenario: " <> profile.scenario)
   require (scenario.id.kind == Benchmark && scenario.revision == profile.scenarioRevision) "profile scenario revision/kind mismatch"
   require (profile.revision > 0 && not (Text.null profile.name) && Text.all (`elem` (['a' .. 'z'] <> ['0' .. '9'] <> ['-'])) profile.name) "invalid profile identity"
   require (profile.workloadPurpose == "fixed-load-latency") "unsupported workload purpose; paced throughput is not capacity"
-  -- These two revisions implement count-bound steady work, not timed phases.
-  require
-    ( (profile.scenario, profile.scenarioRevision)
-        `elem` [("shibuya/core-ordering/benchmark/concurrency-sweep", 2), ("shibuya/pgmq-adapter/benchmark/end-to-end-throughput-latency", 1)]
-    )
-    "scenario phase contract has not been reviewed"
+  -- Only reviewed revisions implement count-bound steady work, not timed phases.
+  require ((profile.scenario, profile.scenarioRevision) `elem` contracts.reviewedPhaseContracts) "scenario phase contract has not been reviewed"
   require (profile.warmupSeconds == 0 && profile.cooldownSeconds == 0 && profile.timeoutSeconds == 180) "scenario revision does not honor requested phases/timeout"
   require (profile.cachePolicy == "cold-reset") "unsupported cache policy"
   require (profile.minimumPairs >= 5 && profile.replacementPairs >= 0 && profile.replacementPairs <= 2) "invalid fixed pair/replacement allowance"
@@ -121,9 +118,10 @@ validateProfile catalog profile = do
   resolved <- either (Left . Text.pack . show) Right (resolveKnobs scenario.knobs assignments)
   dimensionValues <- either (Left . Text.pack . show) Right (resolveDimensions scenario.dimensions (Map.toAscList profile.dimensions))
   require (dimensionValues.pgDurability /= Just PgFsyncOff) "performance profiles require durable PostgreSQL"
-  messageKnob <- mkKnobName "shibuya.messages"
   rawKnob <- mkKnobName "measure.raw-samples"
-  require (Map.lookup messageKnob (resolvedKnobsMap resolved) == Just (VInt (fromIntegral profile.steadyCount))) "profile steady count disagrees with effective workload"
+  case contracts.steadyCountKnob of
+    Just countKnob -> require (Map.lookup countKnob (resolvedKnobsMap resolved) == Just (VInt (fromIntegral profile.steadyCount))) "profile steady count disagrees with effective workload"
+    Nothing -> pure ()
   require (Map.lookup rawKnob (resolvedKnobsMap resolved) == Just (VText "full")) "performance profiles require full raw samples"
   rateKnob <- mkKnobName "bench.rate"
   let offeredRate = case Map.lookup rateKnob (resolvedKnobsMap resolved) of Just (VInt rate) -> rate; _ -> 0
@@ -151,8 +149,8 @@ conservativeChanges graph repository paths mapped = (changes, unknown, documenta
 -- catalog's self-asserted calibrated flag. It maps workload digest to verified
 -- calibration evidence digest. A catalog link cannot populate this map without
 -- full receipt retrieval, raw report replay and acceptance-batch verification.
-planPerformance :: PerfRequest -> ComponentGraph -> [Catalog.ScenarioInfo] -> ProfileCatalog -> [Change] -> [FilePath] -> [FilePath] -> Map Text Text -> Map Text Text -> Either Text PerfPlan
-planPerformance request graph catalog profiles changes unknown documentation policyDigests admitted = do
+planPerformance :: PerfContracts -> PerfRequest -> ComponentGraph -> [Catalog.ScenarioInfo] -> ProfileCatalog -> [Change] -> [FilePath] -> [FilePath] -> Map Text Text -> Map Text Text -> Either Text PerfPlan
+planPerformance contracts request graph catalog profiles changes unknown documentation policyDigests admitted = do
   validateRequest request
   unless (nub profileNames == profileNames) (Left "duplicate performance profile")
   unless (all (`elem` profileNames) request.profiles) (Left "unknown requested performance profile")
@@ -188,7 +186,7 @@ planPerformance request graph catalog profiles changes unknown documentation pol
   where
     profileNames = map (.name) profiles.profiles
     check profile = do
-      effective <- validateProfile catalog profile
+      effective <- validateProfile contracts catalog profile
       scenario <- case filter ((== profile.scenario) . renderScenarioId . (.id)) catalog of
         [value] -> Right value
         _ -> Left "profile scenario is missing"

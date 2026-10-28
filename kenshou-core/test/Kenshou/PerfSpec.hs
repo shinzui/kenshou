@@ -10,6 +10,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Kenshou.ConsumerBaseline (consumerContracts, consumerGraph)
 import Kenshou.Core.Cohort qualified as Cohort
 import Kenshou.Core.Dimension
 import Kenshou.Core.Id (parseScenarioId)
@@ -105,7 +106,7 @@ spec = do
   describe "bounded performance planning" do
     it "retains explicit A/A profiles in calibration mode with an empty diff" do
       (graph, profiles, catalog) <- context
-      plan <- right (Perf.planPerformance request graph catalog profiles [] [] [] policyDigests Map.empty)
+      plan <- right (Perf.planPerformance consumerContracts request graph catalog profiles [] [] [] policyDigests Map.empty)
       length plan.selected `shouldBe` 2
       plan.coverage `shouldBe` "complete"
       plan.gatingEligible `shouldBe` False
@@ -115,7 +116,7 @@ spec = do
     it "cannot admit a catalog's unverified calibration claim to a gating plan" do
       (graph, profiles, catalog) <- context
       let claimed = profiles {Perf.profiles = map (\profile -> profile {Perf.calibration = Just (object ["calibrated" .= True])}) profiles.profiles}
-      plan <- right (Perf.planPerformance request {Request.purpose = "gating"} graph catalog claimed [] [] [] policyDigests Map.empty)
+      plan <- right (Perf.planPerformance consumerContracts request {Request.purpose = "gating"} graph catalog claimed [] [] [] policyDigests Map.empty)
       plan.coverage `shouldBe` "incomplete"
       map snd plan.excluded `shouldBe` ["uncalibrated", "uncalibrated"]
       plan.gatingEligible `shouldBe` False
@@ -126,7 +127,7 @@ spec = do
       Perf.workloadDigest profile "sha256:policy" `shouldNotBe` Perf.workloadDigest profile {Perf.scenarioRevision = 3} "sha256:policy"
     it "defers an entire configuration when the paired estimate exceeds budget" do
       (graph, profiles, catalog) <- context
-      plan <- right (Perf.planPerformance request {Request.budgetMinutes = 13} graph catalog profiles [] [] [] policyDigests Map.empty)
+      plan <- right (Perf.planPerformance consumerContracts request {Request.budgetMinutes = 13} graph catalog profiles [] [] [] policyDigests Map.empty)
       length plan.selected `shouldBe` 1
       map snd plan.excluded `shouldBe` ["over-budget"]
       plan.coverage `shouldBe` "incomplete"
@@ -134,20 +135,20 @@ spec = do
       (graph, profiles, catalog) <- context
       reference <- right (Graph.parseRef graph "shibuya-core:contract")
       let changes = [Change reference Named "core contract changed"]
-      plan <- right (Perf.planPerformance request {Request.control = "none", Request.coverageMode = "affected", Request.profiles = []} graph catalog profiles changes [] [] policyDigests Map.empty)
+      plan <- right (Perf.planPerformance consumerContracts request {Request.control = "none", Request.coverageMode = "affected", Request.profiles = []} graph catalog profiles changes [] [] policyDigests Map.empty)
       plan.affectedScenarios `shouldContain` ["shibuya/pgmq-adapter/benchmark/end-to-end-throughput-latency"]
       plan.uncoveredScenarios `shouldContain` ["shibuya/metrics/correctness/test"]
       plan.coverage `shouldBe` "incomplete"
     it "separates selected-profile completion from whole-change coverage" do
       (graph, profiles, catalog) <- context
       reference <- right (Graph.parseRef graph "shibuya-core:contract")
-      plan <- right (Perf.planPerformance request {Request.control = "none"} graph catalog profiles [Change reference Named "core changed"] [] [] policyDigests Map.empty)
+      plan <- right (Perf.planPerformance consumerContracts request {Request.control = "none"} graph catalog profiles [Change reference Named "core changed"] [] [] policyDigests Map.empty)
       plan.coverage `shouldBe` "complete"
       plan.changeCoverage `shouldBe` "incomplete"
     it "does not certify a telemetry change with disabled telemetry" do
       (graph, profiles, catalog) <- context
       reference <- right (Graph.parseRef graph "shibuya-core:telemetry")
-      plan <- right (Perf.planPerformance request {Request.control = "none", Request.coverageMode = "affected", Request.profiles = []} graph catalog profiles [Change reference Named "telemetry changed"] [] [] policyDigests Map.empty)
+      plan <- right (Perf.planPerformance consumerContracts request {Request.control = "none", Request.coverageMode = "affected", Request.profiles = []} graph catalog profiles [Change reference Named "telemetry changed"] [] [] policyDigests Map.empty)
       plan.uncoveredScenarios `shouldContain` ["shibuya/core-ordering/benchmark/concurrency-sweep"]
       plan.coverage `shouldBe` "incomplete"
     it "selects conservatively for unmapped build inputs" do
@@ -159,22 +160,22 @@ spec = do
     it "requires a repository-scoped documentation proof for not-applicable" do
       (graph, profiles, catalog) <- context
       let normal = request {Request.control = "none", Request.profiles = [], Request.coverageMode = "affected"}
-      empty <- right (Perf.planPerformance normal graph catalog profiles [] [] [] policyDigests Map.empty)
+      empty <- right (Perf.planPerformance consumerContracts normal graph catalog profiles [] [] [] policyDigests Map.empty)
       empty.coverage `shouldBe` "incomplete"
-      proved <- right (Perf.planPerformance normal graph catalog profiles [] [] ["docs/guide.md"] policyDigests Map.empty)
+      proved <- right (Perf.planPerformance consumerContracts normal graph catalog profiles [] [] ["docs/guide.md"] policyDigests Map.empty)
       proved.coverage `shouldBe` "not-applicable"
       proved.gatingEligible `shouldBe` False
     it "rejects phases the pinned scenario revision cannot honor" do
       (_, profiles, catalog) <- context
       profile <- first profiles.profiles
-      Perf.validateProfile catalog profile {Perf.warmupSeconds = 1} `shouldSatisfy` isLeft
-      Perf.validateProfile catalog profile {Perf.steadyCount = 2000} `shouldSatisfy` isLeft
-      Perf.validateProfile catalog profile {Perf.timeoutSeconds = 181} `shouldSatisfy` isLeft
+      Perf.validateProfile consumerContracts catalog profile {Perf.warmupSeconds = 1} `shouldSatisfy` isLeft
+      Perf.validateProfile consumerContracts catalog profile {Perf.steadyCount = 2000} `shouldSatisfy` isLeft
+      Perf.validateProfile consumerContracts catalog profile {Perf.timeoutSeconds = 181} `shouldSatisfy` isLeft
     it "rejects unknown profile names and raw sample suppression" do
       (graph, profiles, catalog) <- context
-      Perf.planPerformance request {Request.profiles = ["missing"]} graph catalog profiles [] [] [] policyDigests Map.empty `shouldSatisfy` isLeft
+      Perf.planPerformance consumerContracts request {Request.profiles = ["missing"]} graph catalog profiles [] [] [] policyDigests Map.empty `shouldSatisfy` isLeft
       profile <- first profiles.profiles
-      Perf.validateProfile catalog profile {Perf.knobs = Map.insert "measure.raw-samples" (String "off") profile.knobs} `shouldSatisfy` isLeft
+      Perf.validateProfile consumerContracts catalog profile {Perf.knobs = Map.insert "measure.raw-samples" (String "off") profile.knobs} `shouldSatisfy` isLeft
 
 shaA, shaB, upstream :: Text
 shaA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -189,7 +190,7 @@ policyDigests = Map.singleton "policies/default.json" "sha256:policy"
 
 context :: IO (Graph.ComponentGraph, Perf.ProfileCatalog, [ScenarioInfo])
 context = do
-  graph <- right Graph.embeddedGraph
+  graph <- consumerGraph >>= right
   profiles <- load "policies/performance/catalog.v1.json"
   catalog <- traverse makeScenario [(profile.scenario, profile.scenarioRevision, True) | profile <- profiles.profiles]
   correctness <- makeScenario ("shibuya/metrics/correctness/test", 1, False)

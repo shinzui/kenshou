@@ -28,6 +28,7 @@ import Kenshou.Measure.Compare.Policy (Direction (..), MetricRule (..), Policy, 
 import Kenshou.Measure.Compare.Policy qualified as Policy
 import Kenshou.Perf.Artifacts
 import Kenshou.Perf.Calibration qualified as Calibration
+import Kenshou.Perf.Contracts (PerfContracts)
 import Kenshou.Perf.Plan
 import Kenshou.Perf.Plan qualified as PerfPlan
 import Kenshou.Perf.Prepared qualified as Prepared
@@ -150,13 +151,13 @@ runCalibrationFingerprint descriptorPath policyPath _ = guarded do
 runNew :: FilePath -> Text -> FilePath -> Text -> Bool -> CliEnv -> IO ExitCode
 runNew preparedPath uri destination bucket start environment = guarded do
   prepared <- eitherDecodeFileStrict' preparedPath >>= either (throwIO . SessionFailure 2 . Text.pack) pure
-  input (Prepared.validatePrepared prepared)
+  input (Prepared.validatePrepared environment.perf prepared)
   _ <- input (parseDestination uri)
   input (initialSessionPlaceholder prepared uri)
   verifyPerfManifest (takeDirectory preparedPath) >>= require
   exists <- doesPathExist destination
   when exists (throwIO (SessionFailure 2 "performance output already exists"))
-  verifyGatingCalibration prepared
+  verifyGatingCalibration environment.perf prepared
   output <- makeAbsolute destination
   (store, label) <- openStore (Bucket bucket)
   projects <- maybe ["tan-nb-exp"] (map Text.strip . Text.splitOn "," . Text.pack) <$> lookupEnv "KENSHOU_GCP_ALLOWED_PROJECTS"
@@ -195,18 +196,18 @@ runResume :: FilePath -> CliEnv -> IO ExitCode
 runResume destination environment = guarded do
   output <- makeAbsolute destination
   withPerformanceLock output do
-    prepared <- loadPreparation (output </> "preparation/prepared.json")
+    prepared <- loadPreparation environment.perf (output </> "preparation/prepared.json")
     session <- readPerfSession (output </> "session.json") >>= require
-    require (validateSessionInputs prepared session)
+    require (validateSessionInputs environment.perf prepared session)
     checkRootInputs output prepared
-    verifyGatingCalibration prepared
+    verifyGatingCalibration environment.perf prepared
     inputs <- require (parseInputs session)
     checkCalibratedPolicies prepared inputs
     state <- require (journalState session)
     receiptExists <- doesFileExist (output </> "receipt.json")
     if receiptExists && state.lease == Nothing && state.pendingClaim == Nothing && state.activeComparison == Nothing && Map.size state.completed == length session.plan.selected
       then do
-        (result, _) <- verifySessionEvidence output False
+        (result, _) <- verifySessionEvidence environment.perf output False
         receipt <- readJSON (output </> "receipt.json")
         retained <- readPerfSession (output </> Text.unpack (receipt :: PublicationReceipt).snapshot </> "session.json") >>= require
         unless (retained == session) (ioError (userError "published report does not describe the current session"))
@@ -228,11 +229,11 @@ runStatus output _ = guarded do
   Lazy.putStrLn (encode (object ["session" .= session.sessionId, "requestSha256" .= session.plan.requestSha256, "admissionSpentSeconds" .= state.admissionSpentSeconds, "executionDeadline" .= state.executionDeadline, "cleanupDeadline" .= state.cleanupDeadline, "lease" .= state.lease, "pendingClaim" .= state.pendingClaim, "activeComparison" .= state.activeComparison, "attempts" .= state.attempts, "replacements" .= state.replacements, "completed" .= Map.elems state.completed, "runtimeBlockers" .= state.runtimeBlockers, "totalElapsedSeconds" .= (realToFrac (diffUTCTime now session.createdAt) :: Double)]))
   pure ExitSuccess
 
-loadPreparation :: FilePath -> IO Prepared.PerfPrepared
-loadPreparation path = do
+loadPreparation :: PerfContracts -> FilePath -> IO Prepared.PerfPrepared
+loadPreparation contracts path = do
   verifyPerfManifest (takeDirectory path) >>= require
   prepared <- readJSON path
-  require (Prepared.validatePrepared prepared)
+  require (Prepared.validatePrepared contracts prepared)
   pure prepared
 
 loadCell :: ObjectStore -> [Text] -> FilePath -> Text -> Text -> IO (CellDescriptor, Maybe CellCapabilities)
@@ -402,6 +403,7 @@ execute environment store inputs payloads prepared output = do
       verify result = verifyConfiguration inputs prepared output result
       hooks =
         RunnerHooks
+          environment.perf
           getCurrentTime
           admission
           (\identity -> maybe False (const True) <$> Lease.reattachActiveLease store (ref identity) identity.leaseId)
@@ -725,18 +727,18 @@ runCalibrationPublish definition path uri _ = guarded do
   pure ExitSuccess
 
 runCalibrationVerify :: FilePath -> FilePath -> CliEnv -> IO ExitCode
-runCalibrationVerify referencePath preparedPath _ = guarded do
-  prepared <- loadPreparation preparedPath
+runCalibrationVerify referencePath preparedPath environment = guarded do
+  prepared <- loadPreparation environment.perf preparedPath
   reference <- readJSON referencePath :: IO Calibration.CalibrationReference
   entry <- case prepared.plan.selected of [selected] -> pure selected; _ -> throwIO (SessionFailure 2 "calibration verification needs one prepared profile")
   (semantics, policies) <- require (either (Left . Text.pack) Right (parseEither (withObject "PinnedInputs" \v -> (,) <$> v .: "harnessSemanticsSha256" <*> v .: "policies") prepared.inputs))
   policy <- maybe (ioError (userError "missing pinned calibration policy")) pure (Map.lookup entry.profile.policy (policies :: Map.Map FilePath Value))
-  digest <- verifyCalibrationAdmission entry {PerfPlan.profile = entry.profile {calibration = Just (toJSON reference)}} (Calibration.toolchainDigest prepared.baseline.buildInventory) semantics policy >>= require
+  digest <- verifyCalibrationAdmission environment.perf entry {PerfPlan.profile = entry.profile {calibration = Just (toJSON reference)}} (Calibration.toolchainDigest prepared.baseline.buildInventory) semantics policy >>= require
   Lazy.putStrLn (encode (object ["verified" .= True, "profile" .= entry.profile.name, "acceptanceSha256" .= digest, "gatingEligible" .= False]))
   pure ExitSuccess
 
-verifyCalibrationAdmission :: PlannedProfile -> Text -> Text -> Value -> IO (Either Text Text)
-verifyCalibrationAdmission entry expectedToolchain semantics policyValue = do
+verifyCalibrationAdmission :: PerfContracts -> PlannedProfile -> Text -> Text -> Value -> IO (Either Text Text)
+verifyCalibrationAdmission contracts entry expectedToolchain semantics policyValue = do
   outcome <- try @IOException do
     reference <- require (either (Left . Text.pack) Right (parseEither (parseJSON @Calibration.CalibrationReference) (fromMaybe Null entry.profile.calibration)))
     (definitionBytes, declared) <- readPinned reference.definitionUri reference.definitionSha256
@@ -750,8 +752,8 @@ verifyCalibrationAdmission entry expectedToolchain semantics policyValue = do
       [metricRule] -> pure metricRule
       _ -> ioError (userError "injected metric needs one unambiguous policy rule")
     unless (definition.targetMetric `elem` map (.name) entry.profile.requiredMetrics && rule.direction == LowerIsBetter && definition.targetRelativeEffect > rule.relativeLimit && definition.targetAbsoluteEffect > rule.absoluteFloor) (ioError (userError "injected latency effect must exceed both frozen policy thresholds"))
-    aa <- traverse (traverse replayCalibrationReceipt . (.receipts)) acceptance.aa
-    slowdown <- traverse (traverse replayCalibrationReceipt . (.receipts)) acceptance.slowdown
+    aa <- traverse (traverse (replayCalibrationReceipt contracts) . (.receipts)) acceptance.aa
+    slowdown <- traverse (traverse (replayCalibrationReceipt contracts) . (.receipts)) acceptance.slowdown
     now <- getCurrentTime
     _ <- require (Calibration.validateCalibration now declared definition acceptance aa slowdown)
     pure reference.acceptanceSha256
@@ -787,19 +789,19 @@ calibrationDefinition entry = do
   unless (sha256Hex (Lazy.toStrict bytes) == reference.definitionSha256) (ioError (userError "calibration declaration digest differs"))
   either (ioError . userError) pure (eitherDecode bytes)
 
-verifyGatingCalibration :: Prepared.PerfPrepared -> IO ()
-verifyGatingCalibration prepared = when prepared.plan.gatingEligible do
+verifyGatingCalibration :: PerfContracts -> Prepared.PerfPrepared -> IO ()
+verifyGatingCalibration contracts prepared = when prepared.plan.gatingEligible do
   (semantics, policies, admissions) <- require (either (Left . Text.pack) Right (parseEither (withObject "PinnedInputs" \v -> (,,) <$> v .: "harnessSemanticsSha256" <*> v .: "policies" <*> v .: "calibrationAdmissions") prepared.inputs))
   mapM_
     ( \entry -> do
         policy <- maybe (ioError (userError "pinned calibration policy is absent")) pure (Map.lookup entry.profile.policy (policies :: Map.Map FilePath Value))
-        evidence <- verifyCalibrationAdmission entry (Calibration.toolchainDigest prepared.baseline.buildInventory) semantics policy >>= require
+        evidence <- verifyCalibrationAdmission contracts entry (Calibration.toolchainDigest prepared.baseline.buildInventory) semantics policy >>= require
         unless (Map.lookup entry.workloadSha256 (admissions :: Map.Map Text Text) == Just evidence) (ioError (userError "pinned calibration admission differs"))
     )
     prepared.plan.selected
 
-replayCalibrationReceipt :: Calibration.CalibrationReceipt -> IO Calibration.VerifiedCalibrationTrial
-replayCalibrationReceipt reference = do
+replayCalibrationReceipt :: PerfContracts -> Calibration.CalibrationReceipt -> IO Calibration.VerifiedCalibrationTrial
+replayCalibrationReceipt contracts reference = do
   (bucket, objectName) <- require (parseDestination reference.uri)
   prefix <- maybe (ioError (userError "calibration must reference a publication receipt")) pure (Text.stripSuffix "/receipt.json" objectName)
   (store, _) <- openStore bucket
@@ -813,8 +815,8 @@ replayCalibrationReceipt reference = do
     let directory = root </> Text.unpack receipt.snapshot
     retrieveEvidence store bucket prefix receipt.manifestSha256 directory >>= require
     Lazy.writeFile (root </> "receipt.json") bytes
-    (result, _) <- verifySessionEvidence root True
-    prepared <- loadPreparation (directory </> "preparation/prepared.json")
+    (result, _) <- verifySessionEvidence contracts root True
+    prepared <- loadPreparation contracts (directory </> "preparation/prepared.json")
     session <- readPerfSession (directory </> "session.json") >>= require
     unless (result.purpose == "calibration" && not result.gatingEligible && length result.configurations == 1 && length prepared.plan.selected == 1) (ioError (userError "calibration needs a single-profile non-gating report"))
     configuration <- case result.configurations of [retainedConfiguration] -> pure retainedConfiguration; _ -> ioError (userError "missing calibration configuration")
@@ -832,13 +834,13 @@ replayCalibrationReceipt reference = do
     pure (Calibration.VerifiedCalibrationTrial session.sessionId prepared.plan.request.seed prepared.plan.request.control prepared.plan.request.project prepared.plan.request.baselineRevision prepared.plan.request.candidateRevision configuration.profile entry.profile.machineProfile (sha256Hex (canonicalEncode policy)) configuration.workloadSha256 (Calibration.toolchainDigest prepared.baseline.buildInventory) semantics configuration.performanceVerdict result.infrastructureState result.blockingRuntimeFailures session.createdAt receipt.totalElapsedSeconds)
 
 runVerify :: FilePath -> Bool -> CliEnv -> IO ExitCode
-runVerify output offline _ = guarded do
-  (result, uri) <- verifySessionEvidence output offline
+runVerify output offline environment = guarded do
+  (result, uri) <- verifySessionEvidence environment.perf output offline
   Lazy.putStrLn (encode (object ["verified" .= True, "offline" .= offline, "manifestUri" .= uri, "result" .= result]))
   pure (exit result.exitCode)
 
-verifySessionEvidence :: FilePath -> Bool -> IO (PerfResult, Text)
-verifySessionEvidence output offline = do
+verifySessionEvidence :: PerfContracts -> FilePath -> Bool -> IO (PerfResult, Text)
+verifySessionEvidence contracts output offline = do
   receipt <- readJSON (output </> "receipt.json")
   let relative = (receipt :: PublicationReceipt).snapshot
       uri = receipt.manifestUri
@@ -849,11 +851,11 @@ verifySessionEvidence output offline = do
   verifyPerfManifest directory >>= require
   manifest <- Bytes.readFile (directory </> "manifest.json")
   unless (sha256Hex manifest == manifestDigest) (ioError (userError "retained manifest differs from durable receipt"))
-  prepared <- loadPreparation (directory </> "preparation/prepared.json")
+  prepared <- loadPreparation contracts (directory </> "preparation/prepared.json")
   checkRootInputs directory prepared
   session <- readPerfSession (directory </> "session.json") >>= require
-  require (validateSessionInputs prepared session)
-  unless offline (verifyGatingCalibration prepared)
+  require (validateSessionInputs contracts prepared session)
+  unless offline (verifyGatingCalibration contracts prepared)
   unless (receipt.payloadsReadyAt == session.createdAt) (ioError (userError "receipt timing origin differs from its pinned session"))
   unless (uri == session.evidenceBaseUri <> "/sessions/" <> renderRunId session.sessionId <> "/" <> relative <> "/manifest.json") (ioError (userError "receipt destination differs from its pinned session"))
   inputs <- require (parseInputs session)

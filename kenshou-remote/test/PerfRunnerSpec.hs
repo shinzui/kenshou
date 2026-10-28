@@ -8,6 +8,8 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Time (UTCTime (..), addUTCTime, fromGregorian, secondsToDiffTime)
 import Kenshou.Core.Id (newRunId)
+import Kenshou.Core.Knob (mkKnobName)
+import Kenshou.Perf.Contracts (PerfContracts (..), noPerfContracts)
 import Kenshou.Perf.Plan
 import Kenshou.Perf.Prepared qualified as Prepared
 import Kenshou.Perf.Result
@@ -258,7 +260,8 @@ fixtureHooks calls = do
   lease <- newRunId
   pure
     RunnerHooks
-      { clock = pure now,
+      { contracts = fixtureContracts,
+        clock = pure now,
         admit = \_ _ _ _ -> pure (Admitted (LeaseIdentity "alpha" lease)),
         ownsLease = \_ -> pure True,
         canRunConfiguration = \_ _ -> pure True,
@@ -279,3 +282,13 @@ now = UTCTime (fromGregorian 2026 10 11) (secondsToDiffTime 0)
 
 right :: (Show e) => Either e a -> IO a
 right = either (fail . show) pure
+
+-- The golden preparation pins the first consumer's two reviewed benchmark
+-- revisions. docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md
+-- (M4) regenerates it from synthetic scenarios and replaces these contracts.
+fixtureContracts :: PerfContracts
+fixtureContracts =
+  noPerfContracts
+    { reviewedPhaseContracts = [("shibuya/core-ordering/benchmark/concurrency-sweep", 2), ("shibuya/pgmq-adapter/benchmark/end-to-end-throughput-latency", 1)],
+      steadyCountKnob = either (const Nothing) Just (mkKnobName "shibuya.messages")
+    }

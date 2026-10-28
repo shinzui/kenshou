@@ -26,6 +26,7 @@ import Kenshou.Measure.Compare.Policy qualified as Policy
 import Kenshou.Measure.Perf (validateProfilePolicy)
 import Kenshou.Perf.Artifacts (sealPerfDirectory, verifyPerfManifest)
 import Kenshou.Perf.Calibration (toolchainDigest)
+import Kenshou.Perf.Contracts (PerfContracts (..))
 import Kenshou.Perf.Plan
 import Kenshou.Perf.Prepared qualified as Prepared
 import Kenshou.Perf.Request
@@ -122,8 +123,8 @@ runPrepare requestPath destination cachePath bucketName environment = guarded do
   -- projects, locks and Cabal caches are siblings outside that checkout.
   _ <- loggedProcess (work </> "clone.log") "git" ["clone", "--quiet", "--no-hardlinks", root, harness]
   _ <- loggedProcess (work </> "checkout.log") "git" ["-C", harness, "checkout", "--quiet", "--detach", Text.unpack revision]
-  baseline <- resolveArm output harness revision "baseline"
-  candidate <- if plan.request.baselineRevision == plan.request.candidateRevision then pure baseline else resolveArm output harness revision "candidate"
+  baseline <- resolveArm environment.perf output harness revision "baseline"
+  candidate <- if plan.request.baselineRevision == plan.request.candidateRevision then pure baseline else resolveArm environment.perf output harness revision "candidate"
   targets <- requireInput (targetPackages plan.request baseline.armDescriptor)
   requireInput (Prepared.compareInventories targets baseline.armInventory candidate.armInventory)
   requireInput (Prepared.compareInventories targets baseline.armBounds candidate.armBounds)
@@ -136,7 +137,7 @@ runPrepare requestPath destination cachePath bucketName environment = guarded do
   published <- getCurrentTime
   let arm resolved payload = Prepared.PreparedArm resolved.armDescriptor resolved.armLock resolved.armBounds resolved.armInventory (toJSON payload) resolved.armBuildKey
       prepared = Prepared.PerfPrepared plan inputs revision (arm baseline baselinePayload) (arm candidate candidatePayload)
-  requireInput (Prepared.validatePrepared prepared)
+  requireInput (Prepared.validatePrepared environment.perf prepared)
   encodeFile (evidence </> "prepared.json") prepared
   encodeFile
     (evidence </> "preparation-summary.json")
@@ -160,8 +161,8 @@ runPrepare requestPath destination cachePath bucketName environment = guarded do
   LazyByteString.putStrLn (encode (object ["prepared" .= (evidence </> "prepared.json"), "preparedSha256" .= Prepared.preparedDigest prepared, "baselineCacheHit" .= baselineHit, "candidateCacheHit" .= candidateHit]))
   pure ExitSuccess
 
-resolveArm :: FilePath -> FilePath -> Text -> Text -> IO ArmInputs
-resolveArm output harness revision arm = do
+resolveArm :: PerfContracts -> FilePath -> FilePath -> Text -> Text -> IO ArmInputs
+resolveArm contracts output harness revision arm = do
   let evidence = output </> "evidence" </> "planning"
       work = output </> "work" </> Text.unpack arm
       flake = work </> "build"
@@ -175,11 +176,8 @@ resolveArm output harness revision arm = do
   lock <- ByteString.readFile lockPath >>= decode "source lock"
   names <- listDirectory harness
   packages <- filterMIO (\name -> doesFileExist (harness </> name </> name <> ".cabal")) (filter (Text.isPrefixOf "kenshou-" . Text.pack) names)
-  let selectedPackages =
-        if Prepared.isolatedShibuyaCohort descriptor
-          then filter (`notElem` ["kenshou-kafka", "kenshou-keiro", "kenshou-kiroku", "kenshou-pgmq", "kenshou-runtime"]) packages
-          else packages
-  boundsProject <- requireInput (Prepared.renderBoundsProject [harness </> name </> name <> ".cabal" | name <- selectedPackages] descriptor)
+  let selectedPackages = contracts.lanePackages descriptor packages
+  boundsProject <- requireInput (Prepared.renderBoundsProject contracts [harness </> name </> name <> ".cabal" | name <- selectedPackages] descriptor)
   let projectPath = work </> "bounds.project"
       planPath = work </> "bounds-dist" </> "cache" </> "plan.json"
   Text.IO.writeFile projectPath boundsProject
@@ -335,7 +333,7 @@ createPlan requestPath output environment pinnedHarness = do
   descriptorBytes <- ByteString.readFile request.cohortTemplate
   descriptor <- decode "cohort template" descriptorBytes
   expectedPackages <- requireInput (targetPackages request descriptor)
-  graph <- either (throwIO . PerfFailure 2 . (.errorText)) pure Graph.embeddedGraph
+  graph <- either (throwIO . PerfFailure 2 . (.errorText)) pure (Graph.decodeGraph environment.componentGraph)
   let nodes = [component | component <- graph.components, any (`elem` expectedPackages) component.packages]
   unless (all (\package -> any (elem package . (.packages)) nodes) expectedPackages) (throwIO (PerfFailure 2 "target packages are not represented in the component graph"))
   profilesBytes <- ByteString.readFile "policies/performance/catalog.v1.json"
@@ -348,7 +346,7 @@ createPlan requestPath output environment pinnedHarness = do
   let policyMap = Map.fromList [(Text.pack path, sha256Hex (canonicalEncode value)) | (path, value, _) <- policies]
   mapM_ (checkPolicy policies) profiles.profiles
   let catalog = map fromScenario (allScenarios environment.registry)
-  mapM_ (requireInput . validateProfile catalog) profiles.profiles
+  mapM_ (requireInput . validateProfile environment.perf catalog) profiles.profiles
   sourceProject <- resolveProject request.project
   unless (all ((== sourceProject.repository) . (.repository)) nodes) (throwIO (PerfFailure 2 "target graph nodes belong to another repository"))
   withSystemTempDirectory "kenshou-perf-source-" \checkout -> do
@@ -363,20 +361,20 @@ createPlan requestPath output environment pinnedHarness = do
     let paths = map Text.unpack (filter (not . Text.null) (Text.splitOn "\0" changedText))
     (mapped, _) <- Git.changesFromUpstream graph (Git.UpstreamDiff sourceProject.repository checkout request.baselineRevision request.candidateRevision) >>= requireInput
     let (changes, unknown, documentation) = conservativeChanges graph sourceProject.repository paths mapped
-    provisional <- requireInput (planPerformance request {purpose = "calibration"} graph catalog profiles changes unknown documentation policyMap Map.empty)
+    provisional <- requireInput (planPerformance environment.perf request {purpose = "calibration"} graph catalog profiles changes unknown documentation policyMap Map.empty)
     toolchain <- planningToolchain descriptor
     semantics <- harnessSemantics
     admissionChecks <-
       traverse
         ( \entry -> do
             policy <- case [document | (path, document, _) <- policies, path == entry.profile.policy] of [value] -> pure value; _ -> throwIO (PerfFailure 2 "missing calibration policy")
-            verified <- if request.purpose == "calibration" then pure (Left "calibration requests do not consume gating admissions") else case entry.profile.calibration of Nothing -> pure (Left "no calibration evidence"); Just _ -> verifyCalibrationAdmission entry (toolchainDigest toolchain) semantics policy
+            verified <- if request.purpose == "calibration" then pure (Left "calibration requests do not consume gating admissions") else case entry.profile.calibration of Nothing -> pure (Left "no calibration evidence"); Just _ -> verifyCalibrationAdmission environment.perf entry (toolchainDigest toolchain) semantics policy
             pure (entry, verified)
         )
         provisional.selected
     let admitted = Map.fromList [(entry.workloadSha256, digest) | (entry, Right digest) <- admissionChecks]
         calibrationProblems = Map.fromList [(entry.profile.name, problem) | (entry, Left problem) <- admissionChecks]
-    plan <- requireInput (planPerformance request graph catalog profiles changes unknown documentation policyMap admitted)
+    plan <- requireInput (planPerformance environment.perf request graph catalog profiles changes unknown documentation policyMap admitted)
     (harnessRevision, harnessDirty) <- case pinnedHarness of
       Just snapshot -> pure snapshot
       Nothing -> do

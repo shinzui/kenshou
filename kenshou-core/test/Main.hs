@@ -5,6 +5,7 @@ module Main (main) where
 import Data.Aeson (FromJSON, Value, eitherDecode, eitherDecodeFileStrict', encode, encodeFile, toJSON)
 import Data.ByteString qualified as ByteString
 import Data.Either (isLeft, isRight)
+import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
@@ -13,23 +14,25 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Database.PostgreSQL.Migrate (migrationComponent, sqlMigration)
-import Kenshou.Core.Bundle (LayerBundle (..), allScenarios, mkRegistry)
+import Kenshou.Core.Bundle (LayerBundle (..), ListFilter (..), RegistryError (..), ScenarioRule (..), allScenarios, emptyListFilter, mkBundle, mkRegistry, registryMigrationSets, requirePgVersionsFor, selectScenarios)
 import Kenshou.Core.Canonical (canonicalEncode)
 import Kenshou.Core.Cohort
 import Kenshou.Core.Compat (comparisonKey, compatInputs, seriesKey)
 import Kenshou.Core.Dimension
-import Kenshou.Core.Env (MigrationSet (..), MigrationSetName (..), PostgresRequirement (..))
+import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName (..), PostgresRequirement (..), noEnvironment)
 import Kenshou.Core.Env.Migration (composePlan, orderMigrationSets)
 import Kenshou.Core.Env.Postgres (EnvError (..), PgSettingsSnapshot (..), PostgresEnv (..), ServerControl (..), StopMode (..), withPostgresEnv, withPostgresEnvNamed)
 import Kenshou.Core.Id
 import Kenshou.Core.Knob
 import Kenshou.Core.Log (nullLogger)
 import Kenshou.Core.Manifest (verifyManifest, writeManifest)
+import Kenshou.Core.Outcome (Outcome (Passed))
+import Kenshou.Core.Phase (zeroPhases)
 import Kenshou.Core.Run (defectDisposition)
 import Kenshou.Core.RunResult (KnownDefectStatus (..))
 import Kenshou.Core.RunSpec
 import Kenshou.Core.RunSpec.Resolve (resolveRunSpec)
-import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), PackageCondition (..), Scenario (..), failedWith)
+import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), PackageCondition (..), Placement (..), Scenario (..), ScenarioReport (..), Tier (..), failedWith)
 import Kenshou.Core.Selector (matchesSelector, parseSelector)
 import Kenshou.Core.Selftest qualified as Selftest
 import Kenshou.Core.Selftest.Schema (selftestMigrationSet, selftestSchema)
@@ -67,6 +70,7 @@ main = hspec do
   layerIdentifierSpec
   selectorSpec
   registrySpec
+  openRegistrySpec
   knownDefectGroupSpec
   knobSpec
   dimensionSpec
@@ -175,6 +179,40 @@ selectorSpec = describe "scenario selectors" do
     recursive <- expectRight (parseSelector "selftest/**")
     matchesSelector one scenario `shouldBe` True
     matchesSelector recursive scenario `shouldBe` True
+
+-- A suite that is not the kernel's: its own layer, migration set, and rule.
+openRegistrySpec :: Spec
+openRegistrySpec = describe "open registry" do
+  let layer = either (error . Text.unpack) id (mkLayerId "acme")
+      acmeSet = syntheticSet "acme" []
+      roundtrip pgVersions =
+        Scenario
+          { id = either (error . show) id (parseScenarioId "acme/widget/correctness/roundtrip"),
+            revision = 1,
+            summary = "Round-trips a widget.",
+            tier = TierSmoke,
+            placement = PlaceEither,
+            knobs = [],
+            dimensions = postgresDimensions (PgDurable :| []) pgVersions noDimensions,
+            phases = zeroPhases,
+            requires = noEnvironment {postgres = Just (PostgresRequirement [MigrationSetName "acme"] [] False)},
+            knownDefect = Nothing,
+            run = const (pure (ScenarioReport Passed Nothing []))
+          }
+      bundleWith scenario = (mkBundle layer [scenario] []) {migrations = [acmeSet], rules = [requirePgVersionsFor (MigrationSetName "acme") (Pg18 :| [])]}
+      registryErrors bundles = either (fmap (\(RegistryError message) -> message) . toList) (const []) (mkRegistry bundles)
+  it "accepts a bundle for a new layer with its own migration set and rule" do
+    registry <- expectRight (mkRegistry [Selftest.bundle, bundleWith (roundtrip (Pg18 :| []))])
+    Map.keys (registryMigrationSets registry) `shouldBe` [MigrationSetName "acme", MigrationSetName "kenshou-selftest"]
+    fmap (renderScenarioId . (.id)) (selectScenarios registry emptyListFilter {layers = [layer]}) `shouldBe` ["acme/widget/correctness/roundtrip"]
+  it "rejects a scenario that violates a contributed rule with the rule's message" do
+    registryErrors [bundleWith (roundtrip (Pg17 :| [Pg18]))] `shouldBe` ["acme/widget/correctness/roundtrip: acme scenarios require PostgreSQL 18"]
+  it "applies a rule to scenarios of every bundle" do
+    let rule = ScenarioRule "no-selftest" (\scenario -> ["rejected" | renderLayer scenario.id.layer == "selftest"])
+    length (registryErrors [Selftest.bundle, (bundleWith (roundtrip (Pg18 :| []))) {rules = [rule]}]) `shouldBe` length Selftest.bundle.scenarios
+  it "rejects duplicate and undefined migration sets" do
+    registryErrors [bundleWith (roundtrip (Pg18 :| [])), (mkBundle layer [] []) {migrations = [acmeSet]}] `shouldBe` ["duplicate migration set: acme"]
+    registryErrors [(bundleWith (roundtrip (Pg18 :| []))) {migrations = []}] `shouldBe` ["acme/widget/correctness/roundtrip: no registered bundle defines migration set acme"]
 
 registrySpec :: Spec
 registrySpec = describe "scenario registry" do
