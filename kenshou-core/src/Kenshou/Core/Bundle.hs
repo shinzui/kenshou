@@ -1,6 +1,7 @@
 module Kenshou.Core.Bundle
   ( LayerBundle (..),
     mkBundle,
+    lookupResource,
     ScenarioRule (..),
     requirePgVersionsFor,
     Registry,
@@ -31,6 +32,7 @@ import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), PgVersi
 import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName, PostgresRequirement (..), mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
 import Kenshou.Core.Knob (KnobSpec (..), renderKnobName)
+import Kenshou.Core.Resource (ResourceName, ResourceProvider (..), renderResourceName)
 import Kenshou.Core.Role (RoleName, WorkerRole (..), renderRoleName)
 import Kenshou.Core.Scenario (KnownDefect (..), Placement, Scenario (..), Tier, individualKnownDefects, renderPlacement, renderTier)
 import Kenshou.Core.Selector (ScenarioSelector, matchesSelector)
@@ -47,11 +49,14 @@ data LayerBundle = LayerBundle
     migrations :: [MigrationSet],
     -- | Checks this bundle contributes. 'mkRegistry' applies every bundle's rules
     -- to every scenario in the registry.
-    rules :: [ScenarioRule]
+    rules :: [ScenarioRule],
+    -- | Providers for named resources. Any scenario in the registry may require a
+    -- resource a bundle provides.
+    resources :: [ResourceProvider]
   }
 
 mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
-mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = []}
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = []}
 
 -- | A named registry check. Each message 'check' returns becomes a 'RegistryError'
 -- prefixed with the scenario identifier.
@@ -109,6 +114,7 @@ mkRegistry bundles = case errors of
         <> [RegistryError ("role layer differs from bundle: " <> renderRoleName role.name) | bundle <- bundles, role <- bundle.roles, not ((renderLayer bundle.layer <> "/") `Text.isPrefixOf` renderRoleName role.name)]
         <> concatMap validateScenario scenarios
         <> migrationErrors bundles
+        <> resourceErrors bundles
         <> [RegistryError (renderScenarioId scenario.id <> ": " <> message) | rule <- concatMap (.rules) bundles, scenario <- scenarios, message <- rule.check scenario]
 
 -- Every set and required name is a valid pg-migrate component name, no two bundles
@@ -132,6 +138,24 @@ migrationErrors bundles =
     definedNames = fmap (.name) sets
     requiredNames = concatMap scenarioSets (concatMap (.scenarios) bundles) <> concatMap (.requires) sets
     scenarioSets scenario = concatMap (.schemas) (maybe [] pure scenario.requires.postgres <> fmap snd scenario.requires.extraPostgres)
+
+-- No two bundles provide the same resource, and every resource a scenario requires
+-- has a provider.
+resourceErrors :: [LayerBundle] -> [RegistryError]
+resourceErrors bundles =
+  duplicateErrors "resource provider" (fmap (renderResourceName . (.name)) providers)
+    <> [ RegistryError ("scenario requires unprovided resource " <> renderResourceName required <> ": " <> renderScenarioId scenario.id)
+       | scenario <- concatMap (.scenarios) bundles,
+         required <- scenario.requires.resources,
+         required `notElem` fmap (.name) providers
+       ]
+  where
+    providers = concatMap (.resources) bundles
+
+lookupResource :: Registry -> ResourceName -> Maybe ResourceProvider
+lookupResource (Registry bundles) wanted = case [provider | bundle <- bundles, provider <- bundle.resources, provider.name == wanted] of
+  provider : _ -> Just provider
+  [] -> Nothing
 
 registryMigrationSets :: Registry -> Map.Map MigrationSetName MigrationSet
 registryMigrationSets (Registry bundles) = Map.fromList [(set.name, set) | bundle <- bundles, set <- bundle.migrations]

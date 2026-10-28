@@ -10,10 +10,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (getCurrentTime)
 import Kenshou.Core.Bundle (LayerBundle (..), Registry, lookupScenario, mkBundle, mkRegistry)
+import Kenshou.Core.Bundle qualified as Bundle
 import Kenshou.Core.Dimension (allTelemetryArms)
 import Kenshou.Core.Env (EnvRequirements (..))
 import Kenshou.Core.Id (mkSeed, newRunId, parseScenarioId, renderRunId, selftestLayer)
 import Kenshou.Core.Knob (Allowed (..), KnobSpec (..), KnobType (..), KnobValue (..), RawKnob (..), mkKnobName)
+import Kenshou.Core.Resource (CellBinding (..), ProvisionedResource (..), ResourceProvider (..))
 import Kenshou.Core.Resource.Types (legacyKafkaName)
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..), minimalRunSpec)
 import Kenshou.Core.Scenario (Scenario (..))
@@ -159,7 +161,7 @@ remoteRegistry :: Registry
 remoteRegistry = either (error . show) id (mkRegistry [Selftest.bundle, RemoteSelftest.bundle])
 
 tracingRegistry :: Registry
-tracingRegistry = either (error . show) id (mkRegistry [(mkBundle selftestLayer [enhanced] []) {migrations = [selftestMigrationSet]}])
+tracingRegistry = either (error . show) id (mkRegistry [(mkBundle selftestLayer [enhanced] []) {migrations = [selftestMigrationSet], Bundle.resources = [brokerProvider]}])
   where
     scenarioId = either (error . Text.unpack) id (parseScenarioId "selftest/kernel/correctness/postgres-roundtrip")
     original = maybe (error "missing PostgreSQL selftest") id (lookupScenario registry scenarioId)
@@ -192,3 +194,15 @@ withEnv name value operation = bracket (lookupEnv name) (restore name) (const (a
     apply key Nothing = unsetEnv key
     apply key (Just setting) = setEnv key setting
     restore key prior = apply key prior
+
+-- A provider for the resource the legacy cell broker binds; the cell supplies the
+-- broker, so the local bracket only passes the value through.
+brokerProvider :: ResourceProvider
+brokerProvider =
+  ResourceProvider
+    { name = legacyKafkaName,
+      summary = "Cell broker",
+      normalize = Right . maybe Null id,
+      withLocal = \_ value action -> action (ProvisionedResource value Null),
+      cell = Just (CellBinding "broker" (Just (object ["wipe" .= True])))
+    }

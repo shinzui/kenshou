@@ -107,7 +107,7 @@ main = hspec do
       let scenario = either (error . show) id (parseScenarioId "selftest/check/process/retirement")
           knobs = either (error . show) id (resolveKnobs [] [])
           seed = either (error . show) id (mkSeed 0)
-          runContext = RunContext runId scenario knobs emptyDimensions seed zeroPhases (Environment Nothing mempty) (minimalRunSpec scenario).environment Nothing directory nullLogger state
+          runContext = RunContext runId scenario knobs emptyDimensions seed zeroPhases (Environment Nothing mempty mempty) (minimalRunSpec scenario).environment Nothing directory nullLogger state
       withCheck runContext \environment -> withSupervisor environment \supervisor -> do
         weak <- retireFixture supervisor
         performMajorGC

@@ -2,24 +2,31 @@
 
 module Main (main) where
 
-import Data.Aeson (FromJSON, Value, eitherDecode, eitherDecodeFileStrict', encode, encodeFile, toJSON)
+import Control.Exception (bracket_)
+import Data.Aeson (FromJSON, Value (..), eitherDecode, eitherDecodeFileStrict', encode, encodeFile, object, toJSON, (.=))
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as ByteString
 import Data.Either (isLeft, isRight)
 import Data.Foldable (toList)
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Int (Int64)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Database.PostgreSQL.Migrate (migrationComponent, sqlMigration)
 import Kenshou.Core.Bundle (LayerBundle (..), ListFilter (..), RegistryError (..), ScenarioRule (..), allScenarios, emptyListFilter, mkBundle, mkRegistry, registryMigrationSets, requirePgVersionsFor, selectScenarios)
+import Kenshou.Core.Bundle qualified as Bundle
 import Kenshou.Core.Canonical (canonicalEncode)
 import Kenshou.Core.Cohort
 import Kenshou.Core.Compat (comparisonKey, compatInputs, seriesKey)
+import Kenshou.Core.Context (Environment (..), RunContext (..))
 import Kenshou.Core.Dimension
-import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName (..), PostgresRequirement (..), noEnvironment)
+import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName (..), PostgresRequirement (..), noEnvironment, requiresResource)
 import Kenshou.Core.Env.Migration (composePlan, orderMigrationSets)
 import Kenshou.Core.Env.Postgres (EnvError (..), PgSettingsSnapshot (..), PostgresEnv (..), ServerControl (..), StopMode (..), withPostgresEnv, withPostgresEnvNamed)
 import Kenshou.Core.Id
@@ -28,7 +35,8 @@ import Kenshou.Core.Log (nullLogger)
 import Kenshou.Core.Manifest (verifyManifest, writeManifest)
 import Kenshou.Core.Outcome (Outcome (Passed))
 import Kenshou.Core.Phase (zeroPhases)
-import Kenshou.Core.Run (defectDisposition)
+import Kenshou.Core.Resource (ProvisionedResource (..), ResourceProvider (..), mkResourceName)
+import Kenshou.Core.Run (RunOutput (..), RunnerConfig (..), defectDisposition, executeRun)
 import Kenshou.Core.RunResult (KnownDefectStatus (..))
 import Kenshou.Core.RunSpec
 import Kenshou.Core.RunSpec.Resolve (resolveRunSpec)
@@ -44,6 +52,7 @@ import Kenshou.PlanSpec qualified
 import Kenshou.ResourceSpec qualified
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
+import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import System.Process (readProcessWithExitCode)
 import Test.Hspec
@@ -72,6 +81,7 @@ main = hspec do
   selectorSpec
   registrySpec
   openRegistrySpec
+  resourceProvisioningSpec
   knownDefectGroupSpec
   knobSpec
   dimensionSpec
@@ -215,6 +225,62 @@ openRegistrySpec = describe "open registry" do
   it "rejects duplicate and undefined migration sets" do
     registryErrors [bundleWith (roundtrip (Pg18 :| [])), (mkBundle layer [] []) {migrations = [acmeSet]}] `shouldBe` ["duplicate migration set: acme"]
     registryErrors [(bundleWith (roundtrip (Pg18 :| []))) {migrations = []}] `shouldBe` ["acme/widget/correctness/roundtrip: no registered bundle defines migration set acme"]
+
+-- A suite resource with a stub provider that records when it is acquired and released.
+resourceProvisioningSpec :: Spec
+resourceProvisioningSpec = describe "resource provisioning" do
+  let layer = either (error . Text.unpack) id (mkLayerId "acme")
+      stub = either (error . Text.unpack) id (mkResourceName "stub")
+      provider :: (Text -> IO ()) -> ResourceProvider
+      provider record =
+        ResourceProvider
+          { name = stub,
+            summary = "Stub resource",
+            normalize = Right . fromMaybe (object ["mode" .= ("default" :: Text)]),
+            withLocal = \_ value action ->
+              bracket_ (record "acquire") (record "release") (action (ProvisionedResource (object ["spec" .= value]) (object ["kind" .= ("stub" :: Text)]))),
+            cell = Nothing
+          }
+      roundtrip :: (Text -> IO ()) -> Scenario
+      roundtrip record =
+        Scenario
+          { id = either (error . show) id (parseScenarioId "acme/widget/correctness/uses-stub"),
+            revision = 1,
+            summary = "Uses the stub resource.",
+            tier = TierSmoke,
+            placement = PlaceEither,
+            knobs = [],
+            dimensions = noDimensions,
+            phases = zeroPhases,
+            requires = requiresResource stub,
+            knownDefect = Nothing,
+            run = \context -> do
+              record "run"
+              pure (if fmap (.workerValue) (Map.lookup stub context.env.resources) == Just (object ["spec" .= object ["mode" .= ("default" :: Text)]]) then ScenarioReport Passed Nothing [] else failedWith ["no-stub"] "the stub resource was not provisioned")
+          }
+      bundleWith record = (mkBundle layer [roundtrip record] []) {Bundle.resources = [provider record]}
+      registryErrors bundles = either (fmap (\(RegistryError message) -> message) . toList) (const []) (mkRegistry bundles)
+      ignore = const (pure ())
+  it "rejects a duplicate provider and an unprovided resource" do
+    registryErrors [bundleWith ignore, (mkBundle layer [] []) {Bundle.resources = [provider ignore]}] `shouldBe` ["duplicate resource provider: stub"]
+    registryErrors [(bundleWith ignore) {Bundle.resources = []}] `shouldBe` ["scenario requires unprovided resource stub: acme/widget/correctness/uses-stub"]
+  it "normalizes the value, provisions around the run, and records the fingerprint" $ withSystemTempDirectory "kenshou-resource" \root -> do
+    events <- newIORef ([] :: [Text])
+    let record event = modifyIORef' events (<> [event])
+    registry <- expectRight (mkRegistry [bundleWith record])
+    scenarioId <- expectRight (parseScenarioId "acme/widget/correctness/uses-stub")
+    output <- executeRun (RunnerConfig registry root (identityWith []) Nothing False False []) (minimalRunSpec scenarioId) >>= expectRight
+    readIORef events `shouldReturn` ["acquire", "run", "release"]
+    runSpec <- decodeFile (output.directory </> "run-spec.json")
+    runResult <- decodeFile (output.directory </> "run-result.json")
+    path ["environment", "resources", "stub"] runSpec `shouldBe` Just (object ["mode" .= ("default" :: Text)])
+    path ["fingerprint", "resources", "stub"] runResult `shouldBe` Just (object ["kind" .= ("stub" :: Text)])
+    path ["outcome"] runResult `shouldBe` Just (String "passed")
+  where
+    decodeFile file = eitherDecodeFileStrict' file >>= either fail pure :: IO Value
+    path [] value = Just value
+    path (key : rest) (Object fields) = KeyMap.lookup (Key.fromText key) fields >>= path rest
+    path _ _ = Nothing
 
 registrySpec :: Spec
 registrySpec = describe "scenario registry" do

@@ -1,16 +1,20 @@
 module Kenshou.Core.RunSpec.Resolve (SpecError (..), resolveRunSpec) where
 
+import Data.Aeson (Value)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Bundle (Registry, lookupScenario)
+import Kenshou.Core.Bundle (Registry, lookupResource, lookupScenario)
 import Kenshou.Core.Dimension (resolveDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
 import Kenshou.Core.Id (mkSeed, newRunId)
 import Kenshou.Core.Knob (resolveKnobs)
 import Kenshou.Core.Phase (PhasePlan (..))
+import Kenshou.Core.Resource (ResourceName, ResourceProvider (..), renderResourceName)
 import Kenshou.Core.RunSpec
+import Kenshou.Core.RunSpec qualified as RunSpec
 import Kenshou.Core.Scenario (Placement (..), Scenario (..), Tier (..))
 import System.Info qualified as System
 import System.Random (randomIO)
@@ -34,7 +38,8 @@ resolveRunSpec registry spec = case lookupScenario registry spec.scenario of
       validatePlacement scenario.placement spec.environment.placement
       validatePostgres scenario spec.environment.postgres
       validateExtraPostgres scenario spec.environment.extraPostgres
-      let environment = applyEnvironmentDefaults scenario spec.environment
+      resources <- resolveResources registry scenario spec.environment.resources
+      let environment = (applyEnvironmentDefaults scenario spec.environment) {RunSpec.resources = resources}
           phases = maybe scenario.phases id spec.phases
           effective = EffectiveRunSpec generatedRunId scenario.id scenario.revision checkedKnobs checkedDimensions checkedSeed phases (maybe (tierTimeout scenario.tier phases) id spec.timeoutSeconds) environment spec.cohortExpectation spec.comparison spec.labels
       pure (scenario, effective)
@@ -43,6 +48,21 @@ resolveRunSpec registry spec = case lookupScenario registry spec.scenario of
     firstOne = either (Left . (:| []) . SpecError) Right
     mapErrors :: (Show problem) => Either (NonEmpty problem) value -> Either (NonEmpty SpecError) value
     mapErrors = either (Left . fmap (SpecError . Text.pack . show)) Right
+
+-- | Every resource the specification names must be required by the scenario, and
+-- every required resource's value is normalized by its registered provider, so the
+-- effective specification records the complete value.
+resolveResources :: Registry -> Scenario -> Map ResourceName Value -> Either (NonEmpty SpecError) (Map ResourceName Value)
+resolveResources registry scenario supplied = do
+  case [name | name <- Map.keys supplied, name `notElem` scenario.requires.resources] of
+    [] -> pure ()
+    extra : _ -> Left (SpecError ("environment names a resource the scenario does not require: " <> renderResourceName extra) :| [])
+  normalized <- traverse normalizeOne scenario.requires.resources
+  pure (Map.fromList normalized)
+  where
+    normalizeOne name = case lookupResource registry name of
+      Nothing -> Left (SpecError ("no registered provider for resource " <> renderResourceName name) :| [])
+      Just provider -> either (\problem -> Left (SpecError ("resource " <> renderResourceName name <> ": " <> problem) :| [])) (Right . (name,)) (provider.normalize (Map.lookup name supplied))
 
 validatePlacement :: Placement -> SpecPlacement -> Either (NonEmpty SpecError) ()
 validatePlacement PlaceCell RunLocal = Left (SpecError "scenario requires cell placement" :| [])

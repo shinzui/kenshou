@@ -35,6 +35,7 @@ import Kenshou.Core.Id (RunId, ScenarioId, Seed, deriveGen)
 import Kenshou.Core.Knob (ResolvedKnobs)
 import Kenshou.Core.Log (Logger, Severity)
 import Kenshou.Core.Phase (PhaseName, PhasePlan)
+import Kenshou.Core.Resource.Types (ProvisionedResource, ResourceName)
 import Kenshou.Core.RunSpec (ComparisonMembership, EnvironmentSpec)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
@@ -46,7 +47,7 @@ data ArtifactDir = SamplesDir | SeriesDir | VerdictsDir | DiagnosisDir | LogsDir
 
 data Observation = Observation {source :: Text, severity :: Severity, message :: Text, at :: UTCTime} deriving stock (Eq, Show)
 
-data Environment = Environment {postgres :: Maybe PostgresEnv, extraPostgres :: Map Text PostgresEnv}
+data Environment = Environment {postgres :: Maybe PostgresEnv, extraPostgres :: Map Text PostgresEnv, resources :: Map ResourceName ProvisionedResource}
 
 data PhaseTiming = PhaseTiming
   { name :: PhaseName,

@@ -60,10 +60,15 @@ the resource named `kafka`.
   `kenshou-evidence/test/fixtures/consumer-records/`, and the synthetic `named resources`
   group is in `ResourceSpec`; see Decision Log. All suites green; the allow-list holds only
   the legacy shim lines.)
-- [ ] M2: `LayerBundle` carries resource providers; `mkRegistry` rejects an unprovided or
+- [x] M2: `LayerBundle` carries resource providers; `mkRegistry` rejects an unprovided or
   duplicate resource; `Kenshou.Core.Run` brackets providers and `Kenshou.Core.Role.Spawn` and
   `Kenshou.Check.Process` send provisioned values to workers; every self-test bundle registers
   no providers and `cabal test all` passes.
+  (2026-10-28; the `resource provisioning` group runs a scenario through `executeRun` with a
+  stub provider and observes `acquire`, `run`, `release`, the normalized value in
+  `run-spec.json`, and `fingerprint.resources.stub` in `run-result.json`; all suites,
+  schemas, and self-tests pass. `resolveRunSpec` now does the validation the CLI's interim
+  `validateKafkaEnvironment` did, which is deleted.)
 - [ ] M3: the cell environment and submission documents carry a `resources` block beside the
   legacy `broker` fields, `Kenshou.Remote.Cell.Legacy` adapts a cell broker to the `kafka`
   resource, the Kafka probe is gone from `Kenshou.Remote.Selftest`, and
@@ -124,6 +129,13 @@ the resource named `kafka`.
   `RunContext`, so one module would form an import cycle. Consumer values may appear only
   in the consumer-records area and `fixtures/consumer-baseline/` (EP-2's rule), which the
   plan's `kenshou-core/test/golden/compat/` location would break.
+  Date: 2026-10-28
+
+- Decision: The run result records `fingerprint.resources` only when a scenario provisioned
+  a resource, so resource-free run results keep their exact shape. The provider's
+  `withLocal` is a rank-N field, which `HasField` cannot select, so the runner binds it
+  with a record pattern.
+  Rationale: Existing consumer run results and their attestations stay byte-comparable.
   Date: 2026-10-28
 
 ## Outcomes & Retrospective

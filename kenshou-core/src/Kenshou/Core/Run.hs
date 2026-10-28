@@ -17,7 +17,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (diffUTCTime, getCurrentTime)
-import Kenshou.Core.Bundle (Registry, registryMigrationSets)
+import Kenshou.Core.Bundle (Registry, lookupResource, registryMigrationSets)
 import Kenshou.Core.Canonical (sha256Hex)
 import Kenshou.Core.Cohort (CohortIdentity (..), PlanHash (..))
 import Kenshou.Core.Compat (comparisonKey, compatInputs, seriesKey)
@@ -29,6 +29,7 @@ import Kenshou.Core.Id (renderRunId, unSeed)
 import Kenshou.Core.Log (Severity (Warning), withLogger)
 import Kenshou.Core.Manifest (writeManifest)
 import Kenshou.Core.Outcome (Outcome (..), outcomeExitCode)
+import Kenshou.Core.Resource (ProvisionedResource (..), ResourceName, ResourceProvider (..), renderResourceName)
 import Kenshou.Core.RunResult
 import Kenshou.Core.RunSpec (CohortExpectation (..), EffectiveRunSpec (..), EnvironmentSpec (..), RunSpec)
 import Kenshou.Core.RunSpec.Resolve (SpecError (..), resolveRunSpec)
@@ -68,8 +69,8 @@ executeRun config input = do
           (result, mediaTypes) <- withLogger (directory </> "logs" </> "harness.jsonl") spec.runId \logger -> do
             startedAt <- getCurrentTime
             state <- newRunState
-            let context = RunContext spec.runId spec.scenario spec.knobs spec.dimensions spec.seed spec.phases (Environment Nothing Map.empty) spec.environment spec.comparison directory logger state
-            (report, postgresSnapshot, extraPostgresSnapshots) <- runScenario config scenario spec context
+            let context = RunContext spec.runId spec.scenario spec.knobs spec.dimensions spec.seed spec.phases (Environment Nothing Map.empty Map.empty) spec.environment spec.comparison directory logger state
+            (report, postgresSnapshot, extraPostgresSnapshots, resourceFingerprints) <- runScenario config scenario spec context
             endedAt <- getCurrentTime
             host <- collectHostFingerprint
             when (host.revision == Nothing) (observe context "harness" Warning "harness revision is unavailable")
@@ -79,7 +80,10 @@ executeRun config input = do
                 schemas = maybe [] (.schemas) scenario.requires.postgres
                 inputs = compatInputs spec postgresSnapshot schemas config.cohort
                 compatibility = object ["algorithm" .= ("kenshou.compat-key/v1" :: Text), "comparisonKey" .= comparisonKey inputs, "seriesKey" .= seriesKey inputs, "inputs" .= inputs]
-                fingerprint = object ["placement" .= spec.environment.placement, "machineProfile" .= spec.environment.machineProfile, "host" .= hostValue host, "runtime" .= runtimeValue host, "kenshou" .= kenshouValue host, "postgres" .= postgresSnapshot, "extraPostgres" .= extraPostgresSnapshots, "cell" .= config.cellFingerprint]
+                fingerprint =
+                  object $
+                    ["placement" .= spec.environment.placement, "machineProfile" .= spec.environment.machineProfile, "host" .= hostValue host, "runtime" .= runtimeValue host, "kenshou" .= kenshouValue host, "postgres" .= postgresSnapshot, "extraPostgres" .= extraPostgresSnapshots, "cell" .= config.cellFingerprint]
+                      <> ["resources" .= resourceFingerprints | not (Map.null resourceFingerprints)]
                 invocation = object ["argv" .= config.argv, "workingDirectory" .= workingDirectory]
                 result = RunResult spec.runId spec.scenario spec.scenarioRevision scenario.tier report.outcome blocking exitCode report.reason report.failures defect (unSeed spec.seed) (sha256Hex specBytes) spec.comparison startedAt endedAt (realToFrac (diffUTCTime endedAt startedAt)) phaseTimings config.cohort fingerprint compatibility summaries observations invocation
             atomicEncode (directory </> "run-result.json") result
@@ -89,18 +93,31 @@ executeRun config input = do
           manifestBytes <- ByteString.readFile (directory </> "manifest.json")
           pure (Right (RunOutput directory result (sha256Hex manifestBytes)))
 
-runScenario :: RunnerConfig -> Scenario -> EffectiveRunSpec -> RunContext -> IO (ScenarioReport, Maybe PgSettingsSnapshot, Map.Map Text PgSettingsSnapshot)
+runScenario :: RunnerConfig -> Scenario -> EffectiveRunSpec -> RunContext -> IO (ScenarioReport, Maybe PgSettingsSnapshot, Map.Map Text PgSettingsSnapshot, Map.Map ResourceName Value)
 runScenario config scenario spec context
-  | cohortMismatch config.cohort spec.cohortExpectation = pure (infrastructureFailureBecause "cohort-mismatch", Nothing, Map.empty)
+  | cohortMismatch config.cohort spec.cohortExpectation = pure (infrastructureFailureBecause "cohort-mismatch", Nothing, Map.empty, Map.empty)
   | otherwise = do
       nested <- withPrimary scenario.requires.postgres spec.environment.postgres \primary ->
-        withExtras scenario.requires.extraPostgres spec.environment.extraPostgres Map.empty \extras -> do
-          let environment = Environment primary extras
-          report <- timed context {env = environment}
-          pure (report, (.snapshot) <$> primary, fmap (.snapshot) extras)
-      let provisioned = nested >>= id
-      pure (either (\err -> (infrastructureFailureBecause (Text.pack (show err)), Nothing, Map.empty)) id provisioned)
+        withExtras scenario.requires.extraPostgres spec.environment.extraPostgres Map.empty \extras ->
+          withResources scenario.requires.resources Map.empty \resources -> do
+            let environment = Environment primary extras resources
+            report <- timed context {env = environment}
+            pure (report, (.snapshot) <$> primary, fmap (.snapshot) extras, fmap (.fingerprint) resources)
+      let provisioned = nested >>= id >>= id
+      pure (either (\err -> (infrastructureFailureBecause (Text.pack (show err)), Nothing, Map.empty, Map.empty)) id provisioned)
   where
+    -- Providers are bracketed in declaration order inside the PostgreSQL contexts; a
+    -- provider failure is an infrastructure failure like a PostgreSQL one.
+    withResources [] accumulated action = Right <$> action accumulated
+    withResources (name : rest) accumulated action = case (lookupResource config.registry name, Map.lookup name spec.environment.resources) of
+      (Nothing, _) -> pure (Left (EnvError ("no registered provider for resource " <> renderResourceName name)))
+      (_, Nothing) -> pure (Left (EnvError ("resource specification is missing: " <> renderResourceName name)))
+      (Just ResourceProvider {withLocal = acquire}, Just value) -> do
+        attempted <- try (acquire context value \provisioned -> withResources rest (Map.insert name provisioned accumulated) action)
+        pure case attempted of
+          Left (exception :: SomeException) -> Left (EnvError ("resource " <> renderResourceName name <> " failed: " <> Text.pack (displayException exception)))
+          Right inner -> inner
+
     withPrimary Nothing _ action = Right <$> action Nothing
     withPrimary (Just requirement) (Just postgresSpec) action = withPostgresEnvKeeping (registryMigrationSets config.registry) config.keepEnvironment context.logger context.outDir spec.runId requirement postgresSpec spec.dimensions (action . Just)
     withPrimary (Just _) Nothing _ = pure (Left (EnvError "PostgreSQL specification is missing"))

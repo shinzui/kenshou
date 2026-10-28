@@ -16,7 +16,6 @@ import Kenshou.Core.Id
 import Kenshou.Core.Knob (parseAssignment)
 import Kenshou.Core.Outcome (renderOutcome)
 import Kenshou.Core.Phase (PhasePlan (..), zeroPhases)
-import Kenshou.Core.Resource.Types (legacyKafkaName)
 import Kenshou.Core.Run
 import Kenshou.Core.RunResult (RunResult (..))
 import Kenshou.Core.RunSpec
@@ -98,15 +97,13 @@ runHandler options environment = case schemaDiagnostic options.config.diagnostic
           input <- loadInput options
           case input >>= applyOverrides options of
             Left err -> Text.IO.hPutStrLn stderr ("kenshou: " <> err) >> pure (ExitFailure 2)
-            Right spec -> case validateKafkaEnvironment (Map.lookup legacyKafkaName spec.environment.resources) of
-              Left err -> Text.IO.hPutStrLn stderr ("kenshou: " <> err) >> pure (ExitFailure 2)
-              Right _ -> do
-                resolved <- resolveRunSpec environment.registry spec
-                case resolved of
-                  Left problems -> Text.IO.hPutStrLn stderr (Text.intercalate "\n" [message | SpecError message <- NonEmpty.toList problems]) >> pure (ExitFailure 2)
-                  Right (_, effective)
-                    | options.printSpec -> LazyByteString.putStrLn (Aeson.encode effective) >> pure ExitSuccess
-                    | otherwise -> execute defaults spec
+            Right spec -> do
+              resolved <- resolveRunSpec environment.registry spec
+              case resolved of
+                Left problems -> Text.IO.hPutStrLn stderr (Text.intercalate "\n" [message | SpecError message <- NonEmpty.toList problems]) >> pure (ExitFailure 2)
+                Right (_, effective)
+                  | options.printSpec -> LazyByteString.putStrLn (Aeson.encode effective) >> pure ExitSuccess
+                  | otherwise -> execute defaults spec
 
     execute defaults spec = do
       cohortResult <- loadCohort options.cohortIdentity
@@ -208,7 +205,3 @@ readPlacement :: String -> Either String SpecPlacement
 readPlacement "local" = Right RunLocal
 readPlacement "cell" = Right RunOnCell
 readPlacement value = Left ("unknown placement " <> show value)
-
-validateKafkaEnvironment :: Maybe Aeson.Value -> Either Text ()
-validateKafkaEnvironment Nothing = Right ()
-validateKafkaEnvironment (Just _) = Left "no registered suite provisions a Kafka environment in this build"
