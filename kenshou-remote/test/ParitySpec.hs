@@ -65,7 +65,7 @@ result placement outcome seed =
       "scenario" .= ("selftest/kernel/correctness/postgres-roundtrip" :: Text.Text),
       "outcome" .= outcome,
       "seed" .= seed,
-      "cohort" .= object ["components" .= [object ["name" .= ("kiroku-store" :: Text.Text), "version" .= ("0.8.0.1" :: Text.Text)]], "os" .= placement],
+      "cohort" .= object ["components" .= [object ["name" .= ("synthetic-store" :: Text.Text), "version" .= ("0.8.0.1" :: Text.Text)]], "os" .= placement],
       "fingerprint" .= object ["placement" .= placement]
     ]
 

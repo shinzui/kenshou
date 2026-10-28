@@ -19,7 +19,7 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as TextIO
 import Data.Time (diffUTCTime, getCurrentTime)
 import Kenshou.Cli.Command.Overhead qualified as LocalOverhead
-import Kenshou.Core.Bundle (lookupScenario)
+import Kenshou.Core.Bundle (lookupScenario, registryRoutingRules)
 import Kenshou.Core.Cli (CliCommand (..), CliEnv (..), CliGroup (..))
 import Kenshou.Core.Cohort (CohortIdentity (..), PlanHash (..))
 import Kenshou.Core.Id (RunId, mkSeed, newRunId, parseRunId, parseScenarioId, renderRunId, unSeed)
@@ -45,7 +45,7 @@ import Kenshou.Remote.Cell.Lease (AcquireOutcome (..), CellRef (..), Lease (..),
 import Kenshou.Remote.Cell.Parity (ParityOptions (..), ParityReport (..), compareForParity)
 import Kenshou.Remote.Cell.Prepare (Granularity (..), OtlpSink (..), PrepareOptions (..))
 import Kenshou.Remote.Cell.RouteJson (RouteDocuments (..), routeWorkJson)
-import Kenshou.Remote.Cell.RouteRules (CellCapabilities (..), defaultRoutingRules, descriptorDigest, loadCellCapabilities)
+import Kenshou.Remote.Cell.RouteRules (CellCapabilities (..), descriptorDigest, loadCellCapabilities)
 import Kenshou.Remote.Cell.Session (SessionTransition (..))
 import Kenshou.Remote.Cell.Session.Build (BuildOptions (..), BuiltSession (..), buildSession)
 import Kenshou.Remote.Cell.Session.Journal (LeaseMode (..), SessionJournal (..), SliceJournal (..), SliceState (..), applyTransition, readSessionJournal, writeSessionJournal)
@@ -478,7 +478,7 @@ runCell selected cli = case selected of
               let descriptors = observed.descriptor : fmap (.descriptor) snapshots
               capabilityResult <- loadCapabilitiesFor descriptors
               planResult <- readJsonDocument planFile
-              rulesResult <- maybe (pure (Right defaultRoutingRules)) readJsonDocument rulesFile
+              rulesResult <- maybe (pure (Right (registryRoutingRules cli.registry))) readJsonDocument rulesFile
               payloadResult <- traverse eitherDecodeFileStrict' payloadFile
               case (capabilityResult, planResult, rulesResult, sequence payloadResult) of
                 (Left problem, _, _, _) -> usage problem
@@ -511,7 +511,7 @@ runCell selected cli = case selected of
             Nothing -> unavailable "cell has no matching lease"
             Just active -> do
               payloadResult <- loadPayloads payloadFiles
-              rulesResult <- maybe (pure (Right defaultRoutingRules)) readJsonDocument rulesFile
+              rulesResult <- maybe (pure (Right (registryRoutingRules cli.registry))) readJsonDocument rulesFile
               case (payloadResult, rulesResult) of
                 (Left problem, _) -> usage problem
                 (_, Left failure) -> usage (Text.pack failure)

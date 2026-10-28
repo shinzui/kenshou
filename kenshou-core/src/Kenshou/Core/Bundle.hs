@@ -4,6 +4,7 @@ module Kenshou.Core.Bundle
     lookupBundle,
     lookupResource,
     registrySubjects,
+    registryRoutingRules,
     ScenarioRule (..),
     requirePgVersionsFor,
     Registry,
@@ -30,7 +31,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Contribution (AdvisoryLabel, OracleSpec (..), PoolMethodology)
+import Kenshou.Core.Contribution (AdvisoryLabel, OracleSpec (..), PoolMethodology, RoutingRule)
 import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), PgVersion (..), Support (..), Supported (..))
 import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName, PostgresRequirement (..), mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
@@ -64,11 +65,13 @@ data LayerBundle = LayerBundle
     methodology :: Maybe PoolMethodology,
     -- | The canonical Mori URI that evidence records of this layer name as their
     -- subject.
-    evidenceSubject :: Maybe Text
+    evidenceSubject :: Maybe Text,
+    -- | Cell capabilities the suite's runs need.
+    routingRules :: [RoutingRule]
   }
 
 mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
-mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = [], oracles = [], advisoryLabels = [], methodology = Nothing, evidenceSubject = Nothing}
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = [], oracles = [], advisoryLabels = [], methodology = Nothing, evidenceSubject = Nothing, routingRules = []}
 
 -- | A named registry check. Each message 'check' returns becomes a 'RegistryError'
 -- prefixed with the scenario identifier.
@@ -176,6 +179,10 @@ lookupBundle (Registry bundles) wanted = case filter ((== wanted) . (.layer)) bu
 -- | The evidence subject each layer's first bundle that declares one names.
 registrySubjects :: Registry -> Map.Map LayerId Text
 registrySubjects (Registry bundles) = Map.fromListWith (\_ first -> first) [(bundle.layer, subject) | bundle <- bundles, Just subject <- [bundle.evidenceSubject]]
+
+-- | Every bundle's routing rules, in registry order.
+registryRoutingRules :: Registry -> [RoutingRule]
+registryRoutingRules (Registry bundles) = concatMap (.routingRules) bundles
 
 lookupResource :: Registry -> ResourceName -> Maybe ResourceProvider
 lookupResource (Registry bundles) wanted = case [provider | bundle <- bundles, provider <- bundle.resources, provider.name == wanted] of

@@ -18,6 +18,7 @@ import Data.Text.IO qualified as TextIO
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Kenshou.Cli.Command.Cell (startCellInstances)
+import Kenshou.Core.Bundle (registryRoutingRules)
 import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cli (CliEnv (..))
 import Kenshou.Core.Id
@@ -307,7 +308,7 @@ options :: BuildOptions
 options = BuildOptions (PrepareOptions False False [] Cold) GranularityRun False NullSink Nothing (24 * 1024 * 1024 * 1024) (20 * 1024 * 1024 * 1024) "0.1.0"
 
 adapter :: CliEnv -> ObjectStore -> ExecutionInputs -> Map.Map Text PayloadDescriptor -> (CellDescriptor, Maybe CellCapabilities) -> CellAdapter
-adapter environment store inputs payloads (descriptor, capabilities) = CellAdapter environment.registry store (Lease.CellRef descriptor.name (Bucket inputs.controlBucket)) descriptor (Map.findWithDefault Null descriptor.name inputs.healthPolicies) capabilities defaultRoutingRules payloads options inputs.storeLabel (\event -> TextIO.hPutStrLn stderr (Text.pack (show event)))
+adapter environment store inputs payloads (descriptor, capabilities) = CellAdapter environment.registry store (Lease.CellRef descriptor.name (Bucket inputs.controlBucket)) descriptor (Map.findWithDefault Null descriptor.name inputs.healthPolicies) capabilities (registryRoutingRules environment.registry) payloads options inputs.storeLabel (\event -> TextIO.hPutStrLn stderr (Text.pack (show event)))
 
 preflight :: CliEnv -> ObjectStore -> ExecutionInputs -> Map.Map Text PayloadDescriptor -> Prepared.PerfPrepared -> RunId -> IO ()
 preflight environment store inputs payloads prepared identifier = mapM_ check prepared.plan.selected

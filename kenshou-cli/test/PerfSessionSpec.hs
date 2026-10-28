@@ -23,6 +23,7 @@ import Kenshou.Measure.Histogram.Codec (encodeHistogram)
 import Kenshou.Measure.Samples
 import Kenshou.Measure.Summary (summarizeRunDir)
 import Kenshou.Perf.Artifacts (sealPerfDirectory)
+import Kenshou.Perf.Plan (PerfPlan (..), PerfProfile (..), PlannedProfile (..))
 import Kenshou.Perf.Prepared qualified as Prepared
 import Kenshou.Perf.Result qualified as Result
 import Kenshou.Plan.RunPlan (PlannedRun (..), RunPlan (..))
@@ -68,6 +69,11 @@ spec = describe "file-backed performance CLI integration" $ before_ (pendingWith
       baseline <- replacePayload (original :: Prepared.PerfPrepared).baseline
       candidate <- replacePayload original.candidate
       let prepared = original {Prepared.baseline = baseline, Prepared.candidate = candidate}
+          -- The captured preparation's profiles, in selection order.
+          profileNames = [entry.profile.name | entry <- prepared.plan.selected]
+          (firstProfile, lastProfile) = case profileNames of
+            first : rest -> (Text.unpack first, last (first : rest))
+            [] -> error "the captured preparation selects no profile"
       createDirectoryIfMissing True preparation
       encodeFile (preparation </> "prepared.json") prepared
       sealPerfDirectory preparation >>= either (fail . Text.unpack) pure
@@ -114,8 +120,8 @@ spec = describe "file-backed performance CLI integration" $ before_ (pendingWith
             -- saved, before its attempt result and root completion checkpoint.
             -- Every sealed cell object and paired schedule stays unchanged.
             saved <- Journal.readPerfSession (output </> "session.json") >>= either (fail . Text.unpack) pure
-            let beforeCompletion = takeWhile (\event -> case event.action of Journal.ComparisonCompleted item -> item.profile /= "shibuya-pgmq-quick"; _ -> True) saved.events
-                attempt = output </> "configurations/shibuya-pgmq-quick/attempt-0"
+            let beforeCompletion = takeWhile (\event -> case event.action of Journal.ComparisonCompleted item -> item.profile /= lastProfile; _ -> True) saved.events
+                attempt = output </> "configurations" </> Text.unpack lastProfile </> "attempt-0"
             identity <- case [one | event <- beforeCompletion, Journal.LeaseAcquired one <- [event.action]] of
               [one] -> pure one
               _ -> fail "expected exactly one original lease"
@@ -139,7 +145,7 @@ spec = describe "file-backed performance CLI integration" $ before_ (pendingWith
             fields <- case receipt of Object value -> pure value; _ -> fail "invalid receipt"
             relative <- case KeyMap.lookup "snapshot" fields of Just (String value) -> pure value; _ -> fail "receipt omits snapshot"
             let snapshot = output </> Text.unpack relative
-                orphan = snapshot </> "configurations/shibuya-core-quick/attempt-0/trials/unlinked-cell/tree"
+                orphan = snapshot </> "configurations" </> firstProfile </> "attempt-0/trials/unlinked-cell/tree"
             createDirectoryIfMissing True orphan
             encodeFile (orphan </> "run-result.json") (object ["outcome" .= ("passed" :: Text)])
             sealPerfDirectory snapshot >>= either (fail . Text.unpack) pure

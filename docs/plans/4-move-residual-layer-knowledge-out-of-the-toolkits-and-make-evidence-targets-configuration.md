@@ -78,12 +78,22 @@ schema instead of `kiroku.events`.
   byte-identically without `verified` and reproduce the paths in `record-paths.json`; the
   layer strings were already there from EP-2 as `layer-strings.json`; all suites and schemas
   pass.)
-- [ ] M3: The remote self-test depends only on the self-test schema, every layer-named
+- [x] M3: The remote self-test depends only on the self-test schema, every layer-named
   fixture or test string in `kenshou-core/test`, `kenshou-evidence/test`, and
   `kenshou-remote/test` uses the synthetic layer name, and the PGMQ routing rule has left
   `Kenshou.Remote.Cell.RouteRules` for bundle data (this last step waits for EP-3).
-- [ ] M4: The audit grep over the six toolkits returns only the allow-listed directory and
+  (2026-10-28; the remote self-test already used the self-test schema and a generic TCP
+  probe from EP-2 and EP-3; `RoutingRule` and `RuleCondition` moved to
+  `Kenshou.Core.Contribution`, bundles carry `routingRules`, `registryRoutingRules` feeds the
+  cell and perf-session commands, `defaultRoutingRules` is empty, and the bridged
+  `policies/cell-routing.json` is deleted. Strings from captured perf documents are now read
+  from them instead of repeated; the perf session journal moved to the bridge.)
+- [x] M4: The audit grep over the six toolkits returns only the allow-listed directory and
   lines, and the `justfile` `coupling-check` recipe that runs it is part of `just verify`.
+  (2026-10-28; `just coupling-check` runs one five-name grep over every generic package and
+  `schemas/`, excluding only `kenshou-evidence/test/fixtures/consumer-records/`; the
+  allow-list holds 33 lines, all of them the EP-3 compatibility shim and its tests; an
+  injected name fails it; `just verify` exits 0.)
 
 
 ## Surprises & Discoveries
@@ -93,7 +103,19 @@ implementation. Provide concise evidence. Friction with the tools, documents, an
 used to do the work belongs in the friction log (see FRICTION.md); cite an entry's FRIC-N
 handle here only when it also changed the plan.
 
-(None yet.)
+- Several steps were already done when this plan started: the remote self-test's schema and
+  Kafka probe (EP-2 and EP-3), and the kernel perf fixture renames, which the user's EP-2 M4
+  decision replaced by keeping captured perf documents verbatim in
+  `fixtures/consumer-baseline/`. `kenshou-remote/test/golden/perf-session.fixture.json`
+  turned out to be one of them: it embeds the captured plan (same `requestSha256`), so it
+  moved to the bridge rather than being renamed.
+
+- Tests that repeated names from captured documents (profile names in `PerfRunnerSpec` and
+  `PerfSessionSpec`, and the target components of the CLI's second-repository test) now read
+  them from those documents, so they assert the same behavior without naming a layer.
+
+- Two schema `$id` URLs named the consumer's documentation site; they now name this
+  repository's.
 
 
 ## Decision Log
@@ -146,6 +168,13 @@ handle here only when it also changed the plan.
   the `layer` and `tier` vocabularies, so a new subject URI validates.
   Date: 2026-10-28
 
+- Decision: The coupling audit is one five-name grep over every generic package and
+  `schemas/`, excluding only the verbatim consumer-records directory, rather than a grep over
+  the six toolkits.
+  Rationale: EP-2 and EP-3 had already brought the kernel, the CLI, and the schemas into the
+  audit; one command with one allow-list is what EP-5 turns into the coupling guard.
+  Date: 2026-10-28
+
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
@@ -154,7 +183,17 @@ this plan by handle with their triage outcome. Before marking the plan complete,
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+EP-4 delivered its purpose: no toolkit names a runtime layer. Oracles, advisory-lock labels,
+pool methodology, routing rules, and the evidence subject are bundle contributions in
+`Kenshou.Core.Contribution` and `LayerBundle`; the history bundle URI is configuration.
+Two verbatim consumer records still parse, re-render byte for byte, and keep their committed
+paths. The final audit (`just coupling-check`) prints nothing beyond the 33 allow-listed
+shim lines across every generic package and the schemas.
+
+No friction entry was recorded under this plan. No `docs/adr/` bundle exists yet;
+`docs/plans/6-…` should record the subject resolution order (override, registry, configured
+fallback, otherwise exit 2), the required `evidence.bundle-uri`, and the rule that suite
+knowledge enters the toolkits only through `LayerBundle` contributions.
 
 
 ## Context and Orientation

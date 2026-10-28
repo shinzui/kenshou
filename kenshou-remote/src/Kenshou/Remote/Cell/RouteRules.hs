@@ -19,6 +19,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime)
 import Kenshou.Core.Canonical (sha256Hex)
+import Kenshou.Core.Contribution (RoutingRule (..), RuleCondition (..))
 import Kenshou.Core.Id (RunId)
 import Kenshou.Core.Knob (RawKnob (..), mkKnobName)
 import Kenshou.Core.RunSpec (RunSpec (..))
@@ -36,23 +37,10 @@ data CellCapabilities = CellCapabilities
   }
   deriving stock (Eq, Show)
 
-data RuleCondition = KnobEquals Text Text | ScenarioMatches Selector
-  deriving stock (Eq, Show)
-
-data RoutingRule = RoutingRule
-  { condition :: !RuleCondition,
-    requires :: !Text,
-    why :: !Text
-  }
-  deriving stock (Eq, Show)
-
+-- | Superseded by 'Kenshou.Core.Bundle.registryRoutingRules': suites contribute
+-- their routing rules on their bundles. Kept, empty, so existing imports compile.
 defaultRoutingRules :: [RoutingRule]
-defaultRoutingRules =
-  [ RoutingRule
-      (KnobEquals "pgmq.queue-kind" "partitioned")
-      "postgres.pg_partman"
-      "Partitioned PGMQ queues require pg_partman on the cell PostgreSQL server."
-  ]
+defaultRoutingRules = []
 
 instance FromJSON CellCapabilities where
   parseJSON = withObject "cell capabilities" \fields -> do
@@ -73,22 +61,6 @@ instance ToJSON CellCapabilities where
         "probedAt" .= cache.probedAt,
         "capabilities" .= cache.capabilities
       ]
-
-instance FromJSON RoutingRule where
-  parseJSON = withObject "cell routing rule" \fields -> do
-    condition <- fields .: "when" >>= parseCondition
-    capability <- fields .: "requires"
-    explanation <- fields .: "why"
-    if Text.null capability || Text.null explanation then fail "cell routing rule requires a capability and explanation" else pure ()
-    pure (RoutingRule condition capability explanation)
-    where
-      parseCondition = withObject "cell routing condition" \fields ->
-        case (KeyMap.lookup "knob" fields, KeyMap.lookup "scenario" fields) of
-          (Just (String knob), Nothing) -> do
-            _ <- either (fail . Text.unpack) pure (mkKnobName knob)
-            KnobEquals knob <$> fields .: "equals"
-          (Nothing, Just (String patternText)) -> ScenarioMatches <$> either (fail . Text.unpack) pure (parseSelector patternText)
-          _ -> fail "cell routing condition must select one knob or scenario"
 
 matchingRules :: [RoutingRule] -> RunSpec -> [RoutingRule]
 matchingRules rules spec = filter (matchesRule spec) rules

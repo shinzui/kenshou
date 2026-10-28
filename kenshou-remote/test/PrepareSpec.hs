@@ -10,7 +10,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (getCurrentTime)
-import Kenshou.Core.Bundle (LayerBundle (..), lookupScenario, mkBundle, mkRegistry)
+import Kenshou.Core.Bundle (LayerBundle (..), lookupScenario, mkBundle, mkRegistry, registryRoutingRules)
 import Kenshou.Core.Bundle qualified as Bundle
 import Kenshou.Core.Dimension (PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
@@ -32,7 +32,7 @@ import Kenshou.Remote.Cell.Lease (CellRef (..))
 import Kenshou.Remote.Cell.Prepare (Granularity (..), OtlpSink (..), PrepareOptions (..), Prepared (..), PreparedRun (..), RejectReason (..), Routed (..), Slice (..), SubmissionInputs (..), prepareForCell, routePlan, slicePlan, sliceRuns, submissionFor)
 import Kenshou.Remote.Cell.Prepare qualified as Prepare
 import Kenshou.Remote.Cell.RouteJson (RouteDocuments (..), routeWorkJson)
-import Kenshou.Remote.Cell.RouteRules (CellCapabilities (..), RoutingRule (..), RuleCondition (..), defaultRoutingRules, descriptorDigest, loadCellCapabilities, matchingRules)
+import Kenshou.Remote.Cell.RouteRules (CellCapabilities (..), RoutingRule (..), RuleCondition (..), descriptorDigest, loadCellCapabilities, matchingRules)
 import Kenshou.Remote.Cell.Session.Build (BuildOptions (..), BuiltSession (..), buildSession)
 import Kenshou.Remote.Cell.Session.Journal (SessionJournal (..), SliceJournal (..))
 import Kenshou.Remote.Cell.Submit (workObjectFor)
@@ -273,14 +273,16 @@ spec = describe "cell run slicing" do
     fmap snd denied.rejected `shouldBe` [MissingCapability "postgres.pg_partman"]
     fmap snd stale.rejected `shouldBe` [PgVersionMismatch 18 17]
 
-  it "loads the seeded partitioned-queue routing rule" do
-    rules <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/policies/cell-routing.json" >>= either fail pure
-    rules `shouldBe` defaultRoutingRules
+  it "reads the routing rules registered bundles contribute" do
     scenario <- either (error . Text.unpack) pure (parseScenarioId "selftest/kernel/correctness/always-pass")
-    knob <- either (error . Text.unpack) pure (mkKnobName "pgmq.queue-kind")
-    let base = minimalRunSpec scenario
+    knob <- either (error . Text.unpack) pure (mkKnobName "synthetic.queue-kind")
+    let rule = RoutingRule (KnobEquals "synthetic.queue-kind" "partitioned") "postgres.pg_partman" "Partitioned queues need pg_partman on the cell PostgreSQL server."
+        registry = either (error . show) id (mkRegistry [Selftest.bundle, (mkBundle selftestLayer [] []) {routingRules = [rule]}])
+        base = minimalRunSpec scenario
         withKnob = RunSpec base.runId base.scenario base.scenarioRevision [(knob, RawText "partitioned")] base.dimensions base.seed base.phases base.timeoutSeconds base.environment base.cohortExpectation base.comparison base.labels
-    fmap (.requires) (matchingRules rules withKnob) `shouldBe` ["postgres.pg_partman"]
+    registryRoutingRules registry `shouldBe` [rule]
+    fmap (.requires) (matchingRules (registryRoutingRules registry) withKnob) `shouldBe` ["postgres.pg_partman"]
+    matchingRules (registryRoutingRules registry) base `shouldBe` []
 
   it "round-trips a probed capability cache" do
     cache <- eitherDecodeFileStrict' "test/golden/cell-capabilities.json" >>= either fail pure

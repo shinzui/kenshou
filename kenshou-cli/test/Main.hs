@@ -85,7 +85,7 @@ main = hspec do
       runWithArgs ["perf", "run", "--prepared", input, "--out", output, "--evidence-base-uri", "gs://fixture-evidence/performance"] `shouldReturnCode` ExitFailure 2
       doesPathExist output `shouldReturn` False
     it "reads retained status without cloud authentication or execution" $ withSystemTempDirectory "kenshou-perf-status" \directory -> do
-      withPerfRoot (copyFile "kenshou-remote/test/golden/perf-session.fixture.json" (directory </> "session.json"))
+      withPerfRoot (copyFile "fixtures/consumer-baseline/kenshou-remote/test/golden/perf-session.fixture.json" (directory </> "session.json"))
       runWithArgs ["perf", "status", "--session", directory] `shouldReturnCode` ExitSuccess
     it "publishes and replays incomplete scope without leasing, and detects storage tampering" $ withSystemTempDirectory "kenshou-perf-incomplete" \directory -> do
       let storeRoot = directory </> "store"
@@ -146,7 +146,8 @@ main = hspec do
         raw <- Aeson.eitherDecodeFileStrict' "fixtures/consumer-baseline/kenshou-core/test/golden/perf-request.json" >>= either fail pure
         let input = directory </> "request.json"
             output = directory </> "plan"
-        Aeson.encodeFile input (replacePerfField "targetComponents" (Aeson.toJSON (["shibuya", "pgmq-hs"] :: [Text])) raw)
+        targets <- foreignTargets raw
+        Aeson.encodeFile input (replacePerfField "targetComponents" (Aeson.toJSON targets) raw)
         withConsumerBaseline ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
         doesPathExist output `shouldReturn` False
     it "rejects unknown profiles before fetching immutable sources" do
@@ -782,3 +783,19 @@ withPerfRoot operation = do
 replacePerfField :: Key.Key -> Value -> Value -> Value
 replacePerfField key value (Aeson.Object fields) = Aeson.Object (KeyMap.insert key value fields)
 replacePerfField _ _ value = value
+
+-- The request's own target components plus one component of its cohort template
+-- that belongs to a different project, read from the consumer-baseline bridge.
+foreignTargets :: Value -> IO [Text]
+foreignTargets request = do
+  let field name (Aeson.Object fields) = KeyMap.lookup name fields
+      field _ _ = Nothing
+      texts value = case value of Just (Aeson.Array items) -> [text | Aeson.String text <- toList items]; _ -> []
+      owned = texts (field "targetComponents" request)
+  template <- case field "cohortTemplate" request of
+    Just (Aeson.String path) -> Aeson.eitherDecodeFileStrict' ("fixtures/consumer-baseline/" <> Text.unpack path) >>= either fail pure
+    _ -> fail "the request names no cohort template"
+  let components = case field "components" template of Just (Aeson.Array items) -> toList items; _ -> []
+  case [name | component <- components, Just (Aeson.String name) <- [field "id" component], field "moriUri" component /= field "project" request] of
+    other : _ -> pure (owned <> [other])
+    [] -> fail "the cohort template has no component from another project"

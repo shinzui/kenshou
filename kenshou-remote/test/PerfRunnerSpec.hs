@@ -214,7 +214,7 @@ spec = describe "performance runner orchestration" do
     session <- readPerfSession path >>= right
     identifier <- newRunId
     acquired <- right (appendEvent (SessionEvent now (LeaseAcquired (LeaseIdentity "alpha" identifier))) session)
-    active <- right (appendEvent (SessionEvent now (ComparisonStarted "shibuya-core-quick" 0)) acquired)
+    active <- right (appendEvent (SessionEvent now (ComparisonStarted (firstProfile prepared) 0)) acquired)
     writePerfSession path active
     calls <- newIORef ([] :: [(Text, Int, Bool)])
     cleanupCalls <- newIORef (0 :: Int)
@@ -236,7 +236,7 @@ spec = describe "performance runner orchestration" do
             { admit = \_ _ _ _ -> do
                 count <- atomicModifyIORef' admissions (\n -> (n + 1, n))
                 pure (Admitted (LeaseIdentity "alpha" (if count == 0 then first else second))),
-              canRunConfiguration = \lease entry -> pure (lease.leaseId /= first || entry.profile.name == "shibuya-core-quick"),
+              canRunConfiguration = \lease entry -> pure (lease.leaseId /= first || entry.profile.name == firstProfile prepared),
               releaseOwnedLease = \_ -> modifyIORef' releases (+ 1) >> pure True
             }
     result <- runPerformance changed prepared path
@@ -302,3 +302,9 @@ instance FromJSON ContractsDocument where
 
 instance FromJSON ReviewedContract where
   parseJSON = withObject "ReviewedPhaseContract" \value -> ReviewedContract <$> value .: "scenario" <*> value .: "revision"
+
+-- The first profile the captured preparation selects.
+firstProfile :: Prepared.PerfPrepared -> Text
+firstProfile prepared = case prepared.plan.selected of
+  entry : _ -> entry.profile.name
+  [] -> error "the captured preparation selects no profile"

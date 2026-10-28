@@ -82,7 +82,7 @@ also available on `cell lease` and `cell run`.
 Measure telemetry overhead under one lease:
 
 ```bash
-kenshou cell overhead keiro/command/benchmark/throughput-latency \
+kenshou cell overhead selftest/telemetry/benchmark/arms-on-synthetic-service \
   --cell alpha --payload payloads/released.json \
   --arms tracing=off,sdk-otlp --trials 3 --otlp-sink file \
   --out cell-overhead/tracing

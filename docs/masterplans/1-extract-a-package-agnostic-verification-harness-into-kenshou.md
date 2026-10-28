@@ -147,7 +147,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | 1 | Import the harness packages from keiro-runtime-kenshou and build them standalone | docs/plans/1-import-the-harness-packages-from-keiro-runtime-kenshou-and-build-them-standalone.md | None | None | Complete |
 | 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | Complete |
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Complete |
-| 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | In Progress |
+| 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Complete |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Not Started |
 | 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | Not Started |
 | 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | Not Started |
@@ -318,15 +318,14 @@ Phase A is complete (EP-1, 2026-10-28): the seven generic packages and the gener
 the `kenshou` executable in `kenshou-synthetic` runs the self-test scenarios, and
 `just verify` passes locally. The CI run on a pushed commit is not yet observed.
 
-Phase B is in progress. EP-2 is complete (2026-10-28): open `LayerId`, suite-supplied
-migration sets composed into one ledger with no migration library in the plan, and
-`Program` carrying registry rules, the component graph, and `PerfContracts`. EP-3 is
-complete (2026-10-28): scenarios require named resources that registered providers
-provision locally and that cells bind by name, with one legacy adapter for the cell broker
-and a compat-key shim that keeps recorded keys stable. `just coupling-check` audits the
-kernel and telemetry toolkit for every layer name and every package for the Kafka layer.
-EP-4 is next (its hard dependency, EP-2, is complete); the terminology and carried-over ADR
-part of EP-6 is unblocked.
+Phase B is complete (2026-10-28). EP-2 opened the layer identity, made migration sets
+suite-supplied, and let the executable supply rules, the component graph, and perf
+contracts through `Program`. EP-3 replaced the Kafka fields with named resources and one
+legacy cell adapter. EP-4 moved oracles, lock labels, pool methodology, routing rules, and
+the evidence subject into bundle contributions and the history bundle URI into
+configuration. `just coupling-check` audits every generic package and the schemas for all
+five layer names; the allow-list holds only the EP-3 compatibility shim. Phase C (EP-5 and
+EP-6) is unblocked; the CI run on a pushed commit is still unobserved.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published

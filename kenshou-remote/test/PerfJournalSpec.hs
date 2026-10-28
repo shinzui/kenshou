@@ -18,7 +18,7 @@ import Test.Hspec
 spec :: Spec
 spec = describe "performance session budgets" do
   it "replays the synthetic interruption fixture without extending its deadline" do
-    session <- eitherDecodeFileStrict' "test/golden/perf-session.fixture.json" >>= either fail pure
+    session <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-remote/test/golden/perf-session.fixture.json" >>= either fail pure
     state <- right (journalState session)
     state.executionDeadline `shouldBe` Just (time 1810)
     state.admissionSpentSeconds `shouldBe` 30

@@ -8,13 +8,19 @@ module Kenshou.Core.Contribution
     AdvisoryKeySpec (..),
     AdvisoryLabel (..),
     PoolMethodology (..),
+    RuleCondition (..),
+    RoutingRule (..),
   )
 where
 
 import Control.Applicative ((<|>))
-import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value (..), object, withObject, (.:), (.=))
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Int (Int64)
 import Data.Text (Text)
+import Data.Text qualified as Text
+import Kenshou.Core.Knob (mkKnobName)
+import Kenshou.Plan.Selector (Selector, parseSelector)
 
 -- | A named SQL query whose rows a correctness scenario reconciles.
 data OracleSpec = OracleSpec {name :: !Text, sql :: !Text}
@@ -32,6 +38,36 @@ data AdvisoryLabel = AdvisoryLabel {label :: !Text, key :: !AdvisoryKeySpec}
 -- measurements justify.
 data PoolMethodology = PoolMethodology {recommendedPoolSize :: !Int, poolRange :: !(Int, Int)}
   deriving stock (Eq, Show)
+
+-- | Which runs a routing rule applies to: a knob with a given text value, or the
+-- scenarios a selector matches.
+data RuleCondition = KnobEquals Text Text | ScenarioMatches Selector
+  deriving stock (Eq, Show)
+
+-- | A cell capability a run needs, with the reason; cell routing and preparation
+-- refuse a cell that reports the capability absent.
+data RoutingRule = RoutingRule
+  { condition :: !RuleCondition,
+    requires :: !Text,
+    why :: !Text
+  }
+  deriving stock (Eq, Show)
+
+instance FromJSON RoutingRule where
+  parseJSON = withObject "cell routing rule" \fields -> do
+    condition <- fields .: "when" >>= parseCondition
+    capability <- fields .: "requires"
+    explanation <- fields .: "why"
+    if Text.null capability || Text.null explanation then fail "cell routing rule requires a capability and explanation" else pure ()
+    pure (RoutingRule condition capability explanation)
+    where
+      parseCondition = withObject "cell routing condition" \fields ->
+        case (KeyMap.lookup "knob" fields, KeyMap.lookup "scenario" fields) of
+          (Just (String knob), Nothing) -> do
+            _ <- either (fail . Text.unpack) pure (mkKnobName knob)
+            KnobEquals knob <$> fields .: "equals"
+          (Nothing, Just (String patternText)) -> ScenarioMatches <$> either (fail . Text.unpack) pure (parseSelector patternText)
+          _ -> fail "cell routing condition must select one knob or scenario"
 
 instance ToJSON OracleSpec where
   toJSON spec = object ["name" .= spec.name, "sql" .= spec.sql]
