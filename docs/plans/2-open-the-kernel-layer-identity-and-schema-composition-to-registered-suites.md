@@ -72,6 +72,13 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
   line `kenshou - run verification scenarios`; `kenshou plan --graph-check` exits 0 on the
   5-component self-test graph; all suites green. `PerfContracts` gained a fourth field,
   `lanePackages`; see Decision Log.)
+Handoff (2026-10-28): M1 to M3 are accepted and committed. M4 is blocked on a scope
+decision recorded in Surprises & Discoveries: the perf goldens cannot be regenerated from
+synthetic inputs here. Until M4, `kenshou-core/test/Kenshou/ConsumerBaseline.hs` gives the
+plan and perf specs the consumer graph (vendored at
+`fixtures/consumer-baseline/kenshou-core/data/components.json`) and contracts, and
+`kenshou-remote/test/PerfRunnerSpec.hs` has matching `fixtureContracts`.
+
 - [ ] M4: The coupling grep over `kenshou-core/src`, `kenshou-core/test`, and
   `kenshou-core/kenshou-core.cabal` returns no match outside the allow-list file
   `scripts/coupling-allowlist.txt`, and every test fixture under `kenshou-core/test` uses
@@ -80,7 +87,36 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
 
 ## Surprises & Discoveries
 
-(None yet.)
+- The plan places two consumer-compatibility proofs in `kenshou-core/test` (the M1 golden
+  over the seven layer strings, and the comparison-key check), but M4 requires the coupling
+  grep over `kenshou-core/test` to be empty and forbids consumer values in the allow-list.
+  Both proofs moved to the `consumer compatibility` group in `kenshou-evidence/test/Main.hs`,
+  reading verbatim consumer data from `kenshou-evidence/test/fixtures/consumer-records/`
+  (the one path `docs/plans/5-…`'s guard excludes); the kernel keeps synthetic layer tests.
+  Evidence: the group passes, and the recorded key
+  `sha256:dacb05fc095929d0a3723b0fc017cf23f2a81efc900c583ba47ee10a7a1ca843` of a consumer
+  `hydration-cost` run reproduces.
+
+- `CompatInputs`, `EffectiveRunSpec`, and `PgSettingsSnapshot` have no decoders, so the
+  comparison-key check cannot rebuild a consumer's inputs as Haskell values. It is proved in
+  two halves: the recorded key equals the SHA-256 of the canonical recorded inputs without
+  `cohortPlanHash` (the key is a pure function of that JSON), and migration set names render
+  as their exact text in declaration order.
+
+- The Kafka fields owned by `docs/plans/3-…` (`EnvRequirements.kafka`, `kafkaEnvironment`,
+  `EnvironmentSpec.kafka`, `WorkerInit.kafka`, and their uses in `Compat.hs` and
+  `Role/Spawn.hs`) are the only coupling left in `kenshou-core/src`, so the M4 grep cannot be
+  empty before EP-3; those exact lines must sit in `scripts/coupling-allowlist.txt` until
+  EP-3 removes them.
+
+- The perf goldens in `kenshou-core/test/golden/` (`perf-prepared.fixture.json` at 7,092
+  lines, `perf-plan.json`, `perf-request.json`, the `perf-result.*` fixtures) were captured
+  from a real `kenshou perf prepare` run, which needs Nix payload builds, exact-revision Git
+  sources, and an object store; nothing in the repository regenerates them, and
+  `validatePrepared` cross-checks their digests. M4's "regenerate from synthetic inputs
+  using the same code paths" is not possible in this repository as it stands. The same
+  fixture is read by `kenshou-remote` (`PerfAttemptSpec`, `PerfCellSpec`, `PerfJournalSpec`,
+  `PerfRunnerSpec`) and `kenshou-cli` (`PerfSessionSpec`, `Main`).
 
 
 ## Decision Log
@@ -119,6 +155,36 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
   value-level extension is the style ADR-3 already prescribes for commands and bundles.
   Date: 2026-10-28
 
+
+- Decision: Migration sets reach provisioning from the registry the runner already holds
+  (`registryMigrationSets config.registry`), not from a new `RunnerConfig.migrationSets`
+  field; `withPostgresEnv`, `withPostgresEnvKeeping`, `withPostgresEnvNamed`, and the
+  internal `withExternalDatabases` take the set map as their first argument. The ordering
+  is exposed as `Kenshou.Core.Env.Migration.orderMigrationSets` so tests observe it,
+  because a `pg-migrate` `MigrationPlan` is opaque. `MigrationSetName`'s constructor is
+  exported and `mkRegistry` validates every defined and required name.
+  Rationale: `RunnerConfig.registry` already exists; a second field would duplicate it.
+  Date: 2026-10-28
+
+- Decision: `selftest/kernel/correctness/postgres-roundtrip` moves to revision 2 when it
+  switches to the `kenshou-selftest` set, and its summary keys become `rows` and
+  `ledgerComponents`. `selftest/remote/correctness/cell-environment` keeps revision 1: it
+  makes the same freshness check against a different table.
+  Rationale: The roundtrip scenario's meaning changed; existing consumer records of
+  revision 1 stay comparable only with each other.
+  Date: 2026-10-28
+
+- Decision: `PerfContracts` has a fourth field, `lanePackages :: CohortDescriptor ->
+  [String] -> [String]`, and `noPerfContracts` is the empty value. `CliEnv` carries
+  `componentGraph` and `perf` (not the whole `Program`). The contracts are threaded into
+  `Kenshou.Remote.Perf.Runner.RunnerHooks.contracts`,
+  `Kenshou.Remote.Perf.Journal.validateSessionInputs`, and the `kenshou-cli` perf session
+  helpers, because the preparation is re-validated wherever it is loaded.
+  Rationale: `kenshou perf prepare` also chose which harness packages a lane builds; that is
+  suite knowledge like the lane stanzas. Contracts cannot live in the scenario catalog,
+  because prepared documents pin that catalog as JSON and a new field would change
+  `kenshou.perf-prepared/v1`.
+  Date: 2026-10-28
 
 ## Outcomes & Retrospective
 
