@@ -95,20 +95,20 @@ spec = describe "performance preparation integrity" do
     cabalInventory "/workspace/harness" "main" plan `shouldSatisfy` isLeft
     eitherDecode (encode resolved) `shouldBe` Right resolved
   it "renders a standalone bounds project and rejects blanket exceptions" do
-    bytes <- ByteString.readFile "../cohort/released.json"
+    bytes <- ByteString.readFile "../fixtures/consumer-baseline/cohort/released.json"
     descriptor <- right (eitherDecodeStrict' bytes :: Either String Cohort.CohortDescriptor)
     project <- right (renderBoundsProject ["/harness/kenshou-core/kenshou-core.cabal"] descriptor)
     project `shouldNotContainText` "active.project"
     renderBoundsProject ["/harness/package.cabal"] descriptor {Cohort.descriptorAllowNewer = ["all"]} `shouldSatisfy` isLeft
     renderBoundsProject ["/unsafe path/package.cabal"] descriptor `shouldSatisfy` isLeft
   it "keeps the isolated current Shibuya cohort independent of runtime suites" do
-    bytes <- ByteString.readFile "../cohort/shibuya-current.json"
+    bytes <- ByteString.readFile "../fixtures/consumer-baseline/cohort/shibuya-current.json"
     descriptor <- right (eitherDecodeStrict' bytes :: Either String Cohort.CohortDescriptor)
     isolatedShibuyaCohort descriptor `shouldBe` True
     project <- right (renderBoundsProject ["/harness/kenshou-cli/kenshou-cli.cabal"] descriptor)
     project `shouldSatisfy` Data.Text.isInfixOf "flags: -runtime-suites"
     project `shouldSatisfy` Data.Text.isInfixOf "flags: -keiro-schema"
-    released <- ByteString.readFile "../cohort/released.json" >>= right . eitherDecodeStrict'
+    released <- ByteString.readFile "../fixtures/consumer-baseline/cohort/released.json" >>= right . eitherDecodeStrict'
     isolatedShibuyaCohort released `shouldBe` False
     full <- right (renderBoundsProject ["/harness/kenshou-cli/kenshou-cli.cabal"] released)
     full `shouldNotContainText` "flags: -runtime-suites"

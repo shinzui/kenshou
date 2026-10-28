@@ -151,7 +151,7 @@ seal directory = do
 
 loadProfile :: IO PerfProfile
 loadProfile = do
-  path <- repositoryFile "policies/performance/catalog.v1.json"
+  path <- repositoryFile "fixtures/consumer-baseline/policies/performance/catalog.v1.json"
   catalog <- eitherDecodeFileStrict' path >>= either fail pure
   case (catalog :: ProfileCatalog).profiles of
     profile : _ -> pure profile

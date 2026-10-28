@@ -251,7 +251,7 @@ spec = describe "cell run slicing" do
     fmap snd stale.rejected `shouldBe` [PgVersionMismatch 18 17]
 
   it "loads the seeded partitioned-queue routing rule" do
-    rules <- eitherDecodeFileStrict' "../policies/cell-routing.json" >>= either fail pure
+    rules <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/policies/cell-routing.json" >>= either fail pure
     rules `shouldBe` defaultRoutingRules
     scenario <- either (error . Text.unpack) pure (parseScenarioId "selftest/kernel/correctness/always-pass")
     knob <- either (error . Text.unpack) pure (mkKnobName "pgmq.queue-kind")

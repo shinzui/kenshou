@@ -28,7 +28,7 @@ spec = describe "content-addressed payload publication" do
     store <- newFileStore (root </> "store")
     builds <- newIORef (0 :: Int)
     let output = root </> "payload.json"
-        options = PublishOptions ".." "released" "default" (Bucket "control") output False
+        options = PublishOptions "../fixtures/consumer-baseline" "released" "default" (Bucket "control") output False
         storePath = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-kenshou"
         work = workObjectFor "application/octet-stream" bundleBytes
         exported destination = do
@@ -58,7 +58,7 @@ spec = describe "content-addressed payload publication" do
     saved `shouldBe` Right descriptor
 
   it "publishes generated performance inputs while verifying a separate clean harness" $ withSystemTempDirectory "kenshou-prepared-publisher" \root -> do
-    bytes <- ByteString.readFile "../cohort/released.json"
+    bytes <- ByteString.readFile "../fixtures/consumer-baseline/cohort/released.json"
     original <- either (ioError . userError) pure (eitherDecodeStrict' bytes :: Either String CohortDescriptor)
     let generated = original {descriptorName = CohortName "perf-fixture-aa"}
         descriptorPath = root </> "cohort.json"
@@ -190,7 +190,7 @@ writeTool path contents = do
 
 releasedIdentity :: IO CohortIdentity
 releasedIdentity = do
-  contents <- ByteString.readFile "../cohort/released.json"
+  contents <- ByteString.readFile "../fixtures/consumer-baseline/cohort/released.json"
   descriptor <- either (ioError . userError) pure (eitherDecodeStrict' contents :: Either String CohortDescriptor)
   let resolved component =
         ResolvedComponent

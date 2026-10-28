@@ -21,7 +21,6 @@ import Kenshou.Perf.Source qualified as Source
 import Kenshou.Plan.Catalog (ScenarioInfo (..))
 import Kenshou.Plan.Change
 import Kenshou.Plan.Components qualified as Graph
-import System.Directory (doesFileExist)
 import Test.Hspec hiding (context)
 
 spec :: Spec
@@ -209,9 +208,7 @@ template :: IO Cohort.CohortDescriptor
 template = load "cohort/released.json"
 
 load :: (FromJSON a) => FilePath -> IO a
-load path = do
-  exists <- doesFileExist path
-  ByteString.readFile (if exists then path else "../" <> path) >>= right . eitherDecodeStrict'
+load path = ByteString.readFile ("../fixtures/consumer-baseline/" <> path) >>= right . eitherDecodeStrict'
 
 right :: (Show e) => Either e a -> IO a
 right (Right value) = pure value

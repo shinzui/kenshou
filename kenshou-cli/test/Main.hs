@@ -146,7 +146,7 @@ main = hspec do
         let input = directory </> "request.json"
             output = directory </> "plan"
         Aeson.encodeFile input (replacePerfField "targetComponents" (Aeson.toJSON (["shibuya", "pgmq-hs"] :: [Text])) raw)
-        runWithArgs ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
+        withCurrentDirectory "fixtures/consumer-baseline" (runWithArgs ["perf", "plan", "--request", input, "--out", output]) `shouldReturnCode` ExitFailure 2
         doesPathExist output `shouldReturn` False
     it "rejects unknown profiles before fetching immutable sources" do
       withPerfRoot $ withSystemTempDirectory "kenshou-perf-profiles" \directory -> do
@@ -154,7 +154,7 @@ main = hspec do
         let input = directory </> "request.json"
             output = directory </> "plan"
         Aeson.encodeFile input (replacePerfField "profiles" (Aeson.toJSON (["missing"] :: [Text])) raw)
-        runWithArgs ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
+        withCurrentDirectory "fixtures/consumer-baseline" (runWithArgs ["perf", "plan", "--request", input, "--out", output]) `shouldReturnCode` ExitFailure 2
         doesPathExist output `shouldReturn` False
     it "refuses to overwrite an existing planning directory" do
       withSystemTempDirectory "kenshou-perf-existing" \directory -> do
@@ -457,7 +457,7 @@ main = hspec do
             command =
               [ "cell",
                 "overhead",
-                "keiro/command/benchmark/throughput-latency",
+                "selftest/telemetry/benchmark/arms-on-synthetic-service",
                 "--cell",
                 "alpha",
                 "--control-bucket",
@@ -504,7 +504,7 @@ main = hspec do
                   now <- getCurrentTime
                   let sequenceNumber = Set.size seen + 1
                       payloadDigest = submission.payload.bundle.sha256
-                      nestedBytes = Aeson.encode (object ["schema" .= ("kenshou.run-result/v1" :: Text), "runId" .= nestedId, "scenario" .= ("keiro/command/benchmark/throughput-latency" :: Text), "outcome" .= Outcome.Passed, "fingerprint" .= object ["cell" .= object ["payload" .= object ["bundleSha256" .= payloadDigest]]]])
+                      nestedBytes = Aeson.encode (object ["schema" .= ("kenshou.run-result/v1" :: Text), "runId" .= nestedId, "scenario" .= ("selftest/telemetry/benchmark/arms-on-synthetic-service" :: Text), "outcome" .= Outcome.Passed, "fingerprint" .= object ["cell" .= object ["payload" .= object ["bundleSha256" .= payloadDigest]]]])
                       nestedInfo = workObjectFor "application/json" nestedBytes
                       nestedManifest = Manifest nestedId now [ManifestFile "run-result.json" ("sha256:" <> nestedInfo.sha256) (fromIntegral nestedInfo.bytes) "application/json"]
                       files =
@@ -684,7 +684,7 @@ main = hspec do
             `finally` killThread worker
 
     it "reads scenario history from a bundle" do
-      runWithArgs ["history", "--bundle", "../docs/verification", "--scenario", "selftest/kernel/correctness/always-pass", "--json"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["history", "--bundle", "../fixtures/consumer-baseline/docs/verification", "--scenario", "selftest/kernel/correctness/always-pass", "--json"] `shouldReturnCode` ExitSuccess
 
     it "requires one record source" do
       runWithArgs ["record", "--purpose", "release"] `shouldReturnCode` ExitFailure 2
@@ -766,7 +766,7 @@ withEnvVariable name selected operation = bracket (lookupEnv name) restore \_ ->
 
 withPerfRoot :: IO a -> IO a
 withPerfRoot operation = do
-  exists <- doesFileExist "cohort/released.json"
+  exists <- doesFileExist "cabal.project"
   withCurrentDirectory (if exists then "." else "..") operation
 
 replacePerfField :: Key.Key -> Value -> Value -> Value

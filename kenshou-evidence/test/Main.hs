@@ -106,7 +106,7 @@ main = hspec do
                 ]
         createDirectoryIfMissing True runDirectory
         createDirectoryIfMissing True bundle
-        callProcess "cp" ["-R", "../docs/verification/.", bundle]
+        callProcess "cp" ["-R", "../fixtures/consumer-baseline/docs/verification/.", bundle]
         writeRunFixture runDirectory
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
@@ -249,7 +249,7 @@ main = hspec do
         callProcess "git" ["-C", attester, "add", "README"]
         callProcess "git" ["-C", attester, "commit", "-qm", "test: create clean attester"]
         revision <- Text.strip . Text.pack <$> readProcess "git" ["-C", attester, "rev-parse", "HEAD"] ""
-        callProcess "cp" ["-R", "../docs/verification/.", bundle]
+        callProcess "cp" ["-R", "../fixtures/consumer-baseline/docs/verification/.", bundle]
         writeCellRunFixture runDirectory outerPath cellRunId revision False
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
@@ -289,7 +289,7 @@ main = hspec do
         callProcess "git" ["-C", attester, "add", "README"]
         callProcess "git" ["-C", attester, "commit", "-qm", "test: create clean attester"]
         revision <- Text.strip . Text.pack <$> readProcess "git" ["-C", attester, "rev-parse", "HEAD"] ""
-        callProcess "cp" ["-R", "../docs/verification/.", bundle]
+        callProcess "cp" ["-R", "../fixtures/consumer-baseline/docs/verification/.", bundle]
         writeRunFixtureWithRevision runDirectory revision
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
