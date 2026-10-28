@@ -21,7 +21,8 @@ import Kenshou.Check.Scenario
 import Kenshou.Check.Verdict (InvariantClass (..))
 import Kenshou.Core.Context (ArtifactDir (..), RunContext (..), artifactPath, requirePostgres)
 import Kenshou.Core.Dimension
-import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..), noEnvironment)
+import Kenshou.Core.Env (PostgresRequirement (..), noEnvironment)
+import Kenshou.Core.Env qualified as Env
 import Kenshou.Core.Id (parseScenarioId, renderRunId)
 import Kenshou.Core.Knob
 import Kenshou.Core.Phase (zeroPhases)
@@ -47,7 +48,7 @@ appendSurvivesKillRestart =
         ],
       dimensions = postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) noDimensions,
       phases = zeroPhases,
-      requires = noEnvironment {postgres = Just (PostgresRequirement [syntheticSchema] [] False)},
+      requires = noEnvironment {Env.postgres = Just (PostgresRequirement [syntheticSchema] [] False)},
       knownDefect = Nothing,
       run = runAppend
     }

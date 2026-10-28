@@ -11,6 +11,7 @@ author: Nadeem Bitar
 maintainer: Nadeem Bitar
 category: Testing
 build-type: Simple
+extra-source-files: data/components.json
 tested-with: ghc >=9.12 && <9.13
 
 common warnings
@@ -39,7 +40,10 @@ library
   hs-source-dirs: src
   exposed-modules:
     Kenshou.Suite.Synthetic
+    Kenshou.Suite.Synthetic.Bench
+    Kenshou.Suite.Synthetic.Concurrency
     Kenshou.Suite.Synthetic.Correctness
+    Kenshou.Suite.Synthetic.Echo
     Kenshou.Suite.Synthetic.Knobs
     Kenshou.Suite.Synthetic.Oracle
     Kenshou.Suite.Synthetic.Roles
@@ -49,11 +53,15 @@ library
   build-depends:
     aeson >=2.2 && <2.3,
     base >=4.21 && <4.22,
+    bytestring,
     containers >=0.7 && <0.8,
+    file-embed >=0.0.16 && <0.1,
     hasql >=1.10 && <1.11,
     kenshou-check,
     kenshou-cli,
     kenshou-core,
+    kenshou-measure,
+    network,
     pg-migrate,
     scientific,
     stm,

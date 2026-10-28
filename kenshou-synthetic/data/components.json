@@ -1,0 +1,385 @@
+{
+  "schema": "kenshou.component-graph/v1",
+  "ignoredPackages": [
+    "pg-migrate-test-support"
+  ],
+  "components": [
+    {
+      "id": "postgresql",
+      "kind": "service",
+      "uri": null,
+      "repository": "postgresql",
+      "sourceRoots": [],
+      "packages": [],
+      "selectors": [],
+      "verifiedAgainst": "PostgreSQL 17 and 18",
+      "dependsOn": []
+    },
+    {
+      "id": "pg-migrate",
+      "kind": "library",
+      "uri": "mori://shinzui/pg-migrate",
+      "repository": "pg-migrate",
+      "sourceRoots": [
+        "src/",
+        "pg-migrate.cabal"
+      ],
+      "packages": [
+        "pg-migrate"
+      ],
+      "selectors": [],
+      "verifiedAgainst": "pg-migrate 1.1.0.0",
+      "dependsOn": [
+        {
+          "to": "postgresql",
+          "kind": "runtime"
+        }
+      ]
+    },
+    {
+      "id": "ephemeral-pg",
+      "kind": "harness",
+      "uri": "mori://shinzui/ephemeral-pg",
+      "repository": "ephemeral-pg",
+      "sourceRoots": [
+        "src/",
+        "ephemeral-pg.cabal"
+      ],
+      "packages": [
+        "ephemeral-pg"
+      ],
+      "selectors": [
+        "selftest/kernel/**"
+      ],
+      "verifiedAgainst": "ephemeral-pg 0.3.1.0",
+      "dependsOn": [
+        {
+          "to": "postgresql",
+          "kind": "runtime"
+        }
+      ]
+    },
+    {
+      "id": "hs-opentelemetry",
+      "kind": "library",
+      "uri": "mori://iand675/hs-opentelemetry",
+      "repository": "hs-opentelemetry",
+      "sourceRoots": [],
+      "packages": [
+        "hs-opentelemetry-api",
+        "hs-opentelemetry-sdk",
+        "hs-opentelemetry-exporter-otlp",
+        "hs-opentelemetry-propagator-w3c",
+        "hs-opentelemetry-semantic-conventions"
+      ],
+      "selectors": [
+        "selftest/telemetry/**"
+      ],
+      "changeImplies": {
+        "minDimensionPolicy": "telemetry-corners"
+      },
+      "verifiedAgainst": "hs-opentelemetry 1.0 family",
+      "dependsOn": []
+    },
+    {
+      "id": "kenshou-harness",
+      "kind": "harness",
+      "uri": "mori://shinzui/kenshou/packages/kenshou-core",
+      "repository": "kenshou",
+      "sourceRoots": [
+        "kenshou-core/"
+      ],
+      "packages": [
+        "kenshou-core"
+      ],
+      "selectors": [
+        "selftest/**"
+      ],
+      "verifiedAgainst": "kenshou-core 0.1.0.0",
+      "subcomponents": [
+        {
+          "id": "kernel",
+          "pathPrefixes": [],
+          "selectors": [
+            "selftest/kernel/**"
+          ],
+          "uses": []
+        }
+      ],
+      "dependsOn": [
+        {
+          "to": "pg-migrate",
+          "kind": "build"
+        },
+        {
+          "to": "ephemeral-pg",
+          "kind": "build"
+        }
+      ]
+    },
+    {
+      "id": "synthetic-table",
+      "kind": "harness",
+      "uri": "mori://shinzui/kenshou/packages/kenshou-synthetic",
+      "repository": "kenshou",
+      "sourceRoots": [
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Table.hs",
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Roles.hs",
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Schema.hs",
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Correctness.hs",
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Concurrency.hs",
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Bench.hs",
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Oracle.hs"
+      ],
+      "packages": [
+        "kenshou-synthetic"
+      ],
+      "selectors": [
+        "synthetic/table/**"
+      ],
+      "verifiedAgainst": "kenshou-synthetic 0.1.0.0",
+      "dependsOn": [
+        {
+          "to": "pg-migrate",
+          "kind": "build"
+        },
+        {
+          "to": "kenshou-harness",
+          "kind": "build"
+        },
+        {
+          "to": "postgresql",
+          "kind": "runtime"
+        }
+      ]
+    },
+    {
+      "id": "synthetic-echo",
+      "kind": "harness",
+      "uri": "mori://shinzui/kenshou/packages/kenshou-synthetic",
+      "repository": "kenshou",
+      "sourceRoots": [
+        "kenshou-synthetic/src/Kenshou/Suite/Synthetic/Echo.hs"
+      ],
+      "packages": [],
+      "selectors": [
+        "synthetic/echo/**"
+      ],
+      "verifiedAgainst": "kenshou-synthetic 0.1.0.0",
+      "dependsOn": []
+    }
+  ],
+  "repositoryPaths": [
+    {
+      "prefix": "kenshou-core/src/Kenshou/Plan/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "kenshou-core/data/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "kenshou-cli/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "kenshou-remote/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "kenshou-evidence/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "schemas/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "suites/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "policies/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    },
+    {
+      "prefix": "cohort/",
+      "effect": {
+        "kind": "cohort"
+      }
+    },
+    {
+      "prefix": "kenshou-core/",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "kenshou-measure/",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "kenshou-check/",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "kenshou-diagnose/",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "kenshou-telemetry/",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "cabal.project",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "flake.",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "nix/",
+      "effect": {
+        "kind": "all"
+      }
+    },
+    {
+      "prefix": "docs/",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "agents/",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": ".seihou/",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": ".github/",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": ".claude/",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": ".agents/",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "README.md",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "mori.dhall",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "mina.kdl",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "justfile",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "process-compose.yaml",
+      "effect": {
+        "kind": "nothing"
+      }
+    },
+    {
+      "prefix": "kenshou-synthetic/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**",
+          "synthetic/**"
+        ]
+      }
+    },
+    {
+      "prefix": "fixtures/",
+      "effect": {
+        "kind": "selectors",
+        "selectors": [
+          "selftest/**"
+        ]
+      }
+    }
+  ]
+}

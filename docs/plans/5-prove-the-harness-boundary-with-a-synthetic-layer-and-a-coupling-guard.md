@@ -62,9 +62,13 @@ is written to be read, not only to pass.
   `duplicates-within-windows`, `eventual-quiescence`, and `ledger-versus-oracle` held over
   8 keys of 500 items and two kills; the reader's facts are recorded in their own ledger
   scope, `synthetic-reader/0`; see Decision Log.)
-- [ ] M2: the concurrency, benchmark, soak, and resource round-trip scenarios exist and each
+- [x] M2: the concurrency, benchmark, soak, and resource round-trip scenarios exist and each
   exits 0; the `echo` resource is provisioned by the suite and the suite oracle, lock labels,
   and evidence subject are registered on the bundle.
+  (2026-10-28; all five synthetic scenarios exit 0; the bundle also carries a
+  `requirePgVersionsFor` rule, a pool methodology, an example routing rule, and its own
+  component graph (`kenshou-synthetic/data/components.json`, brought forward from M3 so the
+  graph check stays green); `just verify` exits 0.)
 - [ ] M3: `kenshou plan --changed synthetic-table` selects only the table scenarios,
   `kenshou diagnose leak` on a soak run exits 0, `kenshou compare` over interleaved benchmark
   pairs writes a comparison document with a pass verdict, and `kenshou record` writes a sealed
@@ -104,6 +108,18 @@ is written to be read, not only to pass.
   reader facts in the harness scope looked like one inversion per key; a consumer process
   writes its own ledger in real suites. Offsets over `(key, seq)` order skip rows when
   writes for different keys interleave.
+  Date: 2026-10-28
+
+- Decision: The benchmark and soak use an `open-constant` load at 200 operations per second
+  with 8 executors instead of a closed loop, and both share one append runner. The
+  concurrency scenario records each contender's steps through its own ledger writer, merged
+  in database-clock order, and does not terminate a contender's backend.
+  Rationale: A closed loop saturated the load driver on the development machine, which the
+  measurement health checks report (the harness's own `selftest/measure/benchmark/pg-insert`
+  exits 4 there for that reason); a fixed rate measures latency honestly. The ownership
+  checker orders by wall clock within a key and takes the owner from the fact's scope, so
+  recording per contender in arrival order is what makes the check meaningful. A backend
+  termination would exercise retry logic in the contender, not a harness extension point.
   Date: 2026-10-28
 
 ## Outcomes & Retrospective

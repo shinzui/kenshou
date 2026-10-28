@@ -7,6 +7,9 @@ module Kenshou.Suite.Synthetic.Roles
     Fact (..),
     decodeFacts,
     roleName,
+    awaitStart,
+    awaitStop,
+    intArg,
   )
 where
 
