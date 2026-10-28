@@ -150,12 +150,45 @@ improvement-requests-validate:
 friction-log-validate:
     okf validate docs/friction-log --strict --profile docs/friction-log/profile.dhall --profile-enforce --log-enforce
 
-# Regenerates every bundle index and fails when a committed index is stale.
+# Regenerates every bundle index and fails when one changed, so a concept added
+# without its index entry is caught whether or not the work is committed.
 [group('docs')]
 docs-index-check:
-    okf index docs/adr --write
-    okf index docs/terminology --write
-    okf index docs/guides --write
-    okf index docs/improvement-requests --write
-    okf index docs/friction-log --write
-    git diff --exit-code -- docs/adr docs/terminology docs/guides docs/improvement-requests docs/friction-log
+    #!/usr/bin/env bash
+    set -euo pipefail
+    stale=0
+    for bundle in adr terminology guides improvement-requests friction-log; do
+      before=$(cat "docs/$bundle/index.md")
+      okf index "docs/$bundle" --write >/dev/null
+      if [ "$before" != "$(cat "docs/$bundle/index.md")" ]; then
+        echo "docs-index-check: docs/$bundle/index.md was stale and has been regenerated" >&2
+        stale=1
+      fi
+    done
+    exit "$stale"
+
+# The released packages, in the order Hackage must receive them: each one's
+# kenshou dependencies come before it.
+release_packages := "kenshou-core kenshou-measure kenshou-check kenshou-diagnose kenshou-telemetry kenshou-remote kenshou-evidence kenshou-cli kenshou-synthetic"
+
+# Writes one source tarball per package under dist-newstyle/sdist/.
+[group('release')]
+sdist:
+    cabal sdist all
+
+# Fails when Hackage would warn about or reject any package.
+[group('release')]
+sdist-check:
+    for p in {{release_packages}}; do (cd "$p" && cabal check) || exit 1; done
+
+# Uploads every package as a Hackage candidate; candidates can be replaced.
+[group('release')]
+upload-candidate: sdist-check sdist
+    for p in {{release_packages}}; do cabal upload "dist-newstyle/sdist/$p-0.1.0.0.tar.gz" || exit 1; done
+
+# Publishes every package and its documentation to Hackage. Permanent.
+[group('release')]
+publish: sdist-check sdist
+    @echo "This will permanently publish to Hackage. Press Ctrl+C to cancel."
+    @read -r _
+    for p in {{release_packages}}; do cabal upload --publish "dist-newstyle/sdist/$p-0.1.0.0.tar.gz" || exit 1; (cd "$p" && cabal haddock --haddock-for-hackage --haddock-hyperlink-source --haddock-quickjump && cabal upload --publish --documentation "$(cabal haddock --haddock-for-hackage 2>&1 | tail -1)") || exit 1; done

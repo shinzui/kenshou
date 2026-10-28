@@ -9,6 +9,9 @@
 # (docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md).
 # Verbatim consumer data lives in kenshou-evidence/test/fixtures/consumer-records/
 # and fixtures/consumer-baseline/, which the check excludes instead of listing.
+# The one URI exception is each release changelog's provenance line, which cites the
+# consumer commit the package was extracted from
+# (docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md).
 kenshou-core/src/Kenshou/Core/Compat.hs:    others = Map.delete legacyKafkaName resources
 kenshou-core/src/Kenshou/Core/Compat.hs:  maybe [] (pure . (Key.fromText (renderResourceName legacyKafkaName) .=)) (Map.lookup legacyKafkaName resources)
 kenshou-core/src/Kenshou/Core/Compat.hs:-- | compat-key/v1 shim: keeps Kafka comparison keys stable for recorded baselines.
@@ -42,3 +45,11 @@ kenshou-remote/test/ExecSpec.hs:    { name = legacyKafkaName,
 kenshou-remote/test/ExecSpec.hs:import Kenshou.Core.Resource.Types (legacyKafkaName)
 schemas/run-spec-v1.schema.json:        "kafka": {"deprecated": true, "description": "Written before named resources; readers map a non-null value to resources.kafka."}
 schemas/worker-init-v1.schema.json:    "kafka": {"deprecated": true, "description": "Written before named resources; readers map a non-null value to resources.kafka."},
+kenshou-check/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-cli/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-core/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-diagnose/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-evidence/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-measure/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-remote/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.
+kenshou-telemetry/CHANGELOG.md:- Extracted from `mori://shinzui/keiro-runtime-kenshou` at commit `a1648293443ad88ff1695ed800ff44c99993574e`, with its package and module names unchanged.

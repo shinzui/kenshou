@@ -4,11 +4,17 @@ version: 0.1.0.0
 synopsis: Telemetry arms and overhead analysis for Kenshou scenarios
 description: Explicit tracing and metrics providers, endpoint scrapers, pipeline diagnostics, and paired observability-overhead reports.
 license: BSD-3-Clause
+license-file: LICENSE
 author: Nadeem Bitar
-maintainer: Nadeem Bitar
+maintainer: nadeem@gmail.com
+homepage: https://github.com/shinzui/kenshou
+bug-reports: https://github.com/shinzui/kenshou/issues
 category: Testing
 build-type: Simple
+extra-doc-files: CHANGELOG.md
 tested-with: ghc >=9.12 && <9.13
+extra-source-files:
+  test/golden/*.json
 
 flag otlp-grpc
   description: Enable the optional OTLP gRPC exporter
@@ -66,33 +72,33 @@ library
     base >=4.21 && <4.22,
     bytestring >=0.12 && <0.13,
     containers >=0.7 && <0.8,
-    directory,
-    filepath,
+    directory >=1.3 && <1.4,
+    filepath >=1.5 && <1.6,
     hs-opentelemetry-api ==1.0.0.0,
     hs-opentelemetry-exporter-otlp ==1.0.0.0,
     hs-opentelemetry-exporter-prometheus ==1.0.0.0,
     hs-opentelemetry-otlp ==1.0.0.0,
     hs-opentelemetry-propagator-w3c ==1.0.0.0,
     hs-opentelemetry-sdk ==1.0.0.0,
-    http-client,
-    http-types,
-    kenshou-core,
-    kenshou-measure,
-    microlens,
-    network,
-    proto-lens,
-    proto-lens-runtime,
+    http-client >=0.7 && <0.8,
+    http-types >=0.12 && <0.13,
+    kenshou-core ^>=0.1.0.0,
+    kenshou-measure ^>=0.1.0.0,
+    microlens >=0.4 && <0.5,
+    network >=3.2 && <3.3,
+    proto-lens >=0.7 && <0.8,
+    proto-lens-runtime >=0.7 && <0.8,
     splitmix >=0.1 && <0.2,
-    stm,
+    stm >=2.5 && <2.6,
     text >=2.1 && <2.2,
-    time,
-    unordered-containers,
-    vector,
-    wai,
-    wai-websockets,
-    warp,
-    websockets,
-    zlib,
+    time >=1.14 && <1.15,
+    unordered-containers >=0.2 && <0.3,
+    vector >=0.13 && <0.14,
+    wai >=3.2 && <3.3,
+    wai-websockets >=3.0 && <3.1,
+    warp >=3.4 && <3.5,
+    websockets >=0.13 && <0.14,
+    zlib >=0.7 && <0.8,
 
   if flag(otlp-grpc)
     cpp-options: -DWITH_OTLP_GRPC
@@ -110,16 +116,20 @@ test-suite kenshou-telemetry-test
     async,
     base >=4.21 && <4.22,
     containers,
-    directory,
+    directory >=1.3 && <1.4,
     hs-opentelemetry-api,
     hs-opentelemetry-sdk,
     hspec >=2.11 && <2.12,
-    http-types,
-    kenshou-core,
+    http-types >=0.12 && <0.13,
+    kenshou-core ^>=0.1.0.0,
     kenshou-telemetry,
-    network,
+    network >=3.2 && <3.3,
     text,
-    wai,
-    wai-websockets,
-    warp,
-    websockets,
+    wai >=3.2 && <3.3,
+    wai-websockets >=3.0 && <3.1,
+    warp >=3.4 && <3.5,
+    websockets >=0.13 && <0.14,
+
+source-repository head
+  type: git
+  location: https://github.com/shinzui/kenshou.git

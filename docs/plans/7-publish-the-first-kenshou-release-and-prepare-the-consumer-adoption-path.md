@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T17:31:09Z
+      mode: "implement"
+      note: "M1 readiness (audit, metadata, bounds, sdists) and DOC-2; tag and publication await user confirmation"
 ---
 
 # Publish the first kenshou release and prepare the consumer adoption path
@@ -48,6 +54,17 @@ Hackage and compile it.
   `cabal sdist all` produces nine tarballs, the divergence audit against the consumer at commit
   `a1648293443ad88ff1695ed800ff44c99993574e` has been run and any generic-package change found
   has been ported, and the commit is tagged `v0.1.0.0`.
+  Progress (2026-10-28): the divergence audit is clean and nothing needed porting. The
+  release metadata is in place:
+  - a `LICENSE` and a `CHANGELOG.md` in each package;
+  - `license-file`, `extra-doc-files`, `homepage`, `bug-reports`, and a
+    `source-repository` in each cabal file;
+  - `^>=0.1.0.0` on every internal dependency;
+  - PVP upper bounds on every dependency that `cabal check` named.
+
+  `cabal check` reports no errors or warnings in all nine packages, and `cabal sdist all`
+  writes nine tarballs. The tag is deferred to the moment publication is confirmed; see the
+  Decision Log.
 - [ ] M2: Publication. The nine packages are published on Hackage (not candidates) with
   documentation uploaded, in dependency order, and a fresh cabal project outside this checkout
   builds against `kenshou-core ==0.1.0.0` at a recorded `index-state`.
@@ -59,11 +76,63 @@ Hackage and compile it.
   under the guides bundle profile, and every read-only command it contains (the divergence audit,
   the inventory listing, the cohort pin shape) has been executed once against the consumer
   checkout with the transcript recorded in the plan.
+  Progress (2026-10-28): DOC-2 is checked in and `just guides-validate` reports
+  `OK: 2 concepts`. Three of its commands ran against the consumer:
+  - the divergence audit;
+  - the inventory listing;
+  - a read of the cohort pin shape. `cohort/released.project` has its `extra-packages`
+    block at line 8 and `constraints` at line 52. `cohort/released.json` is
+    `kenshou.cohort/v1`, and its components have the `id`, `moriUri`, `source`, and
+    `packages` shape that DOC-2 adds.
+
+  The `cabal get` form of the inventory listing and the Nix prefetch need the published
+  release, so they remain.
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+- Divergence audit, 2026-10-28, run in the consumer checkout after `git fetch origin`.
+  `origin/master` was `2129bb9`, three commits past the pin: `9ea967a` (seihou modules),
+  `6514438` (nix-haskell-flake update), and `2129bb9` (a research document). None touches an
+  imported path. Both of these printed nothing:
+
+  ```bash
+  git diff --stat "$PIN"..origin/master -- $GENERIC
+  git log --oneline --no-merges "$PIN"..origin/master -- $GENERIC
+  ```
+
+  `GENERIC` was the complete imported set from `docs/import-provenance.md`. That set also
+  includes `suites` and `policies/selftest.json`, which this plan's Concrete Steps omitted;
+  DOC-2 gives the complete list.
+- `cabal check` found three errors that Hackage rejects:
+  - `kenshou-core` and `kenshou-cli` use `Paths_*` modules without listing them in
+    `autogen-modules`;
+  - `kenshou-diagnose` used extension-less `**/*` globs for its run fixtures.
+
+  It also found that `kenshou-remote` had no `description`, and that sixty-five library
+  dependencies had no upper bound. Each bound is the PVP major of the version in the
+  resolved `plan.json`.
+- The changelogs' provenance line names the consumer's Mori URI, so the coupling guard
+  flagged it. Those eight exact lines are in `scripts/coupling-allowlist.txt`, under a
+  header sentence that names this exception.
+- Inventory listing for DOC-2, run against this checkout's `kenshou-cli/src` (the published
+  tarball does not exist yet). The consumer-only modules are exactly the twelve
+  `Kenshou.Cli.Attest.Keiro*` modules. The released `kenshou-cli` also exports
+  `Kenshou.Cli.Registry` and `Kenshou.Cli.Attest`, so the consumer must rename its own
+  modules of those names; DOC-2 says so.
+- The cohort-pin and Nix-prefetch commands in DOC-2 need the published release. They have
+  not run yet.
+- The nine tarballs, unpacked into an empty project with the harness cohort, build every
+  library, executable, and test suite. This proves every Template Haskell embed is shipped.
+  Their test suites still fail there:
+  - At first, 260 cases failed, because only some packages listed their fixtures in
+    `extra-source-files`. Each package now ships its own fixtures, which leaves 84 failures.
+  - Every remaining failure reads a path outside the package: `../fixtures/consumer-baseline/`,
+    `../policies/`, `../suites/`, or a sibling package's goldens.
+  - `kenshou-check` and `kenshou-telemetry` pass from their tarballs.
+
+  This is recorded as
+  [IR-1](../improvement-requests/run-every-package-test-suite-from-its-source-distribution.md).
 
 
 ## Decision Log
@@ -92,6 +161,30 @@ Hackage and compile it.
   and the consumer may have changed its generic packages since. A change ported before `0.1.0.0`
   reaches the consumer in the first release; a change found only at adoption needs a patch
   release, so the earlier audit is cheaper.
+  Date: 2026-10-28
+
+
+- Decision: Tag `v0.1.0.0` only when publication is confirmed, immediately before the
+  candidate uploads, rather than at the end of M1.
+  Rationale: Publishing is irreversible and waits on the user. A candidate review may still
+  require a fix commit. An unpushed tag could be moved, but tagging only the commit that is
+  actually uploaded keeps the tag honest without relying on that.
+  Date: 2026-10-28
+
+- Decision: Release 0.1.0.0 with test suites that pass only in the repository checkout, and
+  tell Nix builders to use `dontCheck`. Do not restructure the imported tests in this plan.
+  Rationale: Hackage does not run test suites, so publication is unaffected. About eighty
+  cases read repository-level data. Some of it is the consumer baseline, which ADR-20 keeps
+  outside the packages. Making those cases tarball-safe would rework imported tests well
+  beyond release readiness. The work is filed as IR-1, so it is visible and has acceptance
+  criteria. DOC-2's Nix overrides carry `dontCheck` until it lands.
+  Date: 2026-10-28
+
+- Decision: `docs-index-check` compares each index before and after regeneration instead of
+  running `git diff --exit-code`.
+  Rationale: The `git diff` form, written by EP-6, failed `just verify` whenever any
+  documentation edit was uncommitted, including correct ones. Comparing before and after
+  catches exactly a stale index.
   Date: 2026-10-28
 
 

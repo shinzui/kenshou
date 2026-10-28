@@ -155,7 +155,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Complete |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Complete |
 | 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | Complete |
-| 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | Not Started |
+| 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | In Progress |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -343,8 +343,14 @@ five OKF bundles, registered with Mori and validated in `just verify`:
 
 The adoption guide was walked end to end from a scratch project outside the checkout.
 
-Phase D (EP-7) is next. Its hard gate is publication to Hackage, which waits on the user's
-confirmation. The CI run on a pushed commit is still unobserved.
+Phase D (EP-7) is in progress. The nine packages are release-ready:
+- `cabal check` is clean;
+- nine tarballs build from scratch;
+- the divergence audit is clean;
+- the consumer adoption guide, DOC-2, is checked in.
+
+Tagging and publication to Hackage wait on the user's confirmation. The test suites pass
+only in the repository; IR-1 records why. The CI run on a pushed commit is still unobserved.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published
