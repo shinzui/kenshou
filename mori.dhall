@@ -105,12 +105,124 @@ in  Schema.Project::{
       , Schema.MoriRef::{ namespace = "iand675", name = "hs-opentelemetry" }
       , Schema.MoriRef::{ namespace = "shinzui", name = "okf" }
       ]
+    , docs =
+      [ Schema.DocRef::{
+        , key = "adopting-kenshou"
+        , kind = Schema.DocKind.Guide
+        , audience = Schema.DocAudience.User
+        , description = Some
+            "Add the kenshou packages to a cabal project, register a layer bundle, and run a first scenario"
+        , location =
+            Schema.DocLocation.LocalFile
+              "./docs/guides/adopting-kenshou-in-a-project.md"
+        }
+      ]
     , okfBundles =
       [ Schema.OkfBundle::{
+        , name = "adrs"
+        , path = "docs/adr"
+        , profile = Some "docs/adr/profile.dhall"
+        , profileBinding = Some
+            ( Schema.ProfileBinding.Published
+                Schema.PinnedImport::{
+                , publisher = "shinzui/okf-profiles"
+                , publisherRef = Some Schema.MoriRef::{
+                  , namespace = "shinzui"
+                  , name = "okf-profiles"
+                  }
+                , export = Some "documentation.architectureDecisions"
+                , version = Some "v0.25.0"
+                , pin = Some
+                    "sha256:ec74cc6f7b8ee1a5af81ee7fc8804f35cf2c9ba4010671d9e881da72eb6719d3"
+                }
+            )
+        , okfVersion = "0.2"
+        , description = Some "Durable harness architecture decisions"
+        }
+      , Schema.OkfBundle::{
+        , name = "terminology"
+        , path = "docs/terminology"
+        , profile = Some "docs/terminology/profile.dhall"
+        , profileBinding = Some
+            ( Schema.ProfileBinding.Published
+                Schema.PinnedImport::{
+                , publisher = "shinzui/okf-profiles"
+                , publisherRef = Some Schema.MoriRef::{
+                  , namespace = "shinzui"
+                  , name = "okf-profiles"
+                  }
+                , export = Some "documentation.terminology"
+                , version = Some "v0.25.0"
+                , pin = Some
+                    "sha256:ec74cc6f7b8ee1a5af81ee7fc8804f35cf2c9ba4010671d9e881da72eb6719d3"
+                }
+            )
+        , okfVersion = "0.2"
+        , description = Some
+            "Controlled vocabulary for scenarios, runs, evidence, and layer bundles"
+        }
+      , Schema.OkfBundle::{
+        , name = "guides"
+        , path = "docs/guides"
+        , profile = Some "docs/guides/profile.dhall"
+        , profileBinding = Some
+            ( Schema.ProfileBinding.Published
+                Schema.PinnedImport::{
+                , publisher = "shinzui/okf-profiles"
+                , publisherRef = Some Schema.MoriRef::{
+                  , namespace = "shinzui"
+                  , name = "okf-profiles"
+                  }
+                , export = Some "documentation.userDocumentation"
+                , version = Some "v0.25.0"
+                , pin = Some
+                    "sha256:ec74cc6f7b8ee1a5af81ee7fc8804f35cf2c9ba4010671d9e881da72eb6719d3"
+                }
+            )
+        , okfVersion = "0.2"
+        , description = Some "Guides for projects adopting the harness"
+        }
+      , Schema.OkfBundle::{
+        , name = "improvement-requests"
+        , path = "docs/improvement-requests"
+        , profile = Some "docs/improvement-requests/profile.dhall"
+        , profileBinding = Some
+            ( Schema.ProfileBinding.Published
+                Schema.PinnedImport::{
+                , publisher = "shinzui/okf-profiles"
+                , publisherRef = Some Schema.MoriRef::{
+                  , namespace = "shinzui"
+                  , name = "okf-profiles"
+                  }
+                , export = Some "coordination.improvementRequests"
+                , version = Some "v0.25.0"
+                , pin = Some
+                    "sha256:ec74cc6f7b8ee1a5af81ee7fc8804f35cf2c9ba4010671d9e881da72eb6719d3"
+                }
+            )
+        , okfVersion = "0.2"
+        , description = Some
+            "Requests to improve the harness, its toolkits, and its operator commands"
+        }
+      , Schema.OkfBundle::{
         , name = "friction-log"
         , path = "docs/friction-log"
-        , okfVersion = "0.2"
         , profile = Some "docs/friction-log/profile.dhall"
+        , profileBinding = Some
+            ( Schema.ProfileBinding.Published
+                Schema.PinnedImport::{
+                , publisher = "shinzui/okf-profiles"
+                , publisherRef = Some Schema.MoriRef::{
+                  , namespace = "shinzui"
+                  , name = "okf-profiles"
+                  }
+                , export = Some "coordination.frictionLog"
+                , version = Some "v0.25.0"
+                , pin = Some
+                    "sha256:ec74cc6f7b8ee1a5af81ee7fc8804f35cf2c9ba4010671d9e881da72eb6719d3"
+                }
+            )
+        , okfVersion = "0.2"
         , description = Some
             "Friction met while implementing plans, before triage into bug reports and requests"
         }

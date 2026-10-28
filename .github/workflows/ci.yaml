@@ -43,8 +43,10 @@ jobs:
       - name: Update Hackage index
         run: nix develop --command cabal update
 
+      # The OKF CLI is not part of the development shell; the documentation
+      # validations in `just verify` take it from the pinned okf release.
       - name: Verify
-        run: nix develop --command just verify
+        run: nix shell github:shinzui/okf/v0.10.0.0#okf-cli nixpkgs#dhall --command nix develop --command just verify
 
       - name: Check Nix flake
         run: nix flake check

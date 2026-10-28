@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T17:14:50Z
+      mode: "implement"
+      note: "EP-6 completed: ADR, terminology, guides, improvement-request, and friction-log bundles; adoption guide walked end to end"
 ---
 
 # Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation
@@ -83,9 +89,18 @@ handoff during a milestone, add a short prose note stating the remaining outcome
   bundle, and TERM-33 named resource; the improvement-requests bundle is empty; the friction
   log moved from okf-profiles v0.23.0 to v0.25.0. Strict validation reports `OK: 33
   concepts`, `OK: 0 concepts`, and `OK: 1 concepts`.)
-- [ ] M4: `docs/guides/adopting-kenshou-in-a-project.md` validates strictly, every bundle is
+- [x] M4: `docs/guides/adopting-kenshou-in-a-project.md` validates strictly, every bundle is
   declared in `mori.dhall` and registered, `README.md` points at the bundles and the guide,
   and `just verify` runs every bundle validation and the index drift check.
+  (2026-10-28; DOC-1 validates strictly; the five bundles and a `Guide` doc entry are in
+  `mori.dhall`, `mori register` succeeds, and `mori path` resolves ADR-1, TERM-32, and
+  DOC-1. A scratch cabal project outside the checkout, laid out as the guide says, built an
+  executable that registers `syntheticBundle` next to the self-test bundles. In that project,
+  `cohort check` exited 0, and `run` passed both
+  `synthetic/echo/correctness/resource-roundtrip` and
+  `synthetic/table/correctness/append-survives-kill-restart`. `just verify` gained
+  `adr-validate`, `terminology-validate`, `guides-validate`,
+  `improvement-requests-validate`, `friction-log-validate`, and `docs-index-check`.)
 
 
 ## Surprises & Discoveries
@@ -95,7 +110,20 @@ implementation. Provide concise evidence. Friction with the tools, documents, an
 used to do the work belongs in the friction log (see FRICTION.md); cite an entry's FRIC-N
 handle here only when it also changed the plan.
 
-(None yet.)
+- The first draft of the adoption guide did not mention the cohort layout, and the
+  walkthrough caught it. In the scratch project, `run` exited 2 with
+  `unable to resolve cohort identity: ... ./cohort/active.project: does not exist`. The
+  run path resolves a cohort identity from `cohort/active.project`, `cohort/<name>.json`, and
+  `dist-newstyle/cache/plan.json`, or from `KENSHOU_COHORT_IDENTITY`. An adopting project
+  therefore carries the same `cohort/` layout this repository does. The guide now says so,
+  and the rerun passed.
+- `kenshou-cli/help/evidence.md` did not list the `evidence.default-subject` and
+  `evidence.bundle-uri` keys or their environment variables, which EP-4 added. The guide
+  points readers at that help topic, so the topic now lists them.
+- `okf` is not part of the development shell; it comes from the user's Nix profile. CI
+  therefore wraps `just verify` in
+  `nix shell github:shinzui/okf/v0.10.0.0#okf-cli nixpkgs#dhall`, the same release that is
+  installed locally. That CI step has not run yet, because nothing has been pushed.
 
 
 ## Decision Log
@@ -144,7 +172,32 @@ this plan by handle with their triage outcome. Before marking the plan complete,
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+The kenshou repository now documents itself as a harness rather than as a part of the
+consumer. Five OKF bundles validate strictly and are registered with Mori:
+- twenty decisions, fifteen of them carried from the consumer with Origin citations;
+- thirty-three terms;
+- one guide;
+- an empty improvement-request bundle;
+- the friction log.
+
+`just verify` validates all five and fails on a stale index. The adoption guide was checked
+end to end: a scratch project outside the checkout, laid out as the guide says, assembled
+its own executable from `kenshou-cli` and `kenshou-synthetic` and passed two synthetic
+scenarios. That walkthrough found the one gap in the first draft, the cohort layout. A
+reader without that section would have stopped at exit 2.
+
+Gaps:
+- The CI step that fetches `okf` has not run yet, because nothing has been pushed.
+- The guide's `source-repository-package` stanza cannot be followed literally until the
+  commits reach GitHub. The walkthrough used the local-checkout form the guide also gives.
+- The consumer's other operator guides (measurement, diagnosis, evidence, cells,
+  telemetry) were not carried. They describe Keiro scenarios and belong in the consumer;
+  a harness version of them would be a later guide, recorded here as a possible
+  improvement request.
+
+No friction was recorded under this plan. The ADR distillation produced nothing new beyond
+ADR-16 to ADR-20: the cohort-layout requirement is already ADR-2's decision, and the guide
+now states its consequence for adopters.
 
 
 ## Context and Orientation

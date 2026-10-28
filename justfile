@@ -11,7 +11,7 @@ default:
     just --list
 
 [group('meta')]
-verify: fmt-check haskell-build plan-check coupling-check cohort-check graph-check haskell-test schemas-check selftest synthetic
+verify: fmt-check haskell-build plan-check coupling-check cohort-check graph-check haskell-test schemas-check selftest synthetic adr-validate terminology-validate guides-validate improvement-requests-validate friction-log-validate docs-index-check
 
 # Fails when Cabal's resolved plan contains a consumer layer package or a
 # runtime migration library.
@@ -129,3 +129,33 @@ postgres-stop:
 [group('database')]
 create-database db=pg_database:
     PGHOST="{{pg_host}}" createdb "{{db}}" 2>/dev/null || PGHOST="{{pg_host}}" psql -d "{{db}}" -Atqc 'SELECT 1' >/dev/null
+
+[group('docs')]
+adr-validate:
+    okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
+
+[group('docs')]
+terminology-validate:
+    okf validate docs/terminology --strict --profile docs/terminology/profile.dhall --profile-enforce --log-enforce
+
+[group('docs')]
+guides-validate:
+    okf validate docs/guides --strict --profile docs/guides/profile.dhall --profile-enforce --log-enforce
+
+[group('docs')]
+improvement-requests-validate:
+    okf validate docs/improvement-requests --strict --profile docs/improvement-requests/profile.dhall --profile-enforce --log-enforce
+
+[group('docs')]
+friction-log-validate:
+    okf validate docs/friction-log --strict --profile docs/friction-log/profile.dhall --profile-enforce --log-enforce
+
+# Regenerates every bundle index and fails when a committed index is stale.
+[group('docs')]
+docs-index-check:
+    okf index docs/adr --write
+    okf index docs/terminology --write
+    okf index docs/guides --write
+    okf index docs/improvement-requests --write
+    okf index docs/friction-log --write
+    git diff --exit-code -- docs/adr docs/terminology docs/guides docs/improvement-requests docs/friction-log

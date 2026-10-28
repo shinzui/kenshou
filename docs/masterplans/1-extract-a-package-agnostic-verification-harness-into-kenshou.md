@@ -16,6 +16,11 @@ provenance:
       at: 2026-10-28T13:02:34Z
       mode: "implement"
       note: "Began implementation; EP-1 in progress"
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T17:14:50Z
+      mode: "implement"
+      note: "EP-6 completed: ADR, terminology, guides, improvement-request, and friction-log bundles; adoption guide walked end to end"
 ---
 
 # Extract a package-agnostic verification harness into kenshou
@@ -149,7 +154,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Complete |
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Complete |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Complete |
-| 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | In Progress |
+| 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | Complete |
 | 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -326,11 +331,20 @@ the evidence subject into bundle contributions and the history bundle URI into
 configuration. `just coupling-check` audits every generic package and the schemas for all
 five layer names; the allow-list holds only the EP-3 compatibility shim. 
 
-Phase C is in progress. EP-5 is complete (2026-10-28): the synthetic reference suite in
-`kenshou-synthetic` exercises every extension point through the generic commands, and
-`scripts/coupling-guard.sh`, `scripts/plan-check.sh`, and the quick synthetic scenarios run
-in `just verify`. EP-6 (documentation) is next; EP-7 waits on it. The CI run on a pushed
-commit is still unobserved.
+Phase C is complete (2026-10-28). EP-5's synthetic reference suite in `kenshou-synthetic`
+exercises every extension point through the generic commands, and `scripts/coupling-guard.sh`,
+`scripts/plan-check.sh`, and the quick synthetic scenarios run in `just verify`. EP-6 created
+five OKF bundles, registered with Mori and validated in `just verify`:
+- twenty ADRs;
+- thirty-three terms;
+- the adoption guide;
+- improvement requests;
+- the friction log.
+
+The adoption guide was walked end to end from a scratch project outside the checkout.
+
+Phase D (EP-7) is next. Its hard gate is publication to Hackage, which waits on the user's
+confirmation. The CI run on a pushed commit is still unobserved.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published
@@ -390,6 +404,15 @@ exec-plan skill's FRICTION.md).
   `kenshou-evidence/test/Main.hs`). EP-4 removes them and widens the five-name audit to the
   remaining toolkits. The cell `resources` extension is pending adoption in
   `mori://shinzui/load-testing-infra`; until then a Kafka submission keeps its exact shape.
+
+
+- EP-6's walkthrough of the adoption guide found that `run` needs a resolvable cohort
+  identity, which ADR-2 requires. An adopting project therefore needs `cohort/active.project`,
+  `cohort/<name>.project`, `cohort/<name>.json`, and a built `plan.json`, or
+  `KENSHOU_COHORT_IDENTITY`. This touches EP-7: the consumer already has that layout, but the
+  released `kenshou-cli` also exports `Kenshou.Cli.Registry` and `Kenshou.Cli.Attest`, so
+  the consumer's modules of those names must be renamed when they move to its own executable
+  package.
 
 
 ## Decision Log
