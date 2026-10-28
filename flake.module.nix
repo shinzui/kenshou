@@ -81,7 +81,7 @@
         });
       kenshou-synthetic =
         local "kenshou-synthetic" "/kenshou-synthetic" {
-          inherit kenshou-cli;
+          inherit kenshou-check kenshou-cli kenshou-core kenshou-diagnose kenshou-measure;
         };
     in
     {

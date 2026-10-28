@@ -148,7 +148,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | Complete |
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Complete |
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Complete |
-| 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | In Progress |
+| 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Complete |
 | 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | Not Started |
 | 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | Not Started |
 
@@ -324,8 +324,13 @@ contracts through `Program`. EP-3 replaced the Kafka fields with named resources
 legacy cell adapter. EP-4 moved oracles, lock labels, pool methodology, routing rules, and
 the evidence subject into bundle contributions and the history bundle URI into
 configuration. `just coupling-check` audits every generic package and the schemas for all
-five layer names; the allow-list holds only the EP-3 compatibility shim. Phase C (EP-5 and
-EP-6) is unblocked; the CI run on a pushed commit is still unobserved.
+five layer names; the allow-list holds only the EP-3 compatibility shim. 
+
+Phase C is in progress. EP-5 is complete (2026-10-28): the synthetic reference suite in
+`kenshou-synthetic` exercises every extension point through the generic commands, and
+`scripts/coupling-guard.sh`, `scripts/plan-check.sh`, and the quick synthetic scenarios run
+in `just verify`. EP-6 (documentation) is next; EP-7 waits on it. The CI run on a pushed
+commit is still unobserved.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published

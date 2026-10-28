@@ -11,22 +11,19 @@ default:
     just --list
 
 [group('meta')]
-verify: fmt-check haskell-build plan-check coupling-check cohort-check graph-check haskell-test schemas-check selftest
+verify: fmt-check haskell-build plan-check coupling-check cohort-check graph-check haskell-test schemas-check selftest synthetic
 
-# Fails when Cabal's resolved plan contains a consumer layer package. The
-# generic packages must build without any of them.
-[group('verification')]
+# Fails when Cabal's resolved plan contains a consumer layer package or a
+# runtime migration library.
+[group('boundary')]
 plan-check:
-    cabal build all --dry-run >/dev/null
-    jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | sort -u | grep -E '^kenshou-'
-    ! jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | grep -qE '^kenshou-(pgmq|kiroku|shibuya|kafka|keiro|runtime)$'
+    bash scripts/plan-check.sh
 
-# Fails when a generic package or JSON schema names a consumer layer outside the
-# exact lines in scripts/coupling-allowlist.txt. Verbatim consumer records are
-# excluded; fixtures/consumer-baseline/ is outside every package.
-[group('verification')]
+# Fails when a generic package, the synthetic suite, or a JSON schema names a
+# consumer layer outside the exact lines in scripts/coupling-allowlist.txt.
+[group('boundary')]
 coupling-check:
-    ! grep -riE 'keiro|kiroku|pgmq|shibuya|kafka' kenshou-core kenshou-check kenshou-measure kenshou-diagnose kenshou-telemetry kenshou-evidence kenshou-remote kenshou-cli kenshou-synthetic schemas --include='*.hs' --include='*.cabal' --include='*.json' --include='*.md' | grep -v '/test/fixtures/consumer-records/' | grep -vxFf scripts/coupling-allowlist.txt
+    bash scripts/coupling-guard.sh
 
 [group('verification')]
 graph-check:
@@ -77,6 +74,12 @@ schemas-check:
 selftest:
     tmpdir=$(mktemp -d); trap 'rm -rf -- "$tmpdir"' EXIT; K=$(cabal list-bin kenshou); "$K" run selftest/kernel/correctness/always-pass --out "$tmpdir"; "$K" run selftest/kernel/correctness/outcome --out "$tmpdir"; "$K" run selftest/kernel/correctness/known-defect --out "$tmpdir"; "$K" run selftest/kernel/correctness/postgres-roundtrip --dim pg.durability=fsync-off --out "$tmpdir"; "$K" run selftest/kernel/correctness/postgres-roundtrip --dim pg.durability=durable --out "$tmpdir"; "$K" run selftest/kernel/concurrency/worker-echo --out "$tmpdir"; set +e; "$K" run selftest/kernel/correctness/always-fail --out "$tmpdir"; fail=$?; "$K" run selftest/kernel/correctness/errors --out "$tmpdir"; errored=$?; set -e; test "$fail" = 1; test "$errored" = 4
     tmpdir=$(mktemp -d); trap 'rm -rf -- "$tmpdir"' EXIT; K=$(cabal list-bin kenshou); "$K" run selftest/check/correctness/ledger-detects-loss-dup-reorder --set ledger.facts=1000 --out "$tmpdir"; "$K" run selftest/check/concurrency/kill-and-restart-worker --set kill.count=2 --out "$tmpdir"; "$K" run selftest/check/concurrency/postgres-backend-kill --dim pg.durability=fsync-off --out "$tmpdir"; "$K" run selftest/check/concurrency/postgres-backend-kill --dim pg.durability=durable --out "$tmpdir"; "$K" run selftest/check/concurrency/proxy-partition --out "$tmpdir"; "$K" run selftest/check/correctness/model-replays-counterexample --set model.tests=20 --out "$tmpdir"
+
+# Runs the synthetic reference suite's quick scenarios: the boundary proof that a
+# suite built only on the generic packages registers and runs.
+[group('boundary')]
+synthetic:
+    tmpdir=$(mktemp -d); trap 'rm -rf -- "$tmpdir"' EXIT; K=$(cabal list-bin kenshou); "$K" run synthetic/table/correctness/append-survives-kill-restart --out "$tmpdir"; "$K" run synthetic/table/concurrency/competing-writers-hold-disjoint-leases --out "$tmpdir"; "$K" run synthetic/echo/correctness/resource-roundtrip --out "$tmpdir"
 
 [group('haskell')]
 haskell-build:

@@ -81,9 +81,14 @@ is written to be read, not only to pass.
   accepts as evidence the comparison ran; `record` writes
   `runs/synthetic/2026/10/<id>.md` with subject `mori://shinzui/kenshou`, a second call
   reports `already recorded`, and `okf validate --strict` passes on the scratch bundle.)
-- [ ] M4: `scripts/coupling-guard.sh` and `scripts/plan-check.sh` exist, run from
+- [x] M4: `scripts/coupling-guard.sh` and `scripts/plan-check.sh` exist, run from
   `just verify` and CI, and pass; a deliberately injected layer name in a generic package makes
   the guard fail, and `kenshou-synthetic`'s cabal file depends only on generic packages.
+  (2026-10-28; both scripts back the `coupling-check` and `plan-check` recipes in `verify`,
+  which CI runs; a `-- kiroku` comment injected into `kenshou-core/src` fails the guard;
+  `kenshou-synthetic` depends only on generic `kenshou-*` packages and ordinary Hackage
+  libraries; `verify` also runs the quick synthetic scenarios through a new `synthetic`
+  recipe; `just verify` exits 0.)
 
 
 ## Surprises & Discoveries
@@ -155,8 +160,22 @@ is written to be read, not only to pass.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+EP-5 delivered its purpose: a suite built only on the generic packages registers a layer,
+migration set, worker roles, a resource provider, an oracle, lock labels, a rule, a pool
+methodology, a routing rule, an evidence subject, and a component graph, and its five
+scenarios run, plan, diagnose, compare, and record through the generic commands. The
+coupling guard and plan check are part of `just verify`, so the boundary is proven by the
+build on every run.
 
+The guard searches every generic package directory, the synthetic package, and `schemas/`
+rather than only `src`, `test`, and the cabal file, so CLI help topics and schemas are
+covered; its only directory exemption is `kenshou-evidence/test/fixtures/consumer-records/`.
+`fixtures/consumer-baseline/` stays, by the user's decision in EP-2, as the home of the
+captured perf documents and the consumer layout some tests read. No friction entry was
+recorded under this plan.
+
+`docs/plans/6-…` should use the synthetic suite as the adoption guide's worked example and
+record the leak-policy and sampler findings in Surprises & Discoveries as known limits.
 
 ## Context and Orientation
 
