@@ -59,9 +59,13 @@ edits, commands, tests, commits, or session activity. Update this section when a
 is accepted, a material blocker or change of course arises, or work is handed off. For a
 handoff during a milestone, add a short prose note stating the remaining outcome.
 
-- [ ] M1: `docs/adr/` exists with the pinned architecture-decisions descriptor, the
+- [x] M1: `docs/adr/` exists with the pinned architecture-decisions descriptor, the
   carried-over harness decisions as kenshou ADRs with origin citations, and strict
   validation exits 0.
+  (2026-10-28; the bundle pins okf-profiles v0.25.0; the consumer's ADR-1, 2, 3, 5, 6, 7, 8,
+  9, 10, 11, 14, 18, 19, 20, and 21 are ADR-1 to ADR-15 here, each restated for a harness
+  that verifies no particular runtime and ending with an Origin paragraph; strict validation
+  reports `OK: 15 concepts`.)
 - [ ] M2: The three initiative ADRs (layer-bundle registration contract, one ledger per
   database with suite-supplied migration sets, unchanged package and module names) are
   recorded, the one-ledger ADR names the consumer decision it supersedes, and strict

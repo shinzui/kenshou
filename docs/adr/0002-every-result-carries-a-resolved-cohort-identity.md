@@ -1,0 +1,133 @@
+---
+type: Architecture Decision Record
+title: Every result carries a resolved cohort identity
+description: Verification results identify the complete runtime cohort actually selected by Cabal, including immutable sources and a deterministic plan hash, rather than recording only intended pins.
+timestamp: 2026-10-28T16:00:00Z
+generated:
+  by: process:claude-code
+  at: "2026-10-28T16:00:00Z"
+docId: ADR-2
+status: Accepted
+date: 2026-10-28
+originatingPlan: docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md
+---
+
+# Every result carries a resolved cohort identity
+
+## Context
+
+Kenshou compares behavior across a family of independently released packages. A
+version label such as "library 0.17" is insufficient evidence: the
+result also depends on every substrate and adapter version, the Hackage index
+state, any git source, solver flags, and narrowly lifted bounds.
+
+Intended pins are not proof of what Cabal selected. Cabal also caches imported
+project files without noticing a direct edit to `cohort/active.project`; during
+bootstrap, changing that file by hand left the previous plan in place. A result
+that copied the intended descriptor could therefore claim one cohort while the
+executable actually linked another.
+
+The released-first policy follows
+`mori://shinzui/jinmyaku/okf/adrs/concepts/ADR-1`. Exception evidence follows
+`mori://shinzui/rei/okf/adrs/concepts/ADR-16`, and exact index-state adoption
+follows `mori://shinzui/rei/okf/adrs/concepts/ADR-18`.
+
+## Decision
+
+A cohort is an explicit, complete, named pin set. `released` selects Hackage
+packages at an exact reachable `index-state`; `head` replaces selected components
+with HTTPS git sources at immutable commit hashes. Both are first-class cohorts
+and each is self-contained. Git branches, `file://` locations, and local-path
+runtime sources are forbidden.
+
+Each cohort has two coordinated inputs:
+
+- `cohort/<name>.project` is the Cabal solver input. Every Hackage-backed member
+  is both exactly constrained and listed in `extra-packages`, so it appears in
+  the solver plan even before a scenario imports it.
+- `cohort/<name>.json` is the machine-readable descriptor. It groups packages by
+  component and maps every component to its canonical `mori://` project URI.
+
+`cohort/active.project` contains exactly one cohort import. It is changed only
+through `just use-cohort <name>`, which also deletes Cabal's cached project
+configuration and plan. A direct edit is not an accepted switch procedure.
+
+Every verification result embeds the `CohortIdentity` derived from Cabal's
+resolved `plan.json`, not a copy of the intended descriptor. The identity records
+compiler and Cabal versions, platform, index state, descriptor digest, resolved
+package versions and sources, and a deterministic plan hash. Local repository
+units and absolute paths are excluded from the hash. `kenshou cohort check`
+rejects missing packages, version or source drift, and runtime packages resolved
+from local paths.
+
+A package-qualified `allow-newer` is permitted only when its adjacent evidence
+names the bound, explains why the incompatible surface does not reach this
+consumer, identifies a test that exercises the used surface (including live
+migrations when applicable), and states the removal condition. Blanket
+`allow-newer` entries are forbidden.
+
+Performance preparations generate descriptors and source locks outside the active
+checkout and use separate build directories for both arms. Read target manifests
+at each immutable upstream commit instead of copying template versions or paths.
+Identify the clean harness commit separately from generated inputs. A same-source
+A/A request uses identical cohort inputs and one reusable payload.
+
+Before publication or cell leasing, compare complete resolved inventories. Only
+the declared targets may change source or version; compiler, platform, flags,
+build settings and unrelated transitive inputs must remain fixed. Relinked output
+hashes do not imply source drift. A cache key binds the harness, generated inputs,
+resolved inventories and toolchain, and reuse verifies both identity and bundle
+bytes. A successful Nix link does not certify Cabal bounds. Performance builds
+check standalone solver inputs and enforce declared bounds after package overrides,
+including effective flags. Carry the authenticated solver's Hackage tarball and
+package-description digests into generated Nix inputs; the default Nix package
+set can contain incompatible transitive versions. Preserve selected description
+revisions rather than using a mutable latest revision or treating an absent
+revision field as zero. Recheck actual Nix versions and flags against the bounds
+plan before publication. Historical named Nix outputs keep their existing inputs.
+Retain only reviewed package-scoped exceptions. Inventory inspection reads the
+final builder settings, including Cabal description revisions and patches.
+
+An isolated layer release lane may have its own named project and descriptor
+when a full-runtime package bound excludes the newer layer. The project fixes
+an index state and exactly pins every component named by its descriptor. The
+descriptor names the isolated scope and records those components; the identity
+still hashes the entire resolved Cabal plan. A layer-only runner must derive
+the identity from that plan before a live run and must reject a descriptor
+version or source mismatch. An isolated result verifies the named layer and
+its linked dependencies, but it is not a full-runtime cohort result or a
+substitute for updating the assembled cohort. Which lanes a suite needs, and
+the cohort descriptors that define them, belong to the suite; the harness
+supplies the identity and the check.
+
+The operator CLI also adopts the Git-aware release identity from
+`mori://shinzui/haskell-jitsurei/docs/cli-version-git-sha`. `kenshou --version`
+prints the Cabal package version and a seven-character source revision; local
+Cabal builds read Git metadata, Nix injects the clean flake revision, and a dirty
+Nix source reports `dirty` instead of reusing a stale clean revision. This binary
+identity accompanies, but never substitutes for, the full resolved cohort
+identity.
+
+## Consequences
+
+- Results remain attributable and comparable after package indexes, branches,
+  or local checkouts move.
+- Operators can distinguish the harness revision from the runtime cohort it
+  verified; both identities are required to reproduce a result.
+- Reproducing a result starts with its embedded identity rather than reconstructing
+  dependency intent from repository history.
+- Adding a runtime package requires updating both cohort project files and both
+  descriptors, then regenerating the plan and running `kenshou cohort check`.
+- Cohort switching is deliberately a recipe, not a text edit, because cache
+  invalidation is part of correctness.
+- The descriptor and project file duplicate package information; the consistency
+  check makes that duplication explicit and fail-fast.
+- Plan hashes may differ across platforms when platform-conditional dependencies
+  differ. Consumers compare resolved components as the semantic cohort and treat
+  the plan hash as supporting evidence.
+- Isolated layer results retain a scope-specific cohort name and cannot be
+  presented as evidence for the assembled runtime.
+
+## Origin
+
+Adopted from `mori://shinzui/keiro-runtime-kenshou/okf/adrs/concepts/ADR-2`, decided 2026-09-20, when the harness was extracted into this repository by [the extraction MasterPlan](../masterplans/1-extract-a-package-agnostic-verification-harness-into-kenshou.md). The decision binds the generic packages here; anything it says about a particular runtime layer belongs to the suite that verifies that layer.

@@ -149,7 +149,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Complete |
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Complete |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Complete |
-| 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | Not Started |
+| 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | In Progress |
 | 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
