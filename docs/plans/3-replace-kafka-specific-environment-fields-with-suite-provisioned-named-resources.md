@@ -77,13 +77,29 @@ the resource named `kafka`.
   resources round-trip cases; `just schemas-check` validates the unchanged cell examples
   against the extended schema copies; `selftest/remote/correctness/cell-environment` is at
   revision 2 with the `remote.tcp-endpoint` knob.)
-- [ ] M4: the coupling grep in this plan (EP-5 wraps it into the `coupling-check` recipe)
+- [x] M4: the coupling grep in this plan (EP-5 wraps it into the `coupling-check` recipe)
   reports only allow-listed lines, and `just verify` passes.
+  (2026-10-28; `just coupling-check` now also audits every generic package and `schemas/`
+  for the Kafka layer, excluding `kenshou-evidence/test/fixtures/consumer-records/`, and
+  fails when a Kafka mention is injected into `kenshou-check`; `just verify` exits 0.)
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+- The plan's protocol design would have broken live cells: it sends `reset.resources` beside
+  `reset.broker`, but the cell agent decodes submissions with `additionalProperties: false`.
+  `legacyBrokerReset` moves the entry instead (Decision Log). Evidence:
+  `kenshou-remote/test/golden/cell/cell.submission.v1.schema.json` in this repository's copy
+  sets `additionalProperties: false` on `reset`.
+
+- `HasField` cannot select a rank-N record field, so `provider.withLocal` does not
+  type-check; the runner binds the field with a record pattern.
+
+- The Kafka search finds two kinds of hit outside this plan's shim: verbatim consumer data
+  in `kenshou-evidence/test/fixtures/consumer-records/` (excluded by the check), and evidence
+  knowledge that `docs/plans/4-…` owns (`defaultSubject` in `Kenshou.Evidence.Record`, and
+  `kenshou-evidence/test/Main.hs` literals naming a Kafka soak scenario and Kafka-adapter bug
+  URIs). The latter are allow-listed in a section marked for EP-4.
 
 
 ## Decision Log
@@ -156,7 +172,25 @@ the resource named `kafka`.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+EP-3 delivered its purpose. A scenario declares named resources, a bundle registers a
+provider per name, and the kernel normalizes each value during run-spec resolution,
+brackets the provider around a local run, hands workers the provisioned value, and records
+a per-resource fingerprint. On a cell, resources bind by name, and the legacy broker fields
+keep working through one adapter module. Nothing in `kenshou-core`, `kenshou-check`, or
+`kenshou-remote` names Kafka outside the enumerated shim. Every consumer document stays
+readable: the `consumer compatibility` group reads a consumer run spec with a Kafka value,
+a self-test run spec with a null one, and a legacy worker-init document, and the compat-key
+shim keeps recorded comparison keys stable.
+
+Three things changed from the plan, all in the Decision Log: the resource types sit in
+their own module to avoid an import cycle; the consumer goldens live in the consumer-records
+area under EP-2's rule; and a Kafka submission keeps its exact wire shape because the cell
+agent rejects unknown reset members. No friction entry was recorded under this plan.
+
+No `docs/adr/` bundle exists yet. `docs/plans/6-…` should record the protocol compatibility
+choices as ADRs: the `kenshou.run-spec/v1` and `kenshou.worker-init/v1` resource fields
+with legacy readers, the compat-key/v1 shim, and the cell `resources` extension with
+`Kenshou.Remote.Cell.Legacy` as the single adapter until load-testing-infra adopts it.
 
 
 ## Context and Orientation

@@ -1,11 +1,20 @@
 # Permitted matches of the coupling check (just coupling-check): one exact
-# `path:text` line per line that `grep -riE 'keiro|kiroku|pgmq|shibuya|kafka'`
-# prints for the audited paths. Only generic prose and the enumerated
-# compatibility shim belong here, never a new type, identifier, URI, schema name,
-# or fixture value. The shim is the legacy resource name constant, the readers
-# that map the field documents wrote before named resources, and the
-# compat-key/v1 renderer that keeps recorded comparison keys stable
+# `path:text` line per line that the check's greps print. Only generic prose and
+# the enumerated compatibility shim belong here, never a new type, identifier,
+# URI, schema name, or fixture value. The shim is the legacy resource name
+# constant, the readers that map the field documents wrote before named
+# resources, the compat-key/v1 renderer that keeps recorded comparison keys
+# stable, the cell broker adapter and its callers, the deprecated schema
+# properties, and the tests that assert on them
 # (docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md).
+# Verbatim consumer data lives in kenshou-evidence/test/fixtures/consumer-records/
+# and fixtures/consumer-baseline/, which the check excludes instead of listing.
+#
+# Lines of kenshou-evidence that name the Kafka layer as evidence knowledge are
+# pending removal by
+# docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md:
+# the default subject lookup in Kenshou.Evidence.Record and the evidence test
+# literals. That plan deletes them from this file.
 kenshou-core/src/Kenshou/Core/Compat.hs:    others = Map.delete legacyKafkaName resources
 kenshou-core/src/Kenshou/Core/Compat.hs:  maybe [] (pure . (Key.fromText (renderResourceName legacyKafkaName) .=)) (Map.lookup legacyKafkaName resources)
 kenshou-core/src/Kenshou/Core/Compat.hs:-- | compat-key/v1 shim: keeps Kafka comparison keys stable for recorded baselines.
@@ -18,3 +27,29 @@ kenshou-core/src/Kenshou/Core/RunSpec.hs:    (Just found, Nothing) -> pure (Map.
 kenshou-core/src/Kenshou/Core/RunSpec.hs:  case (legacy, Map.lookup legacyKafkaName resources) of
 kenshou-core/src/Kenshou/Core/RunSpec.hs:  legacy <- value .:? "kafka"
 kenshou-core/src/Kenshou/Core/RunSpec.hs:import Kenshou.Core.Resource.Types (ResourceName, legacyKafkaName)
+kenshou-evidence/src/Kenshou/Evidence/Record.hs:        ("kafka", "mori://shinzui/kafka-effectful"),
+kenshou-evidence/test/Main.hs:            second = "mori://shinzui/shibuya-kafka-adapter/okf/bug-reports/concepts/BUG-6" :: Text
+kenshou-evidence/test/Main.hs:            withoutSummary = RunSource source.manifest source.spec (source.result {resultScenario = soakId, resultSummaries = Just (object ["measurements" .= object ["kafka" .= object []]])}) source.files source.cellEvidence
+kenshou-evidence/test/Main.hs:        let first = "mori://shinzui/shibuya-kafka-adapter/okf/bug-reports/concepts/BUG-4" :: Text
+kenshou-evidence/test/Main.hs:        soakId <- either (fail . show) pure (parseScenarioId "kafka/pipeline/soak/consumer-memory-and-fd-stability-reduced")
+kenshou-evidence/test/Main.hs:      Just (Map.lookup legacyKafkaName decoded.resources) `shouldBe` fmap Just (topField (renderResourceName legacyKafkaName) raw)
+kenshou-evidence/test/Main.hs:      Map.lookup legacyKafkaName decoded.environment.resources `shouldBe` legacy
+kenshou-evidence/test/Main.hs:      decoded <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-spec.selftest-null-kafka.json" >>= either fail pure
+kenshou-evidence/test/Main.hs:      environmentKeys (toJSON decoded) `shouldSatisfy` notElem (Key.fromText (renderResourceName legacyKafkaName))
+kenshou-evidence/test/Main.hs:      let legacy = environmentField (renderResourceName legacyKafkaName) raw
+kenshou-evidence/test/Main.hs:      object (renderResourceInputs decoded.environment.resources) `shouldBe` object [Key.fromText (renderResourceName legacyKafkaName) .= legacy]
+kenshou-evidence/test/Main.hs:      raw <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-spec.kafka-redpanda-container.json" >>= either fail pure
+kenshou-evidence/test/Main.hs:      raw <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/worker-init.legacy-kafka.json" >>= either fail pure
+kenshou-evidence/test/Main.hs:import Kenshou.Core.Resource.Types (legacyKafkaName, renderResourceName)
+kenshou-remote/src/Kenshou/Remote/Cell/Exec.hs:      (Nothing, Just broker) | name == legacyKafkaName -> (name,) <$> brokerAsResource broker
+kenshou-remote/src/Kenshou/Remote/Cell/Exec.hs:import Kenshou.Core.Resource.Types (legacyKafkaName, renderResourceName)
+kenshou-remote/src/Kenshou/Remote/Cell/Legacy.hs:  | Map.member legacyKafkaName reset.resources = reset {broker = Just (BrokerReset True), resources = Map.delete legacyKafkaName reset.resources}
+kenshou-remote/src/Kenshou/Remote/Cell/Legacy.hs:import Kenshou.Core.Resource.Types (legacyKafkaName)
+kenshou-remote/src/Kenshou/Remote/Cell/Prepare.hs:          available = reported == Just True || (name == legacyKafkaName && reported /= Just False && legacyBrokerAvailable descriptor)
+kenshou-remote/src/Kenshou/Remote/Cell/Prepare.hs:import Kenshou.Core.Resource.Types (legacyKafkaName)
+kenshou-remote/test/ExecSpec.hs:          Map.lookup legacyKafkaName run.spec.environment.resources `shouldBe` Just (object ["backend" .= ("external" :: Text), "brokers" .= (["10.0.0.5:9092"] :: [Text]), "lanes" .= (0 :: Int)])
+kenshou-remote/test/ExecSpec.hs:    requirements = EnvRequirements original.requires.postgres original.requires.extraPostgres [legacyKafkaName]
+kenshou-remote/test/ExecSpec.hs:    { name = legacyKafkaName,
+kenshou-remote/test/ExecSpec.hs:import Kenshou.Core.Resource.Types (legacyKafkaName)
+schemas/run-spec-v1.schema.json:        "kafka": {"deprecated": true, "description": "Written before named resources; readers map a non-null value to resources.kafka."}
+schemas/worker-init-v1.schema.json:    "kafka": {"deprecated": true, "description": "Written before named resources; readers map a non-null value to resources.kafka."},
