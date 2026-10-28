@@ -10,12 +10,14 @@ module Kenshou.Evidence.Record
   )
 where
 
+import Control.Applicative ((<|>))
 import Control.Monad (forM, unless, when)
 import Data.Aeson (FromJSON (..), Result (..), ToJSON (..), Value (..), fromJSON, object, withObject, (.:), (.:?), (.=))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Parser)
 import Data.List (nub, sortOn)
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
@@ -41,7 +43,11 @@ data RecordInput = RecordInput
     allowDirty :: !Bool,
     subjectOverride :: !(Maybe (Text, SubjectKind)),
     produced :: ![Text],
-    previousRun :: !(Maybe Text)
+    previousRun :: !(Maybe Text),
+    -- | The evidence subject each registered layer declares.
+    subjects :: !(Map LayerId Text),
+    -- | The subject for a layer that declares none.
+    fallbackSubject :: !(Maybe Text)
   }
   deriving stock (Eq, Show)
 
@@ -61,7 +67,9 @@ data RecordOptions = RecordOptions
     allowDirty :: !Bool,
     linkLogs :: !Bool,
     subjectOverride :: !(Maybe (Text, SubjectKind)),
-    produced :: ![Text]
+    produced :: ![Text],
+    subjects :: !(Map LayerId Text),
+    fallbackSubject :: !(Maybe Text)
   }
   deriving stock (Eq, Show)
 
@@ -86,7 +94,7 @@ recordRunWith writer now store options directory = do
         case published of
           Left err -> pure (Left (PublishFailure err))
           Right links -> do
-            let input = RecordInput options.purpose now options.allowDirty options.subjectOverride options.produced Nothing
+            let input = RecordInput options.purpose now options.allowDirty options.subjectOverride options.produced Nothing options.subjects options.fallbackSubject
             case buildRunRecord input source links of
               Left err -> pure (Left err)
               Right record -> do
@@ -279,7 +287,8 @@ buildRunRecord input source dataLinks = do
       case source.cellEvidence of
         Just cell -> unless (outer.digest == cell.cellManifestFile.digest && outer.bytes == cell.cellManifestFile.bytes) (Left (RecordError "outer cell manifest link differs from verified source"))
         Nothing -> Left (RecordError "cell run has no verified outer manifest")
-  unless ("mori://" `Text.isPrefixOf` maybe (defaultSubject source.result.resultScenario.layer) fst input.subjectOverride) (Left (RecordError "subject must be a canonical Mori URI"))
+  subject <- resolveSubject input.subjectOverride input.subjects input.fallbackSubject source.result.resultScenario.layer
+  unless ("mori://" `Text.isPrefixOf` subject) (Left (RecordError "subject must be a canonical Mori URI"))
   unless (all (Text.isPrefixOf "mori://") input.produced) (Left (RecordError "produced artifacts must use canonical Mori URIs"))
   fingerprint <- decoded "fingerprint" source.result.resultFingerprint :: Either RecordError FingerprintFields
   revisionText <- maybe (Left (RecordError "harness revision is unavailable")) Right fingerprint.harnessRevision
@@ -307,7 +316,6 @@ buildRunRecord input source dataLinks = do
       scenario = source.result.resultScenario
       cohortIdentity = source.result.resultCohort
       cohort = unCohortName cohortIdentity.identityCohort
-      subject = maybe (defaultSubject scenario.layer) fst input.subjectOverride
       subjectKind = maybe SubjectProject snd input.subjectOverride
       environment = object (["os" .= fingerprint.os, "arch" .= fingerprint.arch, "cpuModel" .= cpuModel, "cores" .= fingerprint.cores, "memoryBytes" .= memoryBytes, "ghc" .= fingerprint.ghc, "postgres" .= fingerprint.postgres] <> cellFields)
       effectiveOutcome = maybe source.result.resultOutcome (.cellEffectiveOutcome) source.cellEvidence
@@ -403,19 +411,12 @@ decoded label value = case fromJSON value of
 utcText :: UTCTime -> Text
 utcText = Text.pack . formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%QZ"
 
--- The subjects the first consumer's records already carry, keyed by layer text.
--- docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md
--- replaces this lookup with the subject a registered bundle declares.
-defaultSubject :: LayerId -> Text
-defaultSubject layer = fromMaybe "mori://shinzui/keiro-runtime-kenshou" (lookup (renderLayer layer) subjects)
-  where
-    subjects =
-      [ ("pgmq", "mori://shinzui/pgmq-hs"),
-        ("kiroku", "mori://shinzui/kiroku"),
-        ("shibuya", "mori://shinzui/shibuya"),
-        ("kafka", "mori://shinzui/kafka-effectful"),
-        ("keiro", "mori://shinzui/keiro")
-      ]
+-- | The subject of a run record: the override, else the subject the registered
+-- bundle of the run's layer declares, else the configured fallback.
+resolveSubject :: Maybe (Text, SubjectKind) -> Map LayerId Text -> Maybe Text -> LayerId -> Either RecordError Text
+resolveSubject override subjects fallback layer = case (fst <$> override) <|> Map.lookup layer subjects <|> fallback of
+  Just subject -> Right subject
+  Nothing -> Left (RecordError ("no evidence subject for layer " <> renderLayer layer <> "; pass --subject or set evidence.default-subject"))
 
 hasMeasurementSummary :: Maybe Value -> Bool
 hasMeasurementSummary (Just (Object summaries)) = case KeyMap.lookup "measurements" summaries of

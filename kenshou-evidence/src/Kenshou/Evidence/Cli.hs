@@ -6,7 +6,8 @@ import Data.ByteString.Lazy.Char8 qualified as LazyByteString
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
-import Kenshou.Core.Cli (CliCommand (..), CliEnv, CliGroup (Evidence))
+import Kenshou.Core.Bundle (registrySubjects)
+import Kenshou.Core.Cli (CliCommand (..), CliEnv (..), CliGroup (Evidence))
 import Kenshou.Core.Cli.Config (ConfigInputs (..), configInputsParser)
 import Kenshou.Evidence.Attest (AttestError (..), AttestOptions (..), AttestResult (..), Recomputer, attest, coreRecomputers)
 import Kenshou.Evidence.Bundle (BundleWriteError (..))
@@ -243,7 +244,7 @@ recordParser =
     <*> parserOptionGroup "Output" (switch (long "json" <> help "Emit one JSON result document"))
 
 recordHandler :: RecordCli -> CliEnv -> IO ExitCode
-recordHandler options _
+recordHandler options environment
   | options.subject == Nothing && options.subjectKind == SubjectPackage = respond options.json 2 "--subject-kind package requires --subject" Nothing
   | (options.runDirectory == Nothing) == (options.comparisonFile == Nothing) = respond options.json 2 "provide exactly one RUN-DIR or --comparison FILE" Nothing
   | Just output <- schemaDiagnostic options.config.diagnostic (describe evidenceConfig) = Text.IO.putStr output >> pure ExitSuccess
@@ -267,7 +268,7 @@ recordHandler options _
                       then Text.IO.hPutStrLn stderr "kenshou record: warning: --allow-dirty permits investigation-only evidence"
                       else pure ()
                     let mode = if options.verifyOnly then VerifyOnly else UploadMissing
-                        recordOptions = RecordOptions (Text.unpack defaults.bundleRoot) baseUri options.purpose mode options.deepVerify options.allowDirty options.linkLogs ((,options.subjectKind) <$> options.subject) options.produced
+                        recordOptions = RecordOptions (Text.unpack defaults.bundleRoot) baseUri options.purpose mode options.deepVerify options.allowDirty options.linkLogs ((,options.subjectKind) <$> options.subject) options.produced (registrySubjects environment.registry) defaults.defaultSubject
                     recorded <- case (options.runDirectory, options.comparisonFile) of
                       (Just directory, Nothing) -> recordRun store recordOptions directory
                       (Nothing, Just file) -> recordComparison store recordOptions file

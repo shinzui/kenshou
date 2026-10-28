@@ -37,7 +37,9 @@ data HistoryQuery = HistoryQuery
 newtype HistoryError = HistoryError Text deriving stock (Eq, Show)
 
 data HistoryDocument = HistoryDocument
-  { query :: !HistoryQuery,
+  { -- | The canonical Mori URI of the evidence bundle the entries live in.
+    bundleUri :: !Text,
+    query :: !HistoryQuery,
     entries :: ![HistoryEntry]
   }
   deriving stock (Eq, Show)
@@ -60,21 +62,21 @@ instance ToJSON HistoryDocument where
   toJSON document =
     object
       [ "schema" .= ("kenshou.evidence-history/v1" :: Text),
-        "bundle" .= ("mori://shinzui/keiro-runtime-kenshou/okf/verification" :: Text),
+        "bundle" .= document.bundleUri,
         "query" .= queryValue document.query,
-        "entries" .= document.entries
+        "entries" .= fmap (entryValue document.bundleUri) document.entries
       ]
 
-instance ToJSON HistoryEntry where
-  toJSON entry =
-    object
-      [ "concept" .= entry.concept,
-        "ref" .= ("mori://shinzui/keiro-runtime-kenshou/okf/verification/concepts/" <> entry.concept),
-        "record" .= entry.record,
-        "trust" .= entry.trust,
-        "attestations" .= entry.attestations,
-        "derivedBaseline" .= entry.derivedBaseline
-      ]
+entryValue :: Text -> HistoryEntry -> Value
+entryValue bundleUri entry =
+  object
+    [ "concept" .= entry.concept,
+      "ref" .= (bundleUri <> "/concepts/" <> entry.concept),
+      "record" .= entry.record,
+      "trust" .= entry.trust,
+      "attestations" .= entry.attestations,
+      "derivedBaseline" .= entry.derivedBaseline
+    ]
 
 queryValue :: HistoryQuery -> Value
 queryValue query =
@@ -86,8 +88,8 @@ queryValue query =
         <> ["confirmedOnly" .= True | query.confirmedOnly]
     )
 
-history :: FilePath -> HistoryQuery -> IO (Either HistoryError HistoryDocument)
-history root query = do
+history :: Text -> FilePath -> HistoryQuery -> IO (Either HistoryError HistoryDocument)
+history bundleUri root query = do
   walked <- walkBundle root
   pure do
     concepts <- either (Left . HistoryError . Text.pack . show) Right walked
@@ -95,7 +97,7 @@ history root query = do
         allEntries = sortOn (\entry -> (entry.startedAt, entry.concept)) (mapMaybe (runEntry attested) concepts)
         withBaselines = [entry {derivedBaseline = deriveBaseline allEntries entry} | entry <- allEntries]
         selected = filter (matches query) withBaselines
-    Right (HistoryDocument query selected)
+    Right (HistoryDocument bundleUri query selected)
 
 deriveBaseline :: [HistoryEntry] -> HistoryEntry -> Maybe Text
 deriveBaseline entries current

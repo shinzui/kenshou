@@ -3,6 +3,7 @@ module Kenshou.Core.Bundle
     mkBundle,
     lookupBundle,
     lookupResource,
+    registrySubjects,
     ScenarioRule (..),
     requirePgVersionsFor,
     Registry,
@@ -60,11 +61,14 @@ data LayerBundle = LayerBundle
     -- | Advisory-lock labels a stall capture of the suite's scenarios names.
     advisoryLabels :: [AdvisoryLabel],
     -- | The connection-pool size the suite recommends, when it has one.
-    methodology :: Maybe PoolMethodology
+    methodology :: Maybe PoolMethodology,
+    -- | The canonical Mori URI that evidence records of this layer name as their
+    -- subject.
+    evidenceSubject :: Maybe Text
   }
 
 mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
-mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = [], oracles = [], advisoryLabels = [], methodology = Nothing}
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = [], oracles = [], advisoryLabels = [], methodology = Nothing, evidenceSubject = Nothing}
 
 -- | A named registry check. Each message 'check' returns becomes a 'RegistryError'
 -- prefixed with the scenario identifier.
@@ -123,6 +127,7 @@ mkRegistry bundles = case errors of
         <> concatMap validateScenario scenarios
         <> migrationErrors bundles
         <> resourceErrors bundles
+        <> [RegistryError ("evidence subject must be a canonical Mori URI: " <> subject) | bundle <- bundles, Just subject <- [bundle.evidenceSubject], not ("mori://" `Text.isPrefixOf` subject)]
         <> concat [duplicateErrors ("oracle in " <> renderLayer bundle.layer) (fmap (.name) bundle.oracles) | bundle <- bundles]
         <> [RegistryError (renderScenarioId scenario.id <> ": " <> message) | rule <- concatMap (.rules) bundles, scenario <- scenarios, message <- rule.check scenario]
 
@@ -167,6 +172,10 @@ lookupBundle :: Registry -> LayerId -> Maybe LayerBundle
 lookupBundle (Registry bundles) wanted = case filter ((== wanted) . (.layer)) bundles of
   bundle : _ -> Just bundle
   [] -> Nothing
+
+-- | The evidence subject each layer's first bundle that declares one names.
+registrySubjects :: Registry -> Map.Map LayerId Text
+registrySubjects (Registry bundles) = Map.fromListWith (\_ first -> first) [(bundle.layer, subject) | bundle <- bundles, Just subject <- [bundle.evidenceSubject]]
 
 lookupResource :: Registry -> ResourceName -> Maybe ResourceProvider
 lookupResource (Registry bundles) wanted = case [provider | bundle <- bundles, provider <- bundle.resources, provider.name == wanted] of

@@ -10,3 +10,6 @@ run-spec.kafka-redpanda-container.json working-tree run 01a0d5bf-09e3-7727-91f9-
 worker-init.legacy-kafka.json          constructed in the kenshou.worker-init/v1 shape that
                                        commit's WorkerInit codec writes; the consumer commits
                                        no worker-init document
+01a0e106-c828-71ea-96f5-5a693335454f.md    docs/verification/runs/selftest/2026/09/ at commit a1648293443ad88ff1695ed800ff44c99993574e (a run record)
+01a0f8be-8279-7667-ad13-3757c626211f.md    docs/verification/runs/keiro/2026/10/ at commit a1648293443ad88ff1695ed800ff44c99993574e (a comparison record)
+record-paths.json                       the bundle-relative path each record above is committed at

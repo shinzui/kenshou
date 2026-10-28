@@ -67,11 +67,17 @@ schema instead of `kiroku.events`.
   (2026-10-28; `Kenshou.Core.Contribution` holds the types; the three suites pass with new
   `registered oracles`, `pool methodology`, and advisory-lock cases; the grep returns nothing
   for the three packages, and `just coupling-check` now audits them for every layer name.)
-- [ ] M2: Evidence subject and history bundle URI are configuration. `kenshou record`
+- [x] M2: Evidence subject and history bundle URI are configuration. `kenshou record`
   resolves the subject from the registry or `evidence.default-subject`, `kenshou history`
   prints the `evidence.bundle-uri` value, and the new consumer-record fixtures (two verbatim
   records plus the seven layer strings) parse, re-render byte-identically, and reproduce
   their committed paths.
+  (2026-10-28; `LayerBundle.evidenceSubject`, `registrySubjects`, and the keys
+  `evidence.default-subject` / `evidence.bundle-uri` exist; `kenshou history` exits 2 without
+  a bundle URI; the two records in `kenshou-evidence/test/fixtures/consumer-records/` re-render
+  byte-identically without `verified` and reproduce the paths in `record-paths.json`; the
+  layer strings were already there from EP-2 as `layer-strings.json`; all suites and schemas
+  pass.)
 - [ ] M3: The remote self-test depends only on the self-test schema, every layer-named
   fixture or test string in `kenshou-core/test`, `kenshou-evidence/test`, and
   `kenshou-remote/test` uses the synthetic layer name, and the PGMQ routing rule has left
@@ -128,6 +134,17 @@ handle here only when it also changed the plan.
   directory keeps the audit mechanical.
   Date: 2026-10-28
 
+
+- Decision: The verbatim records' committed paths live as data in
+  `kenshou-evidence/test/fixtures/consumer-records/record-paths.json`, and the record tests
+  sit in the existing `consumer compatibility` group of `kenshou-evidence/test/Main.hs`
+  rather than a new `ConsumerRecordsSpec` module; the layer strings file is EP-2's
+  `layer-strings.json`. Tests that build records pass `subjects` for the self-test layer as
+  `mori://shinzui/kenshou`, and the history test passes `--bundle-uri`.
+  Rationale: A committed path names the consumer's layer, so it belongs with the consumer's
+  data, not in test code the coupling check reads. The bridged bundle's profile closes only
+  the `layer` and `tier` vocabularies, so a new subject URI validates.
+  Date: 2026-10-28
 
 ## Outcomes & Retrospective
 

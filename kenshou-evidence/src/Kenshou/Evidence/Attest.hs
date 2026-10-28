@@ -15,6 +15,7 @@ import Data.Aeson (FromJSON (..), Result (..), Value (..), eitherDecodeStrict', 
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString qualified as ByteString
 import Data.List (find, nub, sort)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -577,7 +578,7 @@ noPromptGit args = do
 
 checkCohort :: UTCTime -> EvidenceRecord -> Maybe RunSource -> AttestationCheck
 checkCohort _ _ Nothing = check "cohort-matches-plan" "skipped" "source documents are unavailable"
-checkCohort now record (Just source) = case buildRunRecord (RecordInput record.purpose now True (Just (record.subject, record.subjectKind)) record.produced record.previousRun) source record.dataLinks of
+checkCohort now record (Just source) = case buildRunRecord (RecordInput record.purpose now True (Just (record.subject, record.subjectKind)) record.produced record.previousRun Map.empty Nothing) source record.dataLinks of
   Left err -> check "cohort-matches-plan" "failed" (Text.pack (show err))
   Right expected ->
     let expectationMatches = case source.spec.cohortExpectation of
@@ -591,7 +592,7 @@ checkCohort now record (Just source) = case buildRunRecord (RecordInput record.p
 
 checkEnvironment :: UTCTime -> EvidenceRecord -> Maybe RunSource -> AttestationCheck
 checkEnvironment _ _ Nothing = check "environment-captured" "skipped" "source documents are unavailable"
-checkEnvironment now record (Just source) = case buildRunRecord (RecordInput record.purpose now True (Just (record.subject, record.subjectKind)) record.produced record.previousRun) source record.dataLinks of
+checkEnvironment now record (Just source) = case buildRunRecord (RecordInput record.purpose now True (Just (record.subject, record.subjectKind)) record.produced record.previousRun Map.empty Nothing) source record.dataLinks of
   Left err -> check "environment-captured" "failed" (Text.pack (show err))
   Right expected ->
     if record.environment == expected.environment && record.placement == expected.placement && record.outcome == expected.outcome

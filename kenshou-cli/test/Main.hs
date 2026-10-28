@@ -685,7 +685,8 @@ main = hspec do
             `finally` killThread worker
 
     it "reads scenario history from a bundle" do
-      runWithArgs ["history", "--bundle", "../fixtures/consumer-baseline/docs/verification", "--scenario", "selftest/kernel/correctness/always-pass", "--json"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["history", "--bundle", "../fixtures/consumer-baseline/docs/verification", "--bundle-uri", "mori://shinzui/kenshou/okf/verification", "--scenario", "selftest/kernel/correctness/always-pass", "--json"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["history", "--bundle", "../fixtures/consumer-baseline/docs/verification", "--scenario", "selftest/kernel/correctness/always-pass", "--json"] `shouldReturnCode` ExitFailure 2
 
     it "requires one record source" do
       runWithArgs ["record", "--purpose", "release"] `shouldReturnCode` ExitFailure 2

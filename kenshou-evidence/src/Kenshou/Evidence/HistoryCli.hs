@@ -11,7 +11,7 @@ import Kenshou.Core.Cli (CliCommand (..), CliEnv, CliGroup (Analysis))
 import Kenshou.Core.Cli.Config (ConfigInputs (..), configInputsParser)
 import Kenshou.Core.Id (ScenarioId, parseScenarioId)
 import Kenshou.Core.Outcome (Outcome)
-import Kenshou.Evidence.Config (EvidenceDefaults (..), bundleRootKey, evidenceConfig, resolveEvidenceDefaults)
+import Kenshou.Evidence.Config (EvidenceDefaults (..), bundleRootKey, bundleUriKey, evidenceConfig, resolveEvidenceDefaults)
 import Kenshou.Evidence.History (HistoryDocument (..), HistoryEntry (..), HistoryError (..), HistoryQuery (..), history)
 import Options.Applicative
 import Settei (ResolveResult (..), describe, renderErrorsText)
@@ -38,7 +38,10 @@ historyParser :: Parser HistoryCli
 historyParser =
   HistoryCli
     <$> configInputsParser
-      ((: []) <$> namedOption "--bundle" bundleRootKey (long "bundle" <> metavar "DIR" <> help "OKF evidence bundle"))
+      ( (\bundle bundleUri -> [bundle, bundleUri])
+          <$> namedOption "--bundle" bundleRootKey (long "bundle" <> metavar "DIR" <> help "OKF evidence bundle")
+          <*> namedOption "--bundle-uri" bundleUriKey (long "bundle-uri" <> metavar "MORI_URI" <> help "Canonical Mori URI of the evidence bundle")
+      )
     <*> parserOptionGroup "Scenario filters" (option (eitherReader (either (Left . Text.unpack) Right . parseScenarioId . Text.pack)) (long "scenario" <> metavar "SCENARIO" <> help "Scenario identifier"))
     <*> parserOptionGroup "Scenario filters" (optional (option (eitherReader parseComponent) (long "cohort-component" <> metavar "PACKAGE[=VERSION|REVISION]" <> help "Require a runtime cohort package")))
     <*> parserOptionGroup "Scenario filters" (many (option (eitherReader parseOutcome) (long "outcome" <> metavar "OUTCOME" <> help "Include this outcome; may repeat")))
@@ -58,16 +61,18 @@ historyHandler options _
           Left problems -> failure (renderErrorsText problems)
           Right defaults -> case resolutionDiagnostic options.config.diagnostic result of
             Just output -> Text.IO.putStr output >> pure ExitSuccess
-            Nothing -> do
-              let query = HistoryQuery options.scenario options.cohortComponent options.outcomes options.since options.confirmedOnly
-              observed <- history (Text.unpack defaults.bundleRoot) query
-              case observed of
-                Left (HistoryError message) -> failure message
-                Right document -> do
-                  if options.json
-                    then LazyByteString.putStrLn (encode document)
-                    else mapM_ (\entry -> Text.IO.putStrLn (entry.concept <> "  " <> entry.outcome <> "  " <> entry.trust)) document.entries
-                  pure ExitSuccess
+            Nothing -> case defaults.bundleUri of
+              Nothing -> Text.IO.hPutStrLn stderr "kenshou history: evidence.bundle-uri or --bundle-uri is required" >> pure (ExitFailure 2)
+              Just bundleUri -> do
+                let query = HistoryQuery options.scenario options.cohortComponent options.outcomes options.since options.confirmedOnly
+                observed <- history bundleUri (Text.unpack defaults.bundleRoot) query
+                case observed of
+                  Left (HistoryError message) -> failure message
+                  Right document -> do
+                    if options.json
+                      then LazyByteString.putStrLn (encode document)
+                      else mapM_ (\entry -> Text.IO.putStrLn (entry.concept <> "  " <> entry.outcome <> "  " <> entry.trust)) document.entries
+                    pure ExitSuccess
   where
     failure message = Text.IO.hPutStrLn stderr ("kenshou history: " <> message) >> pure (ExitFailure 4)
 

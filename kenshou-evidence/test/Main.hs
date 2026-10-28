@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Control.Exception (bracket_)
+import Control.Monad (forM_)
 import Data.Aeson (Value (..), encode, object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
@@ -19,20 +20,20 @@ import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cli.Config (ConfigInputs (..))
 import Kenshou.Core.Compat (renderResourceInputs)
 import Kenshou.Core.Env (mkMigrationSetName, renderMigrationSetName)
-import Kenshou.Core.Id (parseLayer, parseRunId, parseScenarioId, renderLayer, renderScenarioId)
+import Kenshou.Core.Id (LayerId, parseLayer, parseRunId, parseScenarioId, renderLayer, renderScenarioId, selftestLayer)
 import Kenshou.Core.Manifest (writeManifest)
 import Kenshou.Core.Outcome (Outcome (InfrastructureFailure, Passed))
 import Kenshou.Core.Resource.Types (legacyKafkaName, renderResourceName)
 import Kenshou.Core.Role qualified as Role
 import Kenshou.Core.RunSpec qualified as RunSpec
 import Kenshou.Evidence.Attest (AttestOptions (..), AttestResult (..), Recomputation (..), Recomputer (..), attest, coreRecomputers)
-import Kenshou.Evidence.Bundle (BundleWriteError (..), BundleWriteResult (..), runRecordPath, writeAttestationRecord, writeRunRecord, writeRunRecordWith)
+import Kenshou.Evidence.Bundle (BundleWriteError (..), BundleWriteResult (..), comparisonRecordPath, runRecordPath, writeAttestationRecord, writeRunRecord, writeRunRecordWith)
 import Kenshou.Evidence.Check (CheckOptions (..), Finding (..), checkBundle, checkBundleWithStore, checkDocument)
 import Kenshou.Evidence.Config (EvidenceDefaults (..), bundleRootKey, dataBaseUriKey, projectKey, resolveEvidenceDefaults)
-import Kenshou.Evidence.Frontmatter (AttestationCheck (..), AttestationEvidence (..), EvidenceRecord (..), recordFromDocument, recordToDocument)
+import Kenshou.Evidence.Frontmatter (AttestationCheck (..), AttestationEvidence (..), EvidenceRecord (..), comparisonFromDocument, comparisonToDocument, recordFromDocument, recordToDocument)
 import Kenshou.Evidence.History (HistoryDocument (..), HistoryEntry (..), HistoryQuery (..), deriveBaseline, history)
 import Kenshou.Evidence.Publish (PublishError (..), PublishOptions (..), UploadMode (..), publishComparisonData, publishRunData)
-import Kenshou.Evidence.Record (RecordInput (..), RecordOptions (..), RecordOutcome (..), buildRunRecord, recordComparison, recordRunWith)
+import Kenshou.Evidence.Record (RecordError (..), RecordInput (..), RecordOptions (..), RecordOutcome (..), buildRunRecord, recordComparison, recordRunWith)
 import Kenshou.Evidence.Source (ComparisonSource (..), ComparisonView (..), RunResultView (..), RunSource (..), VerifiedFile (..), loadComparisonSource, loadRunSource)
 import Kenshou.Evidence.Store (ObjectStat (..), ObjectStore (..), PutResult (..), StoreError (..), directoryStore, gcloudStoreWith, memoryStore)
 import Kenshou.Evidence.Types (DataKind (..), DataLink (..), Purpose (..), Revision (..), Sha256 (..), SubjectKind (..), mkRevision, mkSha256, sha256Bytes)
@@ -40,7 +41,7 @@ import Kenshou.Remote.Cell.Docs (Artifact (Artifact), CellManifest (CellManifest
 import Kenshou.Remote.Cell.Docs qualified as Cell
 import Kenshou.Remote.Cell.Index (CellManifestLink (CellManifestLink), CellRunIndex (..), RunLink (RunLink))
 import Okf.Actor (Actor (ProcessActor))
-import Okf.Document (OKFDocument (..), Verification (..), frontmatterLookup, parseDocument, readVerified, serializeDocument, setField, setVerified)
+import Okf.Document (OKFDocument (..), Verification (..), frontmatterLookup, parseDocument, readVerified, removeField, serializeDocument, setField, setVerified)
 import Settei (ResolveResult (..))
 import Settei.Env (envSnapshot)
 import Settei.Optparse (DiagnosticMode (NoDiagnostic), cliOverride, cliSources)
@@ -78,6 +79,21 @@ main = hspec do
       decoded <- either fail pure (Aeson.parseEither Aeson.parseJSON raw) :: IO Role.WorkerInit
       Just (Map.lookup legacyKafkaName decoded.resources) `shouldBe` fmap Just (topField (renderResourceName legacyKafkaName) raw)
       Aeson.parseEither Aeson.parseJSON (toJSON decoded) `shouldBe` Right decoded
+    it "parses the consumer's sealed records, reproduces their paths, and re-renders them" do
+      paths <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/record-paths.json" >>= either fail pure
+      forM_ (Map.toList (paths :: Map.Map FilePath FilePath)) \(file, committed) -> do
+        text <- Text.IO.readFile ("test/fixtures/consumer-records/" <> file)
+        document <- either (fail . show) pure (parseDocument text)
+        -- The attester adds `verified` after recording; it is not what `kenshou record` writes.
+        let written = serializeDocument document {frontmatter = removeField "verified" document.frontmatter}
+        case (recordFromDocument document, comparisonFromDocument document) of
+          (Right record, _) -> do
+            serializeDocument (recordToDocument record) `shouldBe` written
+            runRecordPath record `shouldBe` Right committed
+          (_, Right comparison) -> do
+            serializeDocument (comparisonToDocument comparison) `shouldBe` written
+            comparisonRecordPath comparison `shouldBe` Right committed
+          (Left problems, Left _) -> expectationFailure (show problems)
     it "keeps a recorded comparison key a function of its inputs and migration set names" do
       document <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-result.hydration-cost.json" >>= either fail pure
       (recordedKey, inputs) <- case document of
@@ -139,7 +155,7 @@ main = hspec do
             baselineId = "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55" :: Text
             candidateId = "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e56" :: Text
             comparisonId = "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e57" :: Text
-            options = RecordOptions bundle "gs://bucket/runs" Release UploadMissing False False False Nothing []
+            options = RecordOptions bundle "gs://bucket/runs" Release UploadMissing False False False Nothing [] testSubjects Nothing
             comparison =
               object
                 [ "schema" .= ("kenshou.comparison/v1" :: Text),
@@ -162,7 +178,7 @@ main = hspec do
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) runDirectory source >>= either (fail . show) pure
-        baseline <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing) source links)
+        baseline <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing) source links)
         writeRunRecord bundle baseline >>= (`shouldSatisfy` isRight)
         LazyByteString.writeFile comparisonPath (encode comparison)
         recordComparison store options comparisonPath >>= (`shouldSatisfy` isLeft)
@@ -245,7 +261,7 @@ main = hspec do
           Left _ -> False
         Text.IO.writeFile attestationPath originalAttestation
         scenario <- either (fail . show) pure (parseScenarioId "selftest/kernel/correctness/always-pass")
-        observed <- history bundle (HistoryQuery scenario Nothing [] Nothing False) >>= either (fail . show) pure
+        observed <- history testBundleUri bundle (HistoryQuery scenario Nothing [] Nothing False) >>= either (fail . show) pure
         let fixtureEntries = filter (\entry -> any (`Text.isSuffixOf` entry.concept) [baselineId, candidateId, comparisonId]) observed.entries
         length fixtureEntries `shouldBe` 3
         map (.recordKind) fixtureEntries `shouldBe` ["run", "run", "comparison"]
@@ -273,10 +289,10 @@ main = hspec do
             attestation verdict at = Text.unlines ["---", "type: Attestation", "run: " <> target, "verdict: " <> verdict, "attestedAt: " <> at, "---"]
         createDirectoryIfMissing True attestations
         Text.IO.writeFile (attestations </> "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e58.md") (attestation "confirmed" "2099-09-27T00:00:03Z")
-        confirmedHistory <- history bundle (HistoryQuery scenario Nothing [] Nothing False) >>= either (fail . show) pure
+        confirmedHistory <- history testBundleUri bundle (HistoryQuery scenario Nothing [] Nothing False) >>= either (fail . show) pure
         (confirmedHistory.entries !! 0).trust `shouldBe` "machine-confirmed"
         Text.IO.writeFile (attestations </> "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e59.md") (attestation "refuted" "2099-09-27T00:00:04Z")
-        refutedHistory <- history bundle (HistoryQuery scenario Nothing [] Nothing False) >>= either (fail . show) pure
+        refutedHistory <- history testBundleUri bundle (HistoryQuery scenario Nothing [] Nothing False) >>= either (fail . show) pure
         (refutedHistory.entries !! 0).trust `shouldBe` "unverified"
 
   describe "attest" do
@@ -309,7 +325,7 @@ main = hspec do
           `shouldReturn` Left (InvalidBaseUri "gs://bucket/runs")
         store.statObject ("gs://bucket/runs/" <> nestedId <> "/run-result.json") `shouldReturn` Right Nothing
         links <- publishRunData store (PublishOptions baseUri UploadMissing True False) runDirectory source >>= either (fail . show) pure
-        record <- either (fail . show) pure (buildRunRecord (RecordInput Investigation (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing) source links)
+        record <- either (fail . show) pure (buildRunRecord (RecordInput Investigation (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing) source links)
         record.outcome `shouldBe` InfrastructureFailure
         case record.environment of
           Object fields -> do
@@ -345,7 +361,7 @@ main = hspec do
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) runDirectory source >>= either (fail . show) pure
-        record <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing) source links)
+        record <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing) source links)
         writeRunRecord bundle record >>= (`shouldSatisfy` isRight)
         originalDirectory <- getCurrentDirectory
         bracket_ (setCurrentDirectory attester) (setCurrentDirectory originalDirectory) do
@@ -370,11 +386,11 @@ main = hspec do
         writeFile second "evidence:\n  bundle-root: second-bundle\n  data-base-uri: gs://second/runs\ngcp:\n  project: second-project\n"
         resolved <- resolveEvidenceDefaults snapshot inputs
         case resolved of
-          Right result -> result.answer `shouldBe` Right (EvidenceDefaults "flag-bundle" (Just "flag-project") (Just "gs://flag/runs"))
+          Right result -> result.answer `shouldBe` Right (EvidenceDefaults "flag-bundle" (Just "flag-project") (Just "gs://flag/runs") Nothing Nothing)
           Left err -> expectationFailure (Text.unpack err)
         builtIn <- resolveEvidenceDefaults (envSnapshot []) (ConfigInputs [] [] NoDiagnostic)
         case builtIn of
-          Right result -> result.answer `shouldBe` Right (EvidenceDefaults "docs/verification" Nothing Nothing)
+          Right result -> result.answer `shouldBe` Right (EvidenceDefaults "docs/verification" Nothing Nothing Nothing Nothing)
           Left err -> expectationFailure (Text.unpack err)
 
     it "rejects purpose and anomaly authority as unknown configuration" do
@@ -399,7 +415,7 @@ main = hspec do
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) runDirectory source >>= either (fail . show) pure
-        record <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing) source links)
+        record <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing) source links)
         path <- either (fail . show) pure (runRecordPath record)
         let document = recordToDocument record
             eventKey = document {frontmatter = setField "status" (String "stable") document.frontmatter}
@@ -452,7 +468,7 @@ main = hspec do
       withSystemTempDirectory "kenshou-record-command" $ \root -> do
         let runDirectory = root </> "run"
             bundle = root </> "bundle"
-            options = RecordOptions bundle "gs://bucket/runs" Baseline UploadMissing False False False Nothing []
+            options = RecordOptions bundle "gs://bucket/runs" Baseline UploadMissing False False False Nothing [] testSubjects Nothing
             timestamp = UTCTime (fromGregorian 2026 9 26) 0
             path = "runs/selftest/2026/09/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55.md"
             accept _ = pure (Right ())
@@ -470,24 +486,26 @@ main = hspec do
         source <- loadRunSource root >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) root source >>= either (fail . show) pure
-        soakId <- either (fail . show) pure (parseScenarioId "kafka/pipeline/soak/consumer-memory-and-fd-stability-reduced")
-        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing
-            withoutSummary = RunSource source.manifest source.spec (source.result {resultScenario = soakId, resultSummaries = Just (object ["measurements" .= object ["kafka" .= object []]])}) source.files source.cellEvidence
+        soakId <- either (fail . show) pure (parseScenarioId "synthetic/pipeline/soak/consumer-memory-and-fd-stability-reduced")
+        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects (Just "mori://shinzui/kenshou")
+            orphan = RunSource source.manifest source.spec (source.result {resultScenario = soakId}) source.files source.cellEvidence
+            withoutSummary = RunSource source.manifest source.spec (source.result {resultScenario = soakId, resultSummaries = Just (object ["measurements" .= object ["synthetic" .= object []]])}) source.files source.cellEvidence
             withSummary = RunSource source.manifest source.spec (source.result {resultScenario = soakId, resultSummaries = Just (object ["measurements" .= object ["measurements" .= object []]])}) source.files source.cellEvidence
+        buildRunRecord input {fallbackSubject = Nothing} orphan links `shouldBe` Left (RecordError "no evidence subject for layer synthetic; pass --subject or set evidence.default-subject")
         without <- either (fail . show) pure (buildRunRecord input withoutSummary links)
         with <- either (fail . show) pure (buildRunRecord input withSummary links)
         without.computations `shouldBe` ["VC-1"]
         with.computations `shouldBe` ["VC-1", "VC-2"]
     it "preserves every owner reference from a grouped known-defect result" do
       withSystemTempDirectory "kenshou-grouped-defects" $ \root -> do
-        let first = "mori://shinzui/shibuya-kafka-adapter/okf/bug-reports/concepts/BUG-4" :: Text
-            second = "mori://shinzui/shibuya-kafka-adapter/okf/bug-reports/concepts/BUG-6" :: Text
+        let first = "mori://example/synthetic/okf/bug-reports/concepts/BUG-4" :: Text
+            second = "mori://example/synthetic/okf/bug-reports/concepts/BUG-6" :: Text
             defect = object ["status" .= ("reproduced" :: Text), "defects" .= [object ["reference" .= first], object ["reference" .= second]]]
         writeRunFixtureWithKnownDefect root defect
         source <- loadRunSource root >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) root source >>= either (fail . show) pure
-        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing
+        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing
         record <- either (fail . show) pure (buildRunRecord input source links)
         record.knownDefects `shouldBe` [first, second]
     it "rejects a malformed grouped defect instead of dropping owner references" do
@@ -497,7 +515,7 @@ main = hspec do
         source <- loadRunSource root >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) root source >>= either (fail . show) pure
-        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing
+        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing
         buildRunRecord input source links `shouldSatisfy` isLeft
     it "derives a round-trippable run record from verified source and links" do
       withSystemTempDirectory "kenshou-record" $ \root -> do
@@ -505,7 +523,7 @@ main = hspec do
         source <- loadRunSource root >>= either (fail . show) pure
         store <- memoryStore
         links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) root source >>= either (fail . show) pure
-        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing
+        let input = RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing
         record <- either (fail . show) pure (buildRunRecord input source links)
         recordFromDocument (recordToDocument record) `shouldBe` Right record
         let path = "runs/selftest/2026/09/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55.md"
@@ -540,7 +558,7 @@ main = hspec do
                 outcome = Passed,
                 startedAt = "2026-09-26T19:59:00Z",
                 finishedAt = "2026-09-26T20:00:00Z",
-                subject = "mori://shinzui/keiro-runtime-kenshou",
+                subject = "mori://shinzui/kenshou",
                 subjectKind = SubjectProject,
                 harnessRevision = Revision (Text.replicate 40 "f"),
                 harnessDirty = True,
@@ -647,7 +665,7 @@ main = hspec do
                     pure fetched
                 }
         publishRunData tampered (PublishOptions baseUri VerifyOnly False False) runDirectory source >>= (`shouldSatisfy` isLeft)
-        record <- either (fail . show) pure (buildRunRecord (RecordInput Investigation (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing) source links)
+        record <- either (fail . show) pure (buildRunRecord (RecordInput Investigation (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing) source links)
         record.outcome `shouldBe` InfrastructureFailure
         case record.environment of
           Object fields -> do
@@ -783,7 +801,7 @@ writeRunFixtureWithRevisionAndDefect root harnessRevision knownDefect = do
       spec = object ["schema" .= ("kenshou.run-spec/v1" :: Text), "runId" .= runId, "scenario" .= ("selftest/kernel/correctness/always-pass" :: Text), "seed" .= (7 :: Int)]
       specBytes = LazyByteString.toStrict (encode spec)
       fullDigest = "sha256:" <> Text.replicate 64 "a"
-      cohort = object ["schema" .= ("kenshou.cohort-identity/v1" :: Text), "cohort" .= ("fixture" :: Text), "compiler" .= ("ghc" :: Text), "cabalVersion" .= ("3.14" :: Text), "os" .= ("darwin" :: Text), "arch" .= ("aarch64" :: Text), "planHash" .= fullDigest, "descriptorSha256" .= fullDigest, "components" .= [object ["id" .= ("selftest" :: Text), "moriUri" .= ("mori://shinzui/keiro-runtime-kenshou" :: Text), "packages" .= [object ["name" .= ("kenshou-core" :: Text), "version" .= ("0.1.0.0" :: Text), "source" .= object ["type" .= ("hackage" :: Text)]]]]]]
+      cohort = object ["schema" .= ("kenshou.cohort-identity/v1" :: Text), "cohort" .= ("fixture" :: Text), "compiler" .= ("ghc" :: Text), "cabalVersion" .= ("3.14" :: Text), "os" .= ("darwin" :: Text), "arch" .= ("aarch64" :: Text), "planHash" .= fullDigest, "descriptorSha256" .= fullDigest, "components" .= [object ["id" .= ("selftest" :: Text), "moriUri" .= ("mori://shinzui/kenshou" :: Text), "packages" .= [object ["name" .= ("kenshou-core" :: Text), "version" .= ("0.1.0.0" :: Text), "source" .= object ["type" .= ("hackage" :: Text)]]]]]]
       result =
         object
           [ "schema" .= ("kenshou.run-result/v1" :: Text),
@@ -856,3 +874,9 @@ environmentField _ _ = Nothing
 topField :: Text -> Value -> Maybe Value
 topField name (Object fields) = KeyMap.lookup (Key.fromText name) fields
 topField _ _ = Nothing
+
+testSubjects :: Map.Map LayerId Text
+testSubjects = Map.singleton selftestLayer "mori://shinzui/kenshou"
+
+testBundleUri :: Text
+testBundleUri = "mori://shinzui/kenshou/okf/verification"
