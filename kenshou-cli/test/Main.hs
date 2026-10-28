@@ -1,0 +1,774 @@
+module Main (main) where
+
+import Control.Concurrent (forkIO, killThread, threadDelay)
+import Control.Exception (bracket, finally)
+import Control.Monad (forM_)
+import Data.Aeson (Value, object, (.=))
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString.Lazy qualified as LazyByteString
+import Data.Foldable (toList)
+import Data.List (find)
+import Data.List qualified as List
+import Data.Set qualified as Set
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
+import Data.Time (addUTCTime, getCurrentTime)
+import Kenshou.Cli (runWithArgsWith, selfTestAssembly)
+import Kenshou.Cli.Cohort (resolveDefaultCohortIdentity)
+import Kenshou.Cli.Version (appVersionWithGit)
+import Kenshou.Core.Canonical (sha256Hex)
+import Kenshou.Core.Cohort (CohortIdentity (..), CohortName (..))
+import Kenshou.Core.Id (newRunId, renderRunId)
+import Kenshou.Core.Manifest (Manifest (..), ManifestFile (..))
+import Kenshou.Core.Outcome qualified as Outcome
+import Kenshou.Perf.Artifacts (sealPerfDirectory)
+import Kenshou.Perf.Plan qualified as Perf
+import Kenshou.Perf.Prepared qualified as Prepared
+import Kenshou.Remote.Cell.Docs (Artifact (..), CellBuckets (..), CellDescriptor (..), CellManifest (..), CellOutcome (..), CellPhase (..), CellRunResult (..), CellStatus (..), Limits (..), LogChunks (..), ManifestPayload (..), Rejected (..), Submission (..), WorkObject (..))
+import Kenshou.Remote.Cell.Lease (Lease (..))
+import Kenshou.Remote.Cell.RouteRules (descriptorDigest)
+import Kenshou.Remote.Cell.Session.Journal (LeaseMode (..), SessionJournal (..), SliceJournal (..), SliceState (..), readSessionJournal, writeSessionJournal)
+import Kenshou.Remote.Cell.Submit (workObjectFor)
+import Kenshou.Remote.Payload (Bundle (..), CellPayload (..), PayloadDescriptor (..))
+import Kenshou.Remote.Payload qualified as Payload
+import Kenshou.Remote.Store (Bucket (..), ObjectName (..), ObjectStore (..), Precondition (..))
+import Kenshou.Remote.Store.File (newFileStore)
+import Kenshou.Telemetry.Overhead (OverheadState (..), SlotRun (..), loadOverheadState)
+import PerfSessionSpec qualified
+import System.Directory (Permissions (..), copyFile, createDirectoryIfMissing, doesFileExist, doesPathExist, getPermissions, listDirectory, makeAbsolute, setPermissions, withCurrentDirectory)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.Exit (ExitCode (..))
+import System.FilePath ((</>))
+import System.IO.Temp (withSystemTempDirectory)
+import System.Timeout (timeout)
+import Test.Hspec (describe, expectationFailure, hspec, it, shouldBe, shouldReturn, shouldSatisfy)
+
+main :: IO ()
+main = hspec do
+  PerfSessionSpec.spec
+  describe "performance planning CLI" do
+    it "exposes calibration publication and rejects malformed batches before storage effects" $ withSystemTempDirectory "kenshou-calibration-malformed" \directory -> do
+      let input = directory </> "definition.json"
+      Aeson.encodeFile input Aeson.Null
+      runWithArgs ["perf", "calibration", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["perf", "calibration", "declare", "--definition", input, "--uri", "gs://fixture-evidence/calibration/definition.json"] `shouldReturnCode` ExitFailure 2
+    it "publishes a calibration definition create-only and retrieves its identical bytes" $ withSystemTempDirectory "kenshou-calibration-publication" \directory -> do
+      raw <- withPerfRoot (Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-calibration-definition.synthetic.json" >>= either fail pure)
+      now <- getCurrentTime
+      let input = directory </> "definition.json"
+          storeRoot = directory </> "store"
+          document = replacePerfField "expiresAt" (Aeson.toJSON (addUTCTime 3600 now)) raw
+          uri = "gs://fixture-evidence/calibration/definition.json"
+      Aeson.encodeFile input document
+      store <- newFileStore storeRoot
+      withCellStore storeRoot do
+        runWithArgs ["perf", "calibration", "declare", "--definition", input, "--uri", uri] `shouldReturnCode` ExitSuccess
+        bytes <- LazyByteString.readFile input
+        retained <- store.getObject (Bucket "fixture-evidence") (ObjectName "calibration/definition.json")
+        fmap fst retained `shouldBe` Just bytes
+        runWithArgs ["perf", "calibration", "declare", "--definition", input, "--uri", uri] `shouldReturnCode` ExitSuccess
+        Aeson.encodeFile input (replacePerfField "injectionMechanism" (Aeson.String "changed after declaration") document)
+        runWithArgs ["perf", "calibration", "declare", "--definition", input, "--uri", uri] `shouldReturnCode` ExitFailure 4
+        store.getObject (Bucket "fixture-evidence") (ObjectName "calibration/definition.json") >>= \current -> fmap fst current `shouldBe` Just bytes
+    it "exposes persistent execution, status, resume and evidence replay" do
+      forM_ ["run", "status", "resume", "verify"] \name -> do
+        runWithArgs ["perf", name, "--help"] `shouldReturnCode` ExitSuccess
+        runWithArgs ["perf", name] `shouldReturnCode` ExitFailure 2
+    it "rejects malformed prepared input before creating a session or contacting a cell" $ withSystemTempDirectory "kenshou-perf-run-malformed" \directory -> do
+      let input = directory </> "prepared.json"
+          output = directory </> "session"
+      Aeson.encodeFile input Aeson.Null
+      runWithArgs ["perf", "run", "--prepared", input, "--out", output, "--evidence-base-uri", "gs://fixture-evidence/performance"] `shouldReturnCode` ExitFailure 2
+      doesPathExist output `shouldReturn` False
+    it "reads retained status without cloud authentication or execution" $ withSystemTempDirectory "kenshou-perf-status" \directory -> do
+      withPerfRoot (copyFile "kenshou-remote/test/golden/perf-session.fixture.json" (directory </> "session.json"))
+      runWithArgs ["perf", "status", "--session", directory] `shouldReturnCode` ExitSuccess
+    it "publishes and replays incomplete scope without leasing, and detects storage tampering" $ withSystemTempDirectory "kenshou-perf-incomplete" \directory -> do
+      let storeRoot = directory </> "store"
+          preparation = directory </> "preparation"
+          output = directory </> "session"
+          bytes = "synthetic payload; this control executes no runtime work"
+          digest = Text.drop 7 (sha256Hex (LazyByteString.toStrict bytes))
+          bundle = Bundle ("gs://control/payloads/sha256/" <> digest <> ".nar.zst") digest (LazyByteString.length bytes)
+          changePayload arm = case Aeson.fromJSON arm.payload of
+            Aeson.Error problem -> fail problem
+            Aeson.Success payload -> pure arm {Prepared.payload = Aeson.toJSON (payload {Payload.cell = payload.cell {Payload.bundle = bundle}} :: PayloadDescriptor)}
+      original <- withPerfRoot (Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-prepared.fixture.json" >>= either fail pure)
+      baseline <- changePayload (original :: Prepared.PerfPrepared).baseline
+      candidate <- changePayload original.candidate
+      let prepared = original {Prepared.plan = original.plan {Perf.selected = [], Perf.coverage = "incomplete", Perf.estimateSeconds = 0}, Prepared.baseline = baseline, Prepared.candidate = candidate}
+      createDirectoryIfMissing True preparation
+      Aeson.encodeFile (preparation </> "prepared.json") prepared
+      sealPerfDirectory preparation >>= either (fail . Text.unpack) pure
+      descriptor <- withPerfRoot (LazyByteString.readFile "kenshou-remote/test/golden/cell/cell.descriptor.v1.json")
+      store <- newFileStore storeRoot
+      _ <- store.putObject (Bucket "control") (ObjectName ("payloads/sha256/" <> digest <> ".nar.zst")) "application/octet-stream" DoesNotExist bytes
+      _ <- store.putObject (Bucket "tan-nb-exp-cells-control") (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist descriptor
+      withCellStore storeRoot $ withCapabilityDir (directory </> "capabilities") do
+        runWithArgs ["perf", "run", "--prepared", preparation </> "prepared.json", "--out", output, "--evidence-base-uri", "gs://fixture-evidence/performance"] `shouldReturnCode` ExitFailure 3
+        store.getObject (Bucket "tan-nb-exp-cells-control") (ObjectName "cells/alpha/lease.json") `shouldReturn` Nothing
+        runWithArgs ["perf", "verify", "--session", output] `shouldReturnCode` ExitFailure 3
+        runWithArgs ["perf", "verify", "--session", output, "--offline"] `shouldReturnCode` ExitFailure 3
+        originalResult <- LazyByteString.readFile (output </> "result.json")
+        runWithArgs ["perf", "resume", "--session", output] `shouldReturnCode` ExitFailure 3
+        LazyByteString.readFile (output </> "result.json") `shouldReturn` originalResult
+        published <- store.listObjects (Bucket "fixture-evidence") "performance/sessions/"
+        let reports = [name | (name, _) <- published, "/report.md" `Text.isSuffixOf` name.unObjectName]
+        length reports `shouldBe` 1
+        forM_ reports \name -> do
+          _ <- store.putObject (Bucket "fixture-evidence") name "text/markdown" NoPrecondition "tampered"
+          pure ()
+        runWithArgs ["perf", "verify", "--session", output] `shouldReturnCode` ExitFailure 4
+    it "exposes the planning command and requires request/output arguments" do
+      runWithArgs ["perf", "plan", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["perf", "plan"] `shouldReturnCode` ExitFailure 2
+    it "exposes exact-revision preparation and rejects malformed requests without building" do
+      runWithArgs ["perf", "prepare", "--help"] `shouldReturnCode` ExitSuccess
+      withSystemTempDirectory "kenshou-perf-prepare-malformed" \directory -> do
+        let input = directory </> "request.json"
+            output = directory </> "preparation"
+        Aeson.encodeFile input Aeson.Null
+        runWithArgs ["perf", "prepare", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
+        doesPathExist output `shouldReturn` False
+    it "rejects malformed requests before creating an output directory" do
+      withSystemTempDirectory "kenshou-perf-malformed" \directory -> do
+        let input = directory </> "request.json"
+            output = directory </> "plan"
+        Aeson.encodeFile input Aeson.Null
+        runWithArgs ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
+        doesPathExist output `shouldReturn` False
+    it "rejects target components from a second repository before fetching" do
+      withPerfRoot $ withSystemTempDirectory "kenshou-perf-targets" \directory -> do
+        raw <- Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-request.json" >>= either fail pure
+        let input = directory </> "request.json"
+            output = directory </> "plan"
+        Aeson.encodeFile input (replacePerfField "targetComponents" (Aeson.toJSON (["shibuya", "pgmq-hs"] :: [Text])) raw)
+        runWithArgs ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
+        doesPathExist output `shouldReturn` False
+    it "rejects unknown profiles before fetching immutable sources" do
+      withPerfRoot $ withSystemTempDirectory "kenshou-perf-profiles" \directory -> do
+        raw <- Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-request.json" >>= either fail pure
+        let input = directory </> "request.json"
+            output = directory </> "plan"
+        Aeson.encodeFile input (replacePerfField "profiles" (Aeson.toJSON (["missing"] :: [Text])) raw)
+        runWithArgs ["perf", "plan", "--request", input, "--out", output] `shouldReturnCode` ExitFailure 2
+        doesPathExist output `shouldReturn` False
+    it "refuses to overwrite an existing planning directory" do
+      withSystemTempDirectory "kenshou-perf-existing" \directory -> do
+        runWithArgs ["perf", "plan", "--request", "missing", "--out", directory] `shouldReturnCode` ExitFailure 2
+  describe "CLI exit contract" do
+    it "resolves the wrapped cohort identity outside a source checkout" $
+      withSystemTempDirectory "kenshou-wrapped-cohort" \root -> do
+        fixture <- makeAbsolute "../kenshou-core/test/fixtures/cohort-identity.golden.json"
+        withEnvVariable "KENSHOU_COHORT_IDENTITY" fixture $
+          withCurrentDirectory root do
+            resolved <- resolveDefaultCohortIdentity
+            case resolved of
+              Left problem -> expectationFailure (show problem)
+              Right identity -> identity.identityCohort `shouldBe` CohortName "released"
+
+    it "returns success for help" do
+      runWithArgs ["--help"] `shouldReturnCode` ExitSuccess
+
+    it "rejects a pinned knob absent from every selected scenario" $
+      withSystemTempDirectory "kenshou-plan-pin" \root -> do
+        let output = root </> "run-plan.json"
+        runWithArgs
+          [ "plan",
+            "--all",
+            "--select",
+            "selftest/kernel/correctness/always-pass",
+            "--set",
+            "diagnose.major-gc-interval-ms=5000",
+            "--out",
+            output
+          ]
+          `shouldReturnCode` ExitFailure 2
+        doesFileExist output `shouldReturn` False
+
+    it "returns success for command-specific help" do
+      runWithArgs ["record", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["attest", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["history", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["run", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "fetch", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "verify", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "status", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "lease", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "release", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "watch", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "route", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "submit", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "run", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "probe", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "pair", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "overhead", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "resume", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "payload", "publish", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["cell", "payload", "show", "--help"] `shouldReturnCode` ExitSuccess
+      runWithArgs ["help", "cells"] `shouldReturnCode` ExitSuccess
+
+    it "shows a payload only when its bundle exists at the recorded size" $
+      withSystemTempDirectory "kenshou-cell-payload" \root -> do
+        store <- newFileStore root
+        let descriptor = "../kenshou-remote/test/golden/payload.json"
+            bundle = ObjectName "payloads/sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.nar.zst"
+            showPayload = ["cell", "payload", "show", descriptor]
+        withCellStore root do
+          runWithArgs showPayload `shouldReturnCode` ExitFailure 1
+          _ <- store.putObject (Bucket "control") bundle "application/octet-stream" DoesNotExist "xx"
+          runWithArgs showPayload `shouldReturnCode` ExitFailure 1
+          _ <- store.putObject (Bucket "control") bundle "application/octet-stream" NoPrecondition "x"
+          runWithArgs showPayload `shouldReturnCode` ExitSuccess
+
+    it "rejects malformed cell result identifiers and URIs" do
+      runWithArgs ["cell", "fetch", "--results-bucket", "test-results", "not-a-run-id", "--out", "test-output"] `shouldReturnCode` ExitFailure 2
+      runWithArgs ["cell", "verify", "gs://test-results/runs/not-a-run-id"] `shouldReturnCode` ExitFailure 2
+
+    it "distinguishes an unavailable cell tree from invalid evidence" do
+      runWithArgs ["cell", "verify", "test/fixtures/does-not-exist"] `shouldReturnCode` ExitFailure 4
+      runWithArgs ["cell", "verify", leakingRun] `shouldReturnCode` ExitFailure 1
+
+    it "acquires, reports and releases a lease through the file-backed cell CLI" $
+      withSystemTempDirectory "kenshou-cell-cli" \root -> do
+        store <- newFileStore root
+        descriptor <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        let control = Bucket "tan-nb-exp-cells-control"
+            leaseObject = ObjectName "cells/alpha/lease.json"
+            common = ["--cell", "alpha", "--control-bucket", "tan-nb-exp-cells-control"]
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist descriptor
+        withCellStore root do
+          runWithArgs (["cell", "status"] <> common <> ["--json"]) `shouldReturnCode` ExitSuccess
+          runWithArgs (["cell", "lease"] <> common <> ["--purpose", "cli-test"]) `shouldReturnCode` ExitSuccess
+          stored <- store.getObject control leaseObject
+          record <- case stored of
+            Just (bytes, _) -> case Aeson.eitherDecode bytes of
+              Right lease -> pure (lease :: Lease)
+              Left problem -> expectationFailure problem >> error "unreachable"
+            Nothing -> expectationFailure "lease was not published" >> error "unreachable"
+          runWithArgs (["cell", "status"] <> common) `shouldReturnCode` ExitSuccess
+          runWithArgs (["cell", "release"] <> common <> ["--lease-id", Text.unpack (renderRunId record.leaseId)]) `shouldReturnCode` ExitSuccess
+          store.statObject control leaseObject `shouldReturn` Nothing
+
+    it "routes a public plan through file-backed cell descriptors" $
+      withSystemTempDirectory "kenshou-cell-route" \root -> do
+        store <- newFileStore root
+        descriptor <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptor :: Either String CellDescriptor)
+        let control = Bucket "tan-nb-exp-cells-control"
+            outDir = root </> "routed"
+            common = ["cell", "route", "--cell", "beta", "--cell", "alpha", "--control-bucket", "tan-nb-exp-cells-control", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json"]
+        _ <- store.putObject control (ObjectName "cells/beta/descriptor.json") "application/json" DoesNotExist (Aeson.encode (observed {name = "beta", postgresMajor = 17}))
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist descriptor
+        withCellStore root do
+          runWithArgs (common <> ["--out", outDir, "--coerce-durable"]) `shouldReturnCode` ExitSuccess
+          doesFileExist (outDir </> "plan.alpha.json") `shouldReturn` True
+          doesFileExist (outDir </> "plan.beta.json") `shouldReturn` False
+          report <- Aeson.eitherDecodeFileStrict' (outDir </> "unroutable.json") >>= either fail pure
+          case report of
+            Aeson.Object fields -> KeyMap.lookup "schema" fields `shouldBe` Just (Aeson.String "kenshou.cell-route/v1")
+            _ -> expectationFailure "expected route report"
+          runWithArgs (common <> ["--out", outDir, "--coerce-durable"]) `shouldReturnCode` ExitFailure 2
+          runWithArgs (common <> ["--out", root </> "refused"]) `shouldReturnCode` ExitFailure 2
+          doesFileExist (root </> "refused" </> "unroutable.json") `shouldReturn` True
+
+    it "uses a matching capability cache and ignores one from an old descriptor" $
+      withSystemTempDirectory "kenshou-cell-capability-route" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        descriptor <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        probeId <- newRunId
+        now <- getCurrentTime
+        let control = Bucket "tan-nb-exp-cells-control"
+            directory = root </> "capabilities"
+            rulesPath = root </> "rules.json"
+            cachePath = directory </> "alpha.capabilities.json"
+            command outDir = ["cell", "route", "--cell", "alpha", "--control-bucket", "tan-nb-exp-cells-control", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json", "--routing-rules", rulesPath, "--out", outDir, "--coerce-durable"]
+            cache digest = object ["schema" .= ("kenshou.cell-capabilities/v1" :: Text), "cell" .= ("alpha" :: Text), "descriptorSha256" .= digest, "probedBy" .= renderRunId probeId, "probedAt" .= now, "capabilities" .= object ["postgres.pg_partman" .= False]]
+            rule = object ["when" .= object ["scenario" .= ("selftest/kernel/**" :: Text)], "requires" .= ("postgres.pg_partman" :: Text), "why" .= ("requires extension" :: Text)]
+        createDirectoryIfMissing True directory
+        LazyByteString.writeFile rulesPath (Aeson.encode [rule])
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist descriptorBytes
+        withCellStore root $ withCapabilityDir directory do
+          LazyByteString.writeFile cachePath (Aeson.encode (cache (descriptorDigest descriptor)))
+          runWithArgs (command (root </> "denied")) `shouldReturnCode` ExitFailure 2
+          doesFileExist (root </> "denied" </> "plan.alpha.json") `shouldReturn` False
+          LazyByteString.writeFile cachePath (Aeson.encode (cache (Text.replicate 64 "0")))
+          runWithArgs (command (root </> "unprobed")) `shouldReturnCode` ExitSuccess
+          doesFileExist (root </> "unprobed" </> "plan.alpha.json") `shouldReturn` True
+
+    it "prepares a dry-run submission under an existing file-backed lease" $
+      withSystemTempDirectory "kenshou-cell-submit" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        let control = Bucket "control"
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            location = ["--cell", "alpha", "--control-bucket", "control"]
+            outDir = root </> "session"
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        withCellStore root do
+          runWithArgs (["cell", "lease"] <> location <> ["--purpose", "submit-test"]) `shouldReturnCode` ExitSuccess
+          stored <- store.getObject control (ObjectName "cells/alpha/lease.json")
+          lease <- case stored of
+            Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Lease)
+            Nothing -> expectationFailure "lease was not published" >> error "unreachable"
+          let common = ["cell", "submit"] <> location <> ["--lease-id", Text.unpack (renderRunId lease.leaseId), "--payload", "../kenshou-remote/test/golden/payload.json", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json", "--out", outDir, "--dry-run"]
+          runWithArgs (common <> ["--coerce-durable"]) `shouldReturnCode` ExitSuccess
+          doesPathExist outDir `shouldReturn` False
+          runWithArgs common `shouldReturnCode` ExitFailure 2
+          template <- Aeson.eitherDecodeFileStrict' "../kenshou-remote/test/golden/cell-session.json" >>= either fail pure
+          let complete = (template :: SessionJournal) {store = Text.pack ("file:" <> root), controlBucket = "control", resultsBucket = descriptor.buckets.results, leaseId = lease.leaseId, slices = []}
+          createDirectoryIfMissing True outDir
+          writeSessionJournal (outDir </> "session.json") complete
+          runWithArgs ["cell", "resume", "--session", outDir] `shouldReturnCode` ExitSuccess
+
+    it "releases a one-command lease when plan preparation fails" $
+      withSystemTempDirectory "kenshou-cell-run" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        let control = Bucket "control"
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outDir = root </> "run-session"
+            command = ["cell", "run", "--cell", "alpha", "--control-bucket", "control", "--payload", "../kenshou-remote/test/golden/payload.json", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json", "--out", outDir]
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        withCellStore root do
+          runWithArgs command `shouldReturnCode` ExitFailure 2
+          store.statObject control (ObjectName "cells/alpha/lease.json") `shouldReturn` Nothing
+          doesPathExist outDir `shouldReturn` False
+
+    it "checkpoints a rejected one-command submission and releases its lease" $
+      withSystemTempDirectory "kenshou-cell-run-rejected" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        let control = Bucket "control"
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outDir = root </> "run-session"
+            command = ["cell", "run", "--cell", "alpha", "--control-bucket", "control", "--payload", "../kenshou-remote/test/golden/payload.json", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json", "--out", outDir, "--coerce-durable"]
+            awaitMarker = do
+              objects <- store.listObjects control "cells/alpha/submissions/"
+              case find (Text.isSuffixOf "/submission.json" . (.unObjectName) . fst) objects of
+                Nothing -> threadDelay 10000 >> awaitMarker
+                Just (name, _) -> do
+                  stored <- store.getObject control name
+                  case stored of
+                    Nothing -> expectationFailure "submission marker disappeared"
+                    Just (bytes, _) -> do
+                      submission <- either fail pure (Aeson.eitherDecode bytes :: Either String Submission)
+                      now <- getCurrentTime
+                      let prefix = "cells/alpha/submissions/" <> renderRunId submission.runId <> "/rejected.json"
+                      _ <- store.putObject control (ObjectName prefix) "application/json" DoesNotExist (Aeson.encode (Rejected submission.runId "fixture-rejected" now))
+                      pure ()
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        worker <- forkIO awaitMarker
+        ( withCellStore root do
+            result <- timeout 15000000 (runWithArgs command)
+            result `shouldBe` Just (ExitFailure 4)
+            store.statObject control (ObjectName "cells/alpha/lease.json") `shouldReturn` Nothing
+            journal <- readSessionJournal (outDir </> "session.json") >>= either (fail . Text.unpack) pure
+            fmap (.state) journal.slices `shouldBe` [SliceRejected]
+          )
+          `finally` killThread worker
+
+    it "fetches and verifies a sealed one-command submission" $
+      withSystemTempDirectory "kenshou-cell-run-sealed" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        let control = Bucket "control"
+            results = Bucket observed.buckets.results
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outDir = root </> "run-session"
+            command = ["cell", "run", "--cell", "alpha", "--control-bucket", "control", "--payload", "../kenshou-remote/test/golden/payload.json", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json", "--out", outDir, "--coerce-durable"]
+            awaitMarker = do
+              objects <- store.listObjects control "cells/alpha/submissions/"
+              case find (Text.isSuffixOf "/submission.json" . (.unObjectName) . fst) objects of
+                Nothing -> threadDelay 10000 >> awaitMarker
+                Just (name, _) -> do
+                  marker <- store.getObject control name
+                  submission <- case marker of
+                    Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Submission)
+                    Nothing -> fail "submission marker disappeared"
+                  journal <- readSessionJournal (outDir </> "session.json") >>= either (fail . Text.unpack) pure
+                  nestedId <- case journal.slices of
+                    [slice] -> case slice.runIds of
+                      [identifier] -> pure identifier
+                      _ -> fail "expected one nested run"
+                    _ -> fail "expected one cell slice"
+                  let prefix = "cells/alpha/submissions/" <> renderRunId submission.runId <> "/"
+                  work <- store.getObject control (ObjectName (prefix <> "work"))
+                  workBytes <- case work of
+                    Just (bytes, _) -> pure bytes
+                    Nothing -> fail "submission work disappeared"
+                  now <- getCurrentTime
+                  let payloadDigest = submission.payload.bundle.sha256
+                      nestedBytes = Aeson.encode (object ["schema" .= ("kenshou.run-result/v1" :: Text), "runId" .= nestedId, "scenario" .= ("selftest/kernel/correctness/postgres-roundtrip" :: Text), "outcome" .= Outcome.Passed, "fingerprint" .= object ["cell" .= object ["payload" .= object ["bundleSha256" .= payloadDigest]]]])
+                      nestedInfo = workObjectFor "application/json" nestedBytes
+                      nestedManifest = Manifest nestedId now [ManifestFile "run-result.json" ("sha256:" <> nestedInfo.sha256) (fromIntegral nestedInfo.bytes) "application/json"]
+                      files =
+                        [ ("submission/work", workBytes),
+                          ("submission/submission.json", Aeson.encode submission),
+                          ("cell/result.json", Aeson.encode (CellRunResult submission.runId "alpha" submission.leaseId 1 Completed (Just 0) Nothing [])),
+                          ("output/" <> renderRunId nestedId <> "/run-result.json", nestedBytes),
+                          ("output/" <> renderRunId nestedId <> "/manifest.json", Aeson.encode nestedManifest)
+                        ]
+                      artifactFor (path, bytes) = let info = workObjectFor "application/json" bytes in Artifact path info.sha256 info.bytes "application/json"
+                      manifest = CellManifest submission.runId "alpha" submission.leaseId 1 now "0.1.0" (ManifestPayload payloadDigest submission.payload.storePath) Completed 3600 (map artifactFor files)
+                      manifestBytes = Aeson.encode manifest
+                      manifestDigest = (workObjectFor "application/json" manifestBytes).sha256
+                  mapM_
+                    ( \(path, bytes) -> do
+                        _ <- store.putObject results (ObjectName ("runs/" <> renderRunId submission.runId <> "/" <> path)) "application/json" DoesNotExist bytes
+                        pure ()
+                    )
+                    files
+                  _ <- store.putObject results (ObjectName ("runs/" <> renderRunId submission.runId <> "/manifest.json")) "application/json" DoesNotExist manifestBytes
+                  _ <- store.putObject control (ObjectName (prefix <> "status.json")) "application/json" DoesNotExist (Aeson.encode (CellStatus submission.runId Sealed (Just 1) now Nothing (LogChunks 0 0) (Just Completed) (Just manifestDigest) (Just [])))
+                  pure ()
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        worker <- forkIO awaitMarker
+        ( withCellStore root do
+            result <- timeout 15000000 (runWithArgs command)
+            result `shouldBe` Just ExitSuccess
+            store.statObject control (ObjectName "cells/alpha/lease.json") `shouldReturn` Nothing
+            journal <- readSessionJournal (outDir </> "session.json") >>= either (fail . Text.unpack) pure
+            fmap (.state) journal.slices `shouldBe` [SliceVerified]
+            case journal.slices of
+              [slice] -> doesFileExist (root </> Text.unpack (renderRunId slice.cellRun) </> "cell-run.json") `shouldReturn` True
+              _ -> expectationFailure "expected one verified cell slice"
+          )
+          `finally` killThread worker
+
+    it "runs overhead slots behind one cell lease and links their verified run directories" $
+      withSystemTempDirectory "kenshou-cell-overhead" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        let control = Bucket "control"
+            results = Bucket observed.buckets.results
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outRoot = root </> "overhead-output"
+            command =
+              [ "cell",
+                "overhead",
+                "keiro/command/benchmark/throughput-latency",
+                "--cell",
+                "alpha",
+                "--control-bucket",
+                "control",
+                "--payload",
+                "../kenshou-remote/test/golden/payload.json",
+                "--arms",
+                "tracing=off,noop",
+                "--trials",
+                "3",
+                "--settle-seconds",
+                "0",
+                "--retries",
+                "0",
+                "--policy",
+                "../policies/telemetry-overhead.json",
+                "--out",
+                outRoot
+              ]
+            awaitMarkers seen = do
+              objects <- store.listObjects control "cells/alpha/submissions/"
+              case find (\(name, _) -> Text.isSuffixOf "/submission.json" name.unObjectName && name `Set.notMember` seen) objects of
+                Nothing -> threadDelay 10000 >> awaitMarkers seen
+                Just (name, _) -> do
+                  marker <- store.getObject control name
+                  submission <- case marker of
+                    Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Submission)
+                    Nothing -> fail "overhead submission marker disappeared"
+                  let prefix = "cells/alpha/submissions/" <> renderRunId submission.runId <> "/"
+                  work <- store.getObject control (ObjectName (prefix <> "work"))
+                  workBytes <- case work of
+                    Just (bytes, _) -> pure bytes
+                    Nothing -> fail "overhead work disappeared"
+                  workValue <- either fail pure (Aeson.eitherDecode workBytes :: Either String Value)
+                  nestedId <- case workValue of
+                    Aeson.Object fields -> case KeyMap.lookup "runs" fields of
+                      Just (Aeson.Array entries) -> case toList entries of
+                        [Aeson.Object entry] -> case KeyMap.lookup "runId" entry of
+                          Just value -> case Aeson.fromJSON value of Aeson.Success identifier -> pure identifier; Aeson.Error problem -> fail problem
+                          Nothing -> fail "overhead work has no nested run ID"
+                        _ -> fail "overhead work must contain one valid run entry"
+                      _ -> fail "overhead work has no runs"
+                    _ -> fail "overhead work is invalid"
+                  now <- getCurrentTime
+                  let sequenceNumber = Set.size seen + 1
+                      payloadDigest = submission.payload.bundle.sha256
+                      nestedBytes = Aeson.encode (object ["schema" .= ("kenshou.run-result/v1" :: Text), "runId" .= nestedId, "scenario" .= ("keiro/command/benchmark/throughput-latency" :: Text), "outcome" .= Outcome.Passed, "fingerprint" .= object ["cell" .= object ["payload" .= object ["bundleSha256" .= payloadDigest]]]])
+                      nestedInfo = workObjectFor "application/json" nestedBytes
+                      nestedManifest = Manifest nestedId now [ManifestFile "run-result.json" ("sha256:" <> nestedInfo.sha256) (fromIntegral nestedInfo.bytes) "application/json"]
+                      files =
+                        [ ("submission/work", workBytes),
+                          ("submission/submission.json", Aeson.encode submission),
+                          ("cell/result.json", Aeson.encode (CellRunResult submission.runId "alpha" submission.leaseId sequenceNumber Completed (Just 0) Nothing [])),
+                          ("output/" <> renderRunId nestedId <> "/run-result.json", nestedBytes),
+                          ("output/" <> renderRunId nestedId <> "/manifest.json", Aeson.encode nestedManifest)
+                        ]
+                      artifactFor (path, bytes) = let info = workObjectFor "application/json" bytes in Artifact path info.sha256 info.bytes "application/json"
+                      manifest = CellManifest submission.runId "alpha" submission.leaseId sequenceNumber now "0.1.0" (ManifestPayload payloadDigest submission.payload.storePath) Completed 3600 (map artifactFor files)
+                      manifestBytes = Aeson.encode manifest
+                      manifestDigest = (workObjectFor "application/json" manifestBytes).sha256
+                  mapM_ (\(path, bytes) -> do _ <- store.putObject results (ObjectName ("runs/" <> renderRunId submission.runId <> "/" <> path)) "application/json" DoesNotExist bytes; pure ()) files
+                  _ <- store.putObject results (ObjectName ("runs/" <> renderRunId submission.runId <> "/manifest.json")) "application/json" DoesNotExist manifestBytes
+                  _ <- store.putObject control (ObjectName (prefix <> "status.json")) "application/json" DoesNotExist (Aeson.encode (CellStatus submission.runId Sealed (Just sequenceNumber) now Nothing (LogChunks 0 0) (Just Completed) (Just manifestDigest) (Just [])))
+                  if sequenceNumber < 6 then awaitMarkers (Set.insert name seen) else pure ()
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        worker <- forkIO (awaitMarkers Set.empty)
+        ( withCellStore root do
+            result <- timeout 30000000 (runWithArgs command)
+            result `shouldBe` Just (ExitFailure 4)
+            store.statObject control (ObjectName "cells/alpha/lease.json") `shouldReturn` Nothing
+            [invocation] <- listDirectory outRoot
+            state <- loadOverheadState (outRoot </> invocation) >>= either fail pure
+            length state.slots `shouldBe` 6
+            all (.complete) state.slots `shouldBe` True
+            observations <-
+              traverse
+                ( \slot -> do
+                    runId <- case reverse slot.runIds of identifier : _ -> pure identifier; [] -> fail "overhead slot has no run"
+                    doesFileExist (outRoot </> invocation </> "runs" </> Text.unpack (renderRunId runId) </> "manifest.json") `shouldReturn` True
+                    journal <- readSessionJournal (outRoot </> invocation </> "cell-sessions" </> Text.unpack (renderRunId runId) </> "session.json") >>= either (fail . Text.unpack) pure
+                    slice <- case journal.slices of [one] -> pure one; _ -> fail "overhead child must have one slice"
+                    sealed <- store.getObject results (ObjectName ("runs/" <> renderRunId slice.cellRun <> "/manifest.json"))
+                    manifest <- case sealed of
+                      Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String CellManifest)
+                      Nothing -> fail "overhead child has no cell manifest"
+                    pure (journal.leaseId, manifest.leaseSequence)
+                )
+                state.slots
+            length (Set.fromList (fmap fst observations)) `shouldBe` 1
+            List.sort (fmap snd observations) `shouldBe` [1 .. 6]
+            resumed <- timeout 15000000 (runWithArgs (command <> ["--resume"]))
+            resumed `shouldBe` Just (ExitFailure 4)
+            markers <- store.listObjects control "cells/alpha/submissions/"
+            length (filter (Text.isSuffixOf "/submission.json" . (.unObjectName) . fst) markers) `shouldBe` 6
+          )
+          `finally` killThread worker
+
+    it "leaves a detached single-slice lease alive and collects its rejection later" $
+      withSystemTempDirectory "kenshou-cell-run-detached" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        let control = Bucket "control"
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outDir = root </> "run-session"
+            leaseObject = ObjectName "cells/alpha/lease.json"
+            command = ["cell", "run", "--cell", "alpha", "--control-bucket", "control", "--payload", "../kenshou-remote/test/golden/payload.json", "--plan", "../kenshou-core/test/golden/run-plan.minimal.json", "--out", outDir, "--coerce-durable", "--detach"]
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        withCellStore root do
+          runWithArgs command `shouldReturnCode` ExitSuccess
+          journal <- readSessionJournal (outDir </> "session.json") >>= either (fail . Text.unpack) pure
+          journal.leaseMode `shouldBe` Detached
+          fmap (.state) journal.slices `shouldBe` [SliceSubmitted]
+          leaseStored <- store.getObject control leaseObject
+          lease <- case leaseStored of
+            Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Lease)
+            Nothing -> expectationFailure "detached lease was released" >> error "unreachable"
+          slice <- case journal.slices of
+            [entry] -> pure entry
+            _ -> expectationFailure "expected one detached slice" >> error "unreachable"
+          lease.ttlSeconds `shouldSatisfy` (>= fromIntegral slice.submission.limits.wallClockSeconds + 600)
+          runWithArgs ["cell", "resume", "--session", outDir] `shouldReturnCode` ExitFailure 4
+          store.statObject control leaseObject >>= (`shouldSatisfy` (maybe False (const True)))
+          now <- getCurrentTime
+          let rejectedObject = ObjectName ("cells/alpha/submissions/" <> renderRunId slice.cellRun <> "/rejected.json")
+          _ <- store.putObject control rejectedObject "application/json" DoesNotExist (Aeson.encode (Rejected slice.cellRun "fixture-rejected" now))
+          runWithArgs ["cell", "resume", "--session", outDir] `shouldReturnCode` ExitFailure 4
+          store.statObject control leaseObject `shouldReturn` Nothing
+          finished <- readSessionJournal (outDir </> "session.json") >>= either (fail . Text.unpack) pure
+          fmap (.state) finished.slices `shouldBe` [SliceRejected]
+          runWithArgs command `shouldReturnCode` ExitFailure 2
+          store.statObject control leaseObject `shouldReturn` Nothing
+
+    it "starts stopped instances and releases a reattached held lease after a terminal resume" $
+      withSystemTempDirectory "kenshou-cell-resume-release" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        template <- Aeson.eitherDecodeFileStrict' "../kenshou-remote/test/golden/cell-session.json" >>= either fail pure
+        let control = Bucket "control"
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outDir = root </> "session"
+            leaseObject = ObjectName "cells/alpha/lease.json"
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        withCellStore root do
+          runWithArgs ["cell", "lease", "--cell", "alpha", "--control-bucket", "control", "--purpose", "resume-test"] `shouldReturnCode` ExitSuccess
+          stored <- store.getObject control leaseObject
+          lease <- case stored of
+            Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Lease)
+            Nothing -> fail "fixture lease missing"
+          let journal = (template :: SessionJournal) {store = Text.pack ("file:" <> root), controlBucket = "control", resultsBucket = descriptor.buckets.results, leaseId = lease.leaseId, leaseMode = Held, slices = map (\slice -> slice {state = SliceRejected, rejectionReason = Just "fixture-rejected", cellOutcome = Nothing, entryExitCode = Nothing, manifestSha256 = Nothing, fetchedPath = Nothing}) template.slices}
+          createDirectoryIfMissing True outDir
+          writeSessionJournal (outDir </> "session.json") journal
+          let binDir = root </> "bin"
+              fakeGcloud = binDir </> "gcloud"
+              started = root </> "instances-started"
+          createDirectoryIfMissing True binDir
+          writeFile fakeGcloud "#!/bin/sh\nif [ \"$3\" = describe ]; then echo TERMINATED; else printf started > \"$KENSHOU_TEST_STARTED\"; fi\n"
+          permissions <- getPermissions fakeGcloud
+          setPermissions fakeGcloud permissions {executable = True}
+          oldPath <- lookupEnv "PATH"
+          withEnvVariable "PATH" (binDir <> ":" <> maybe "" id oldPath) $
+            withEnvVariable "KENSHOU_TEST_STARTED" started $
+              runWithArgs ["cell", "resume", "--start", "--session", outDir] `shouldReturnCode` ExitFailure 4
+          doesFileExist started `shouldReturn` True
+          store.statObject control leaseObject `shouldReturn` Nothing
+          runWithArgs ["cell", "resume", "--start", "--help"] `shouldReturnCode` ExitSuccess
+
+    it "rebinds a submitted marker that a prior held lease never accepted" $
+      withSystemTempDirectory "kenshou-cell-resume-unaccepted" \root -> do
+        store <- newFileStore root
+        descriptorBytes <- LazyByteString.readFile "../kenshou-remote/test/golden/cell/cell.descriptor.v1.json"
+        observed <- either fail pure (Aeson.eitherDecode descriptorBytes :: Either String CellDescriptor)
+        template <- Aeson.eitherDecodeFileStrict' "../kenshou-remote/test/golden/cell-session.json" >>= either fail pure
+        let control = Bucket "control"
+            descriptor = observed {buckets = observed.buckets {control = "control"}}
+            outDir = root </> "session"
+            leaseObject = ObjectName "cells/alpha/lease.json"
+        _ <- store.putObject control (ObjectName "cells/alpha/descriptor.json") "application/json" DoesNotExist (Aeson.encode descriptor)
+        withCellStore root do
+          runWithArgs ["cell", "lease", "--cell", "alpha", "--control-bucket", "control", "--purpose", "old-session"] `shouldReturnCode` ExitSuccess
+          oldStored <- store.getObject control leaseObject
+          oldLease <- case oldStored of
+            Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Lease)
+            Nothing -> expectationFailure "old lease missing" >> error "unreachable"
+          fixtureSlice <- case (template :: SessionJournal).slices of
+            [entry] -> pure entry
+            _ -> expectationFailure "expected one fixture slice" >> error "unreachable"
+          let fixtureSubmission = fixtureSlice.submission
+              fixturePayload = fixtureSubmission.payload
+              fixtureBundle = fixturePayload.bundle
+              payload = fixturePayload {bundle = fixtureBundle {uri = "gs://control/payloads/sha256/" <> fixtureBundle.sha256 <> ".nar.zst"}}
+              oldSubmission = fixtureSubmission {leaseId = oldLease.leaseId, payload = payload, work = workObjectFor "application/json" "{}"}
+              oldSlice = fixtureSlice {submission = oldSubmission, state = SliceSubmitted}
+              journal = template {store = Text.pack ("file:" <> root), controlBucket = "control", resultsBucket = descriptor.buckets.results, leaseId = oldLease.leaseId, slices = [oldSlice]}
+              oldMarker = ObjectName ("cells/alpha/submissions/" <> renderRunId oldSlice.cellRun <> "/submission.json")
+              awaitRetry = do
+                objects <- store.listObjects control "cells/alpha/submissions/"
+                case find (\(name, _) -> name /= oldMarker && Text.isSuffixOf "/submission.json" name.unObjectName) objects of
+                  Nothing -> threadDelay 10000 >> awaitRetry
+                  Just (name, _) -> do
+                    stored <- store.getObject control name
+                    submission <- case stored of
+                      Just (bytes, _) -> either fail pure (Aeson.eitherDecode bytes :: Either String Submission)
+                      Nothing -> fail "retry marker disappeared"
+                    now <- getCurrentTime
+                    let rejected = ObjectName ("cells/alpha/submissions/" <> renderRunId submission.runId <> "/rejected.json")
+                    _ <- store.putObject control rejected "application/json" DoesNotExist (Aeson.encode (Rejected submission.runId "fixture-rejected" now))
+                    pure ()
+          createDirectoryIfMissing True (outDir </> "slice-0")
+          LazyByteString.writeFile (outDir </> "slice-0/work.json") "{}"
+          writeSessionJournal (outDir </> "session.json") journal
+          _ <- store.putObject control oldMarker "application/json" DoesNotExist (Aeson.encode oldSubmission)
+          runWithArgs ["cell", "release", "--cell", "alpha", "--control-bucket", "control", "--lease-id", Text.unpack (renderRunId oldLease.leaseId)] `shouldReturnCode` ExitSuccess
+          worker <- forkIO awaitRetry
+          ( do
+              result <- timeout 15000000 (runWithArgs ["cell", "resume", "--session", outDir])
+              result `shouldBe` Just (ExitFailure 4)
+              finished <- readSessionJournal (outDir </> "session.json") >>= either (fail . Text.unpack) pure
+              fmap (.state) finished.slices `shouldBe` [SliceRejected]
+              fmap (.cellRun) finished.slices `shouldSatisfy` (/= [oldSlice.cellRun])
+              store.statObject control leaseObject `shouldReturn` Nothing
+            )
+            `finally` killThread worker
+
+    it "reads scenario history from a bundle" do
+      runWithArgs ["history", "--bundle", "../docs/verification", "--scenario", "selftest/kernel/correctness/always-pass", "--json"] `shouldReturnCode` ExitSuccess
+
+    it "requires one record source" do
+      runWithArgs ["record", "--purpose", "release"] `shouldReturnCode` ExitFailure 2
+      runWithArgs ["record", "a-run", "--comparison", "comparison.json", "--purpose", "release"] `shouldReturnCode` ExitFailure 2
+
+    it "rejects a human anomaly exception without an interactive terminal" do
+      runWithArgs ["attest", "invalid", "--project", "fixture", "--accept-anomaly", "--authority", "human:fixture", "--reason", "fixture"] `shouldReturnCode` ExitFailure 2
+
+    it "returns 2 for an unknown subcommand" do
+      runWithArgs ["cohort", "bogus"] `shouldReturnCode` ExitFailure 2
+
+    it "returns 1 when offline leak diagnosis finds growth" do
+      runWithArgs ["diagnose", "leak", leakingRun] `shouldReturnCode` ExitFailure 1
+
+    it "returns 1 when an offline stall diagnosis exists" do
+      runWithArgs ["diagnose", "stall", stalledRun] `shouldReturnCode` ExitFailure 1
+
+    it "returns 0 when no offline stall diagnosis exists" do
+      runWithArgs ["diagnose", "stall", leakingRun] `shouldReturnCode` ExitSuccess
+
+    it "returns 3 when leak evidence is insufficient" do
+      runWithArgs ["diagnose", "leak", stalledRun] `shouldReturnCode` ExitFailure 3
+
+    it "returns 4 when diagnosis input is unavailable" do
+      runWithArgs ["diagnose", "leak", "test/fixtures/does-not-exist"] `shouldReturnCode` ExitFailure 4
+
+    it "returns 2 for invalid diagnose syntax" do
+      runWithArgs ["diagnose", "leak", "--bogus"] `shouldReturnCode` ExitFailure 2
+
+    it "does not mutate a sealed run manifest" do
+      before <- Text.readFile (leakingRun <> "/manifest.json")
+      _ <- runWithArgs ["diagnose", "leak", leakingRun]
+      after <- Text.readFile (leakingRun <> "/manifest.json")
+      after `shouldBe` before
+
+  describe "version" do
+    it "includes the cabal package version and a short revision" do
+      appVersionWithGit `shouldSatisfy` Text.isPrefixOf "kenshou v0.1.0.0 ("
+      Text.dropAround (`elem` ['(', ')']) (Text.takeWhileEnd (/= ' ') appVersionWithGit)
+        `shouldSatisfy` (\revision -> revision == "dirty" || Text.length revision == 7)
+
+runWithArgs :: [String] -> IO ExitCode
+runWithArgs = runWithArgsWith selfTestAssembly
+
+shouldReturnCode :: IO ExitCode -> ExitCode -> IO ()
+shouldReturnCode action expected = action >>= (`shouldBe` expected)
+
+leakingRun :: FilePath
+leakingRun = "../kenshou-diagnose/test/fixtures/run-leaking"
+
+stalledRun :: FilePath
+stalledRun = "../kenshou-diagnose/test/fixtures/run-stalled"
+
+withCellStore :: FilePath -> IO value -> IO value
+withCellStore root operation = bracket (lookupEnv "KENSHOU_CELL_STORE") (restore "KENSHOU_CELL_STORE") \_ ->
+  bracket (lookupEnv "KENSHOU_GCP_ALLOWED_PROJECTS") (restore "KENSHOU_GCP_ALLOWED_PROJECTS") \_ -> do
+    setEnv "KENSHOU_CELL_STORE" ("file:" <> root)
+    setEnv "KENSHOU_GCP_ALLOWED_PROJECTS" "tan-nb-exp"
+    operation
+  where
+    restore name Nothing = unsetEnv name
+    restore name (Just prior) = setEnv name prior
+
+withCapabilityDir :: FilePath -> IO value -> IO value
+withCapabilityDir directory operation = bracket (lookupEnv "KENSHOU_CELL_CAPABILITIES_DIR") restore \_ -> do
+  setEnv "KENSHOU_CELL_CAPABILITIES_DIR" directory
+  operation
+  where
+    restore Nothing = unsetEnv "KENSHOU_CELL_CAPABILITIES_DIR"
+    restore (Just prior) = setEnv "KENSHOU_CELL_CAPABILITIES_DIR" prior
+
+withEnvVariable :: String -> String -> IO value -> IO value
+withEnvVariable name selected operation = bracket (lookupEnv name) restore \_ -> do
+  setEnv name selected
+  operation
+  where
+    restore Nothing = unsetEnv name
+    restore (Just prior) = setEnv name prior
+
+withPerfRoot :: IO a -> IO a
+withPerfRoot operation = do
+  exists <- doesFileExist "cohort/released.json"
+  withCurrentDirectory (if exists then "." else "..") operation
+
+replacePerfField :: Key.Key -> Value -> Value -> Value
+replacePerfField key value (Aeson.Object fields) = Aeson.Object (KeyMap.insert key value fields)
+replacePerfField _ _ value = value

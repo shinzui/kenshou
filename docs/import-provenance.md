@@ -41,6 +41,7 @@ kenshou-cli/src/Kenshou/Cli/Attest/Keiro*.hs
 kenshou-cli/test/fixtures/{inbox,outbox,queue,producer-identity}-*.json
 ```
 
-The edits made to the imported `kenshou-cli` sources after extraction are recorded in the
-plan named above, and are visible in this repository's history as the commits that follow
-the import commit.
+The seven packages are committed verbatim in the import commit. The `kenshou-cli` sources
+were extracted and reshaped in one commit (the generic-CLI-library commit that follows
+it); the edits are described in the plan named above. `cohort/` is not imported: this
+repository has its own `harness` cohort.

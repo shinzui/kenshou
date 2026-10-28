@@ -1,24 +1,9 @@
 -- One cabal project. A plan adds a package by creating
 -- kenshou-<name>/kenshou-<name>.cabal; nobody edits this list.
+-- The cohort (index-state and exact constraints) comes from cohort/; every run
+-- result records it as a resolved cohort identity.
+import: cohort/active.project
 packages: kenshou-*/*.cabal
 with-compiler: ghc-9.12.4
 tests: True
 test-show-details: direct
--- Same Hackage snapshot as the first consumer's released cohort
--- (mori://shinzui/keiro-runtime-kenshou, cohort/released.project).
-index-state: 2026-09-20T13:44:47Z
--- Exact pins for the narrowly bound Hackage packages. The three migration
--- libraries are removed by docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md.
-constraints:
-  keiro-migrations ==0.17.0.0,
-  kiroku-store-migrations ==0.4.0.0,
-  pgmq-migration ==0.6.1.0,
-  pg-migrate ==1.1.0.0,
-  ephemeral-pg ==0.3.1.0,
-  hs-opentelemetry-api ==1.0.0.0,
-  hs-opentelemetry-sdk ==1.0.0.0,
-  hs-opentelemetry-propagator-w3c ==1.0.0.0,
-  hs-opentelemetry-exporter-in-memory ==1.0.0.0,
-  hs-opentelemetry-exporter-otlp ==1.0.0.0,
-  hs-opentelemetry-exporter-prometheus ==1.0.0.0,
-  hs-opentelemetry-otlp ==1.0.0.0

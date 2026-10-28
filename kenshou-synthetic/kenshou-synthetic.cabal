@@ -1,13 +1,40 @@
-cabal-version: 3.12
+cabal-version: 3.0
 name: kenshou-synthetic
 version: 0.1.0.0
-synopsis: Placeholder for the synthetic reference suite and the kenshou executable
-license: NONE
+synopsis: Synthetic reference suite and the standalone kenshou executable
+description:
+  The kenshou executable assembled from the generic operator commands and the
+  harness's own self-test bundles.
+
+license: BSD-3-Clause
+author: Nadeem Bitar
+maintainer: Nadeem Bitar
+category: Testing
 build-type: Simple
+tested-with: ghc >=9.12 && <9.13
+
+common warnings
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Wredundant-constraints
+
+  default-language: GHC2024
 
 executable kenshou
-  main-is: Main.hs
+  import: warnings
   hs-source-dirs: app
-  build-depends: base >=4.21 && <5
-  default-language: GHC2024
-  ghc-options: -Wall
+  main-is: Main.hs
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+    -with-rtsopts=-T
+
+  build-depends:
+    base >=4.21 && <4.22,
+    kenshou-cli,

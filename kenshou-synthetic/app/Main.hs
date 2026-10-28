@@ -1,4 +1,6 @@
 module Main (main) where
 
+import Kenshou.Cli (mainWith, selfTestAssembly)
+
 main :: IO ()
-main = putStrLn "kenshou 0.1.0.0"
+main = mainWith selfTestAssembly

@@ -1,0 +1,26 @@
+{
+  "schema": "kenshou.cohort/v1",
+  "name": "harness",
+  "description": "Hackage releases the generic harness packages are built and verified against.",
+  "verifiedAt": "2026-10-28",
+  "compiler": "ghc-9.12.4",
+  "indexState": "2026-09-20T13:44:47Z",
+  "projectFile": "cohort/harness.project",
+  "components": [
+    { "id": "pg-migrate", "moriUri": "mori://shinzui/pg-migrate", "source": { "type": "hackage" }, "packages": [
+      { "name": "pg-migrate", "version": "1.1.0.0" }
+    ] },
+    { "id": "ephemeral-pg", "moriUri": "mori://shinzui/ephemeral-pg", "source": { "type": "hackage" }, "packages": [
+      { "name": "ephemeral-pg", "version": "0.3.1.0" }
+    ] },
+    { "id": "settei", "moriUri": "mori://shinzui/settei", "source": { "type": "hackage" }, "packages": [
+      { "name": "settei", "version": "0.2.0.0" }
+    ] },
+    { "id": "hs-opentelemetry", "moriUri": "mori://iand675/hs-opentelemetry", "source": { "type": "hackage" }, "packages": [
+      { "name": "hs-opentelemetry-api", "version": "1.0.0.0" },
+      { "name": "hs-opentelemetry-sdk", "version": "1.0.0.0" }
+    ] }
+  ],
+  "allowNewer": [],
+  "exceptions": []
+}
