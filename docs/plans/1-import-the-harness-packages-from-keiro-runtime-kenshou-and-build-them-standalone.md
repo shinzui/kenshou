@@ -55,19 +55,23 @@ edits, commands, tests, commits, or session activity. Update this section when a
 is accepted, a material blocker or change of course arises, or work is handed off. For a
 handoff during a milestone, add a short prose note stating the remaining outcome.
 
-- [ ] M1: the workspace scaffold builds. `cabal.project`, `flake.module.nix`, `justfile`, and
+- [x] M1: the workspace scaffold builds. `cabal.project`, `flake.module.nix`, `justfile`, and
   `docs/import-provenance.md` exist, `nix develop` enters a shell with GHC 9.12.4, and
-  `cabal build all` succeeds on a placeholder package.
-- [ ] M2: the seven generic packages are imported at the pinned revision and
+  `cabal build all` succeeds on a placeholder package. (2026-10-28, commit `cee501c`; the
+  placeholder printed `kenshou 0.1.0.0`.)
+- [x] M2: the seven generic packages are imported at the pinned revision and
   `cabal build kenshou-core kenshou-check kenshou-measure kenshou-diagnose kenshou-telemetry
-  kenshou-evidence kenshou-remote` succeeds.
-- [ ] M3: `kenshou-cli` builds as a library that takes its registry from the caller, and the
+  kenshou-evidence kenshou-remote` succeeds. (2026-10-28, commit `60fc55f`, committed
+  verbatim with no source edit.)
+- [x] M3: `kenshou-cli` builds as a library that takes its registry from the caller, and the
   `kenshou` executable in `kenshou-synthetic` lists only `selftest/…` scenarios and runs
-  `selftest/kernel/correctness/always-pass` to a sealed run directory.
+  `selftest/kernel/correctness/always-pass` to a sealed run directory. (2026-10-28, commit
+  `b9eebd8`; `kenshou list` prints 26 identifiers, all `selftest/…`; `--version` prints
+  `kenshou v0.1.0.0 (60fc55f)`; the run writes `run-spec.json`, `run-result.json`,
+  `manifest.json`, and `logs/`. Required the harness cohort, see Decision Log.)
 - [ ] M4: `just verify` passes: unit tests, formatting, schema checks, the self-test
   recipe, and the plan check that proves no layer package is in the build plan; the CI
   workflow runs the same gate on push.
-
 
 ## Surprises & Discoveries
 
@@ -76,7 +80,32 @@ implementation. Provide concise evidence. Friction with the tools, documents, an
 used to do the work belongs in the friction log (see FRICTION.md); cite an entry's FRIC-N
 handle here only when it also changed the plan.
 
-(None yet.)
+- Every `kenshou run` resolves a cohort identity from `cohort/active.project`, the named
+  descriptor `cohort/<name>.json`, and `dist-newstyle/cache/plan.json`
+  (`Kenshou.Core.Cohort.resolveCohortIdentity`), so without a `cohort/` directory every run
+  exits 2 with `unable to resolve cohort identity: … ./cohort/active.project … does not
+  exist`. The plan had assumed `cohort/` stays with the consumer. Evidence: the first
+  `kenshou run selftest/kernel/correctness/always-pass` after M3 built.
+
+- Several imported tests the plan called generic read files from the consumer's checkout
+  layout and failed here (37 failures across five suites on the first `just haskell-test`):
+  `../cohort/released.json` and `../cohort/shibuya-current.json` (kenshou-core perf
+  preparation and source-identity tests, kenshou-remote payload tests),
+  `policies/performance/catalog.v1.json` (kenshou-core bounded planning, kenshou-measure
+  metric admission, the kenshou-cli `perf plan` tests), `../policies/cell-routing.json`
+  (kenshou-remote route rule), and `../docs/verification` (kenshou-evidence attestation
+  tests copy the consumer's whole verification bundle; the kenshou-cli history test reads
+  it). The `kenshou perf` commands themselves resolve `cohortTemplate` and the catalog
+  relative to the working directory. The two kenshou-cli file-backed perf session tests also
+  dispatch the Shibuya scenarios named in `kenshou-core/test/golden/perf-prepared.fixture.json`
+  against the registry, which cannot resolve them here. The overhead CLI test selected
+  `keiro/command/benchmark/throughput-latency`, which is not registered, and exited 2.
+
+- `nix build` of the package outputs could not use the shared Haskell package set as is: it
+  lacks `hs-opentelemetry-exporter-prometheus` and carries newer majors of `settei*` (0.3),
+  `okf-core` (0.10), `pg-migrate` (1.2), and the three migration libraries than the cohort
+  pins. The consumer's equivalent `packages.kenshou-core` is evaluated by `nix flake check`
+  but never built, so the gap was not visible there.
 
 
 ## Decision Log
@@ -98,6 +127,47 @@ future contributor should follow. Omit routine implementation choices.
   the executable passes in is the smallest change that lets `kenshou-synthetic` here and the
   Keiro suite later link different suites against one library, and it is already how
   `Kenshou.Core.Cli.runCli` is shaped.
+  Date: 2026-10-28
+
+- Decision: Give this repository its own cohort, `harness`, as `cohort/active.project`
+  (`import: harness.project`), `cohort/harness.project` (the index state and the exact pins,
+  moved out of `cabal.project`, which now imports `cohort/active.project`), and the
+  descriptor `cohort/harness.json` naming `pg-migrate`, `ephemeral-pg`, `settei`, and
+  `hs-opentelemetry`. `just cohort-check` validates the descriptor and runs `kenshou cohort
+  check`.
+  Rationale: Cohort identity on every result is generic behavior
+  (`mori://shinzui/keiro-runtime-kenshou/okf/adrs/concepts/ADR-2`), and it needs a
+  descriptor. Importing the consumer's `released` descriptor would make the Keiro packages
+  part of this repository's identity; a cohort of its own records exactly what the
+  generic packages are verified against.
+  Date: 2026-10-28
+
+- Decision: Vendor the consumer files the generic tests read into one bridge directory,
+  `fixtures/consumer-baseline/` (verbatim at the pinned commit, laid out at the consumer's
+  paths, with a README), and point the tests there; mark the two kenshou-cli file-backed
+  perf session tests pending with a reason naming `docs/plans/2-…` M4; switch the overhead
+  CLI test to `selftest/telemetry/benchmark/arms-on-synthetic-service`.
+  Rationale: Placing the files at the consumer's real paths would make `released` a
+  selectable cohort and `policies/cell-routing.json` a live policy here. Rewriting the
+  fixtures as synthetic data is the work of `docs/plans/2-…` M4 (perf and cohort fixtures)
+  and `docs/plans/4-…` (routing rule and evidence bundle); doing it in this plan would
+  duplicate theirs. The bridge keeps every test running except the two that need
+  registered consumer scenarios, and `docs/plans/5-…` deletes it once nothing reads it.
+  Date: 2026-10-28
+
+- Decision: The Nix package outputs compose a cohort overlay that builds the exact
+  Hackage releases the harness cohort pins (`callHackageDirect`, jailbroken, without
+  tests) over the shared `haskell-nix` extension, and the local package outputs skip their
+  test suites.
+  Rationale: The shared package set is ahead of the cohort for eight packages and lacks
+  one; building against it would not be the dependency set Cabal verifies. The unit tests
+  start PostgreSQL servers and are the job of `just verify`, not of a sandboxed Nix build.
+  Date: 2026-10-28
+
+- Decision: Commit the seven imported packages with `--no-verify`, so the formatter hook
+  cannot alter the verbatim import.
+  Rationale: The import commit is the divergence-audit baseline for `docs/plans/7-…`. The
+  subsequent `nix fmt` pass found no change, so no separate reformat commit exists.
   Date: 2026-10-28
 
 - Decision: Keep every package at version `0.1.0.0` and keep every package name and module
