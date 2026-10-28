@@ -7,7 +7,6 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.ConsumerBaseline (consumerGraph)
 import Kenshou.Core.Dimension
 import Kenshou.Core.Id (Kind (..), mkSeed, parseRunId, parseScenarioId, renderScenarioId)
 import Kenshou.Core.Outcome (Outcome (..))
@@ -36,12 +35,12 @@ spec :: Spec
 spec = do
   describe "Kenshou.Plan.Selector" do
     it "round-trips and matches recursive selectors" do
-      selector <- expectRight (parseSelector "shibuya/pgmq-adapter/**")
-      scenario <- expectRight (parseScenarioId "shibuya/pgmq-adapter/correctness/finalize")
-      renderSelector selector `shouldBe` "shibuya/pgmq-adapter/**"
+      selector <- expectRight (parseSelector "acme/quill-adapter/**")
+      scenario <- expectRight (parseScenarioId "acme/quill-adapter/correctness/finalize")
+      renderSelector selector `shouldBe` "acme/quill-adapter/**"
       matches selector scenario `shouldBe` True
     it "rejects recursive wildcards before the final position" do
-      parseSelector "shibuya/**/correctness/*" `shouldBe` Left "** is permitted only as the final segment"
+      parseSelector "acme/**/correctness/*" `shouldBe` Left "** is permitted only as the final segment"
 
   describe "Kenshou.Plan.Catalog" do
     it "decodes the planned scenario catalog" do
@@ -51,88 +50,88 @@ spec = do
 
   describe "Kenshou.Plan.Components" do
     it "validates the embedded graph" do
-      graph <- consumerGraph >>= expectRight
+      graph <- syntheticGraph >>= expectRight
       validateGraph graph `shouldBe` []
-    it "computes the pgmq dependent closure" do
-      graph <- consumerGraph >>= expectRight
-      origin <- expectRight (parseRef graph "pgmq-hs")
+    it "computes the quill dependent closure" do
+      graph <- syntheticGraph >>= expectRight
+      origin <- expectRight (parseRef graph "quill-hs")
       let affected = dependents graph (Set.singleton origin)
           present text = either (const False) (`Map.member` affected) (parseRef graph text)
-      present "shibuya-pgmq-adapter" `shouldBe` True
-      present "keiro-pgmq" `shouldBe` True
+      present "acme-quill-adapter" `shouldBe` True
+      present "flux-quill" `shouldBe` True
       present "kenshou-harness" `shouldBe` True
       present "runtime-assembly" `shouldBe` True
-    it "keeps shibuya runner changes away from keiro contract consumers" do
-      graph <- consumerGraph >>= expectRight
-      origin <- expectRight (parseRef graph "shibuya-core:runner")
+    it "keeps acme runner changes away from flux contract consumers" do
+      graph <- syntheticGraph >>= expectRight
+      origin <- expectRight (parseRef graph "acme-core:runner")
       let affected = dependents graph (Set.singleton origin)
           present text = either (const False) (`Map.member` affected) (parseRef graph text)
-      present "keiro-pgmq" `shouldBe` True
-      present "shibuya-metrics" `shouldBe` True
-      present "shibuya-kiroku-adapter" `shouldBe` True
+      present "flux-quill" `shouldBe` True
+      present "acme-metrics" `shouldBe` True
+      present "acme-tally-adapter" `shouldBe` True
       present "runtime-assembly" `shouldBe` True
-      present "keiro" `shouldBe` False
-      present "keiro:router" `shouldBe` False
-    it "routes shibuya contract changes to the three keiro consumers" do
-      graph <- consumerGraph >>= expectRight
-      origin <- expectRight (parseRef graph "shibuya-core:contract")
+      present "flux" `shouldBe` False
+      present "flux:router" `shouldBe` False
+    it "routes acme contract changes to the three flux consumers" do
+      graph <- syntheticGraph >>= expectRight
+      origin <- expectRight (parseRef graph "acme-core:contract")
       let affected = dependents graph (Set.singleton origin)
           present text = either (const False) (`Map.member` affected) (parseRef graph text)
-      present "keiro:process-manager" `shouldBe` True
-      present "keiro:router" `shouldBe` True
-      present "keiro:inbox" `shouldBe` True
-      present "keiro:command" `shouldBe` False
-      present "keiro:outbox" `shouldBe` False
-      present "keiro:workflow" `shouldBe` False
+      present "flux:process-manager" `shouldBe` True
+      present "flux:router" `shouldBe` True
+      present "flux:inbox" `shouldBe` True
+      present "flux:command" `shouldBe` False
+      present "flux:outbox" `shouldBe` False
+      present "flux:workflow" `shouldBe` False
 
   describe "Kenshou.Plan.Components.Check" do
     it "resolves shortened unit ids and finds a planted missing edge" do
-      graph <- consumerGraph >>= expectRight
+      graph <- syntheticGraph >>= expectRight
       result <- checkAgainstPlanJson graph "test/fixtures/plan/plan-missing-edge.json"
       findings <- expectRight result
       findings `shouldSatisfy` any isMissing
 
   describe "Kenshou.Plan.Change" do
-    it "selects only the PGMQ family and its dependents" do
+    it "selects only the QUILL family and its dependents" do
       (graph, catalog) <- fixtureInputs
-      changed <- named graph "pgmq-hs"
+      changed <- named graph "quill-hs"
       selectedIds (selectScenarios graph catalog [changed])
-        `shouldBe` expectedIds catalog ["pgmq/", "shibuya/pgmq-adapter/", "keiro/queue/", "runtime/", "selftest/kernel/correctness/postgres-roundtrip"]
-    it "selects all Kiroku, Keiro, runtime, and kernel evidence for kiroku-store" do
+        `shouldBe` expectedIds catalog ["quill/", "acme/quill-adapter/", "flux/queue/", "runtime/", "selftest/kernel/correctness/postgres-roundtrip"]
+    it "selects all Tally, Flux, runtime, and kernel evidence for tally-store" do
       (graph, catalog) <- fixtureInputs
-      changed <- named graph "kiroku-store"
+      changed <- named graph "tally-store"
       selectedIds (selectScenarios graph catalog [changed])
-        `shouldBe` expectedIds catalog ["kiroku/", "shibuya/kiroku-adapter/", "keiro/", "runtime/", "selftest/kernel/"]
-    it "distinguishes shibuya runner changes from contract changes" do
+        `shouldBe` expectedIds catalog ["tally/", "acme/tally-adapter/", "flux/", "runtime/", "selftest/kernel/"]
+    it "distinguishes acme runner changes from contract changes" do
       (graph, catalog) <- fixtureInputs
-      runner <- named graph "shibuya-core:runner"
-      contract <- named graph "shibuya-core:contract"
+      runner <- named graph "acme-core:runner"
+      contract <- named graph "acme-core:contract"
       selectedIds (selectScenarios graph catalog [runner])
-        `shouldBe` expectedIds catalog ["shibuya/", "kafka/", "keiro/queue/", "runtime/"]
+        `shouldBe` expectedIds catalog ["acme/", "brook/", "flux/queue/", "runtime/"]
       let contractIds = selectedIds (selectScenarios graph catalog [contract])
-      contractIds `shouldSatisfy` Set.member "keiro/process-manager/correctness/react"
-      contractIds `shouldSatisfy` Set.member "keiro/router/correctness/route"
-      contractIds `shouldSatisfy` Set.member "keiro/inbox/correctness/deduplicate"
-      contractIds `shouldSatisfy` Set.notMember "keiro/command/correctness/decide"
-      contractIds `shouldSatisfy` Set.notMember "keiro/outbox/concurrency/publish"
-      contractIds `shouldSatisfy` Set.notMember "keiro/workflow/correctness/resume"
+      contractIds `shouldSatisfy` Set.member "flux/process-manager/correctness/react"
+      contractIds `shouldSatisfy` Set.member "flux/router/correctness/route"
+      contractIds `shouldSatisfy` Set.member "flux/inbox/correctness/deduplicate"
+      contractIds `shouldSatisfy` Set.notMember "flux/command/correctness/decide"
+      contractIds `shouldSatisfy` Set.notMember "flux/outbox/concurrency/publish"
+      contractIds `shouldSatisfy` Set.notMember "flux/workflow/correctness/resume"
     it "maps an outbox-only upstream diff and ignores upstream documentation" do
       (graph, catalog) <- fixtureInputs
       withSystemTempDirectory "kenshou-upstream" \repository -> do
         initialiseRepository repository
-        writeRepoFile repository "keiro/src/Keiro/Outbox/Schema.hs" "module Schema where\n"
+        writeRepoFile repository "flux/src/Flux/Outbox/Schema.hs" "module Schema where\n"
         writeRepoFile repository "docs/readme.md" "initial\n"
         commitAll repository "initial"
-        writeRepoFile repository "keiro/src/Keiro/Outbox/Schema.hs" "module Schema where\nvalue = 1\n"
+        writeRepoFile repository "flux/src/Flux/Outbox/Schema.hs" "module Schema where\nvalue = 1\n"
         commitAll repository "outbox"
-        result <- Git.changesFromUpstream graph (Git.UpstreamDiff "keiro" repository "HEAD^" "HEAD")
+        result <- Git.changesFromUpstream graph (Git.UpstreamDiff "flux" repository "HEAD^" "HEAD")
         (changes, ignored) <- expectRight result
         ignored `shouldBe` 0
         selectedIds (selectScenarios graph catalog changes)
-          `shouldBe` expectedIds catalog ["keiro/outbox/", "runtime/"]
+          `shouldBe` expectedIds catalog ["flux/outbox/", "runtime/"]
         writeRepoFile repository "docs/readme.md" "changed\n"
         commitAll repository "docs"
-        docsResult <- Git.changesFromUpstream graph (Git.UpstreamDiff "keiro" repository "HEAD^" "HEAD")
+        docsResult <- Git.changesFromUpstream graph (Git.UpstreamDiff "flux" repository "HEAD^" "HEAD")
         (docsChanges, docsIgnored) <- expectRight docsResult
         docsChanges `shouldBe` []
         docsIgnored `shouldBe` 1
@@ -140,22 +139,22 @@ spec = do
       (graph, catalog) <- fixtureInputs
       withSystemTempDirectory "kenshou-since" \repository -> do
         initialiseRepository repository
-        writeRepoFile repository "kenshou-kiroku/x" "initial\n"
+        writeRepoFile repository "kenshou-tally/x" "initial\n"
         writeRepoFile repository "docs/z" "initial\n"
         commitAll repository "initial"
-        writeRepoFile repository "kenshou-kiroku/x" "changed\n"
+        writeRepoFile repository "kenshou-tally/x" "changed\n"
         result <- Git.changesSince graph repository "HEAD"
         (changes, selectors, warnings) <- expectRight result
         changes `shouldBe` []
         warnings `shouldBe` []
         selectedIds (selectBySelectors Since "repository path" selectors catalog)
-          `shouldBe` expectedIds catalog ["kiroku/"]
+          `shouldBe` expectedIds catalog ["tally/"]
     it "maps a cohort package difference and fails safe for unknown packages" do
       (graph, _catalog) <- fixtureInputs
-      let old = Map.fromList [("kiroku-store", FromHackage "0.8.0.1")]
-          new = Map.fromList [("kiroku-store", FromHackage "0.8.0.2"), ("unmapped", FromHackage "1")]
+      let old = Map.fromList [("tally-store", FromHackage "0.8.0.1")]
+          new = Map.fromList [("tally-store", FromHackage "0.8.0.2"), ("unmapped", FromHackage "1")]
           (changes, warnings) = diffCohorts graph old new
-      fmap (.ref) changes `shouldContain` [ComponentRef (ComponentId "kiroku-store") Nothing]
+      fmap (.ref) changes `shouldContain` [ComponentRef (ComponentId "tally-store") Nothing]
       fmap (.source) changes `shouldContain` [Everything]
       fmap (.code) warnings `shouldContain` ["unmapped-package"]
 
@@ -228,12 +227,12 @@ spec = do
       let summary = Summary.PlanSummary runId [Summary.SummaryEntry 1 scenarioId Summary.Pending []] Map.empty Passed 0
       Summary.worstOutcome summary `shouldBe` Errored
   where
-    isMissing (MissingEdge (ComponentId "pgmq-hs") (ComponentId "kiroku-store") _) = True
+    isMissing (MissingEdge (ComponentId "quill-hs") (ComponentId "tally-store") _) = True
     isMissing _ = False
 
 fixtureInputs :: IO (ComponentGraph, [ScenarioInfo])
 fixtureInputs = do
-  graph <- consumerGraph >>= expectRight
+  graph <- syntheticGraph >>= expectRight
   catalog <- readCatalogFile "test/fixtures/plan/catalog-planned.json" >>= expectRight
   pure (graph, catalog)
 
@@ -272,8 +271,8 @@ commitAll repository message = do
 
 matrixSelected :: Kind -> Maybe Text -> IO Selected
 matrixSelected kind minimumPolicy = do
-  scenarioId <- expectRight (parseScenarioId ("kiroku/append/" <> kindText kind <> "/matrix"))
-  selector <- expectRight (parseSelector "kiroku/**")
+  scenarioId <- expectRight (parseScenarioId ("tally/append/" <> kindText kind <> "/matrix"))
+  selector <- expectRight (parseSelector "tally/**")
   let scenario =
         ScenarioInfo
           { id = scenarioId,
@@ -285,7 +284,7 @@ matrixSelected kind minimumPolicy = do
             dimensions = allMatrixDimensions,
             knownDefect = Nothing
           }
-      change = Change (ComponentRef (ComponentId "kiroku-store") Nothing) Named "fixture"
+      change = Change (ComponentRef (ComponentId "tally-store") Nothing) Named "fixture"
   pure (Selected scenario (Reason change [change.ref] selector 0 :| []) minimumPolicy Nothing)
   where
     kindText Correctness = "correctness"
@@ -329,3 +328,9 @@ testPlanContext =
 expectRight :: (Show problem) => Either problem value -> IO value
 expectRight (Right value) = pure value
 expectRight (Left problem) = expectationFailure (show problem) >> fail "unreachable"
+
+-- A component graph with the shapes the planner must handle (libraries with
+-- subcomponents and uses edges, dependsOn edges with fromSubs and toSubs, a
+-- changeImplies policy, and repository paths) under synthetic names.
+syntheticGraph :: IO (Either GraphError ComponentGraph)
+syntheticGraph = loadGraphFile "test/fixtures/plan/components.synthetic.json"

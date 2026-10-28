@@ -160,7 +160,7 @@ activeCohortSpec = describe "activeCohortName" do
 identifierSpec :: Spec
 identifierSpec = describe "scenario identifiers" do
   it "round-trips canonical identifiers" do
-    let rendered = "kiroku/append/concurrency/expected-version-race"
+    let rendered = "acme/append/concurrency/expected-version-race"
     fmap renderScenarioId (parseScenarioId rendered) `shouldBe` Right rendered
 
   it "rejects malformed identifiers" do

@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T14:38:30Z
+      mode: "update"
+      note: "Context updated with implementation state left by EP-1 and EP-2"
 ---
 
 # Replace Kafka-specific environment fields with suite-provisioned named resources
@@ -208,6 +214,20 @@ silently changing a published version is forbidden) and
 verified cohort identities, which is why the client and the payload are always the same
 harness revision).
 
+
+Implementation state left by EP-1 and EP-2 (added 2026-10-28 while implementing them). The
+coupling check is the `justfile` recipe `coupling-check`, which runs
+`grep -riE 'keiro|kiroku|pgmq|shibuya|kafka'` (no line numbers) over `kenshou-core/src`,
+`kenshou-core/test`, `kenshou-core/kenshou-core.cabal`, and `kenshou-core/data`, and
+filters it through the exact `path:text` lines of `scripts/coupling-allowlist.txt`. That
+file currently holds only the Kafka lines this plan removes (in `Env.hs`, `RunSpec.hs`,
+`Role.hs`, `Role/Spawn.hs`, `Compat.hs`, and `kenshou-core/test/golden/run-spec.effective.json`);
+this plan deletes them from the allow-list as it removes the fields, and widens the check
+to the toolkits. Exact pins live in `cohort/harness.project`, which `cabal.project`
+imports, not in `cabal.project` itself. Verbatim consumer data may appear only in
+`kenshou-evidence/test/fixtures/consumer-records/` and `fixtures/consumer-baseline/`; the
+golden decode test of a consumer-produced `run-spec.json` and `worker-init` message belongs
+in the former.
 
 ## Plan of Work
 

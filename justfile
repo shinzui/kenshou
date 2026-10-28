@@ -11,7 +11,7 @@ default:
     just --list
 
 [group('meta')]
-verify: fmt-check haskell-build plan-check cohort-check graph-check haskell-test schemas-check selftest
+verify: fmt-check haskell-build plan-check coupling-check cohort-check graph-check haskell-test schemas-check selftest
 
 # Fails when Cabal's resolved plan contains a consumer layer package. The
 # generic packages must build without any of them.
@@ -20,6 +20,12 @@ plan-check:
     cabal build all --dry-run >/dev/null
     jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | sort -u | grep -E '^kenshou-'
     ! jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | grep -qE '^kenshou-(pgmq|kiroku|shibuya|kafka|keiro|runtime)$'
+
+# Fails when an audited generic path names a consumer layer outside the
+# exact lines in scripts/coupling-allowlist.txt.
+[group('verification')]
+coupling-check:
+    ! grep -riE 'keiro|kiroku|pgmq|shibuya|kafka' kenshou-core/src kenshou-core/test kenshou-core/kenshou-core.cabal kenshou-core/data | grep -vxFf scripts/coupling-allowlist.txt
 
 [group('verification')]
 graph-check:
@@ -32,10 +38,10 @@ schemas-check:
     check-jsonschema --schemafile schemas/kenshou.perf-calibration-reference.v1.schema.json kenshou-core/test/golden/perf-calibration-reference.synthetic.json
     check-jsonschema --schemafile schemas/kenshou.perf-publication.v1.schema.json kenshou-cli/test/fixtures/perf-publication.synthetic.json
     check-jsonschema --schemafile schemas/kenshou.perf-session.v1.schema.json kenshou-remote/test/golden/perf-session.fixture.json
-    check-jsonschema --schemafile schemas/kenshou.perf-result.v1.schema.json kenshou-core/test/golden/perf-result.*.fixture.json
-    check-jsonschema --schemafile schemas/kenshou.perf-prepared.v1.schema.json kenshou-core/test/golden/perf-prepared.fixture.json
-    check-jsonschema --schemafile schemas/kenshou.perf-plan.v1.schema.json kenshou-core/test/golden/perf-plan.json
-    check-jsonschema --schemafile schemas/kenshou.perf-request.v1.schema.json kenshou-core/test/golden/perf-request.json
+    check-jsonschema --schemafile schemas/kenshou.perf-result.v1.schema.json kenshou-core/test/golden/perf-result.*.fixture.json fixtures/consumer-baseline/kenshou-core/test/golden/perf-result.*.fixture.json
+    check-jsonschema --schemafile schemas/kenshou.perf-prepared.v1.schema.json fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json
+    check-jsonschema --schemafile schemas/kenshou.perf-plan.v1.schema.json fixtures/consumer-baseline/kenshou-core/test/golden/perf-plan.json
+    check-jsonschema --schemafile schemas/kenshou.perf-request.v1.schema.json fixtures/consumer-baseline/kenshou-core/test/golden/perf-request.json
     for fixture in kenshou-remote/test/golden/cell/cell.*.v1.json; do schema="${fixture%.json}.schema.json"; check-jsonschema --base-uri "file://$PWD/$schema" --schemafile "$schema" "$fixture" || exit; done
     check-jsonschema --schemafile schemas/kenshou.cohort-identity.v1.schema.json kenshou-core/test/fixtures/cohort-identity.golden.json
     check-jsonschema --schemafile schemas/kenshou.payload.v1.schema.json kenshou-remote/test/golden/payload.json

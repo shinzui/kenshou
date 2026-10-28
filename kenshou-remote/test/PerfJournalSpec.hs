@@ -131,7 +131,7 @@ spec = describe "performance session budgets" do
 
 fixture :: IO PerfSession
 fixture = do
-  plan <- eitherDecodeFileStrict' "../kenshou-core/test/golden/perf-plan.json" >>= either fail pure
+  plan <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-plan.json" >>= either fail pure
   identifier <- newRunId
   right (initialSession identifier ("sha256:" <> "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") plan "gs://fixture-evidence/performance" (time 0))
 

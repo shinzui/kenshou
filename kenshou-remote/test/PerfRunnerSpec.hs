@@ -248,7 +248,7 @@ spec = describe "performance runner orchestration" do
 
 fixture :: FilePath -> IO (Prepared.PerfPrepared, FilePath)
 fixture directory = do
-  prepared <- eitherDecodeFileStrict' "../kenshou-core/test/golden/perf-prepared.fixture.json" >>= either fail pure
+  prepared <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json" >>= either fail pure
   identifier <- newRunId
   session <- right (initialSession identifier (Prepared.preparedDigest prepared) prepared.plan "gs://fixture-evidence/performance" now)
   let path = directory </> "session.json"
@@ -257,10 +257,11 @@ fixture directory = do
 
 fixtureHooks :: IORef [(Text, Int, Bool)] -> IO RunnerHooks
 fixtureHooks calls = do
+  contracts <- fixtureContracts
   lease <- newRunId
   pure
     RunnerHooks
-      { contracts = fixtureContracts,
+      { contracts,
         clock = pure now,
         admit = \_ _ _ _ -> pure (Admitted (LeaseIdentity "alpha" lease)),
         ownsLease = \_ -> pure True,
@@ -283,12 +284,21 @@ now = UTCTime (fromGregorian 2026 10 11) (secondsToDiffTime 0)
 right :: (Show e) => Either e a -> IO a
 right = either (fail . show) pure
 
--- The golden preparation pins the first consumer's two reviewed benchmark
--- revisions. docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md
--- (M4) regenerates it from synthetic scenarios and replaces these contracts.
-fixtureContracts :: PerfContracts
-fixtureContracts =
-  noPerfContracts
-    { reviewedPhaseContracts = [("shibuya/core-ordering/benchmark/concurrency-sweep", 2), ("shibuya/pgmq-adapter/benchmark/end-to-end-throughput-latency", 1)],
-      steadyCountKnob = either (const Nothing) Just (mkKnobName "shibuya.messages")
-    }
+-- The captured preparation pins the first consumer's reviewed benchmark revisions;
+-- its contracts are data in the consumer-baseline bridge.
+fixtureContracts :: IO PerfContracts
+fixtureContracts = do
+  document <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/perf-contracts.json" >>= either fail pure
+  let entries = [(entry.scenario, entry.revision) | entry <- (document :: ContractsDocument).reviewed]
+  countKnob <- either (fail . show) pure (mkKnobName document.countKnob)
+  pure noPerfContracts {reviewedPhaseContracts = entries, steadyCountKnob = Just countKnob}
+
+data ContractsDocument = ContractsDocument {reviewed :: [ReviewedContract], countKnob :: Text}
+
+data ReviewedContract = ReviewedContract {scenario :: Text, revision :: Int}
+
+instance FromJSON ContractsDocument where
+  parseJSON = withObject "PerfContracts" \value -> ContractsDocument <$> value .: "reviewedPhaseContracts" <*> value .: "steadyCountKnob"
+
+instance FromJSON ReviewedContract where
+  parseJSON = withObject "ReviewedPhaseContract" \value -> ReviewedContract <$> value .: "scenario" <*> value .: "revision"

@@ -97,7 +97,7 @@ main = hspec do
           changePayload arm = case Aeson.fromJSON arm.payload of
             Aeson.Error problem -> fail problem
             Aeson.Success payload -> pure arm {Prepared.payload = Aeson.toJSON (payload {Payload.cell = payload.cell {Payload.bundle = bundle}} :: PayloadDescriptor)}
-      original <- withPerfRoot (Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-prepared.fixture.json" >>= either fail pure)
+      original <- withPerfRoot (Aeson.eitherDecodeFileStrict' "fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json" >>= either fail pure)
       baseline <- changePayload (original :: Prepared.PerfPrepared).baseline
       candidate <- changePayload original.candidate
       let prepared = original {Prepared.plan = original.plan {Perf.selected = [], Perf.coverage = "incomplete", Perf.estimateSeconds = 0}, Prepared.baseline = baseline, Prepared.candidate = candidate}
@@ -143,7 +143,7 @@ main = hspec do
         doesPathExist output `shouldReturn` False
     it "rejects target components from a second repository before fetching" do
       withPerfRoot $ withSystemTempDirectory "kenshou-perf-targets" \directory -> do
-        raw <- Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-request.json" >>= either fail pure
+        raw <- Aeson.eitherDecodeFileStrict' "fixtures/consumer-baseline/kenshou-core/test/golden/perf-request.json" >>= either fail pure
         let input = directory </> "request.json"
             output = directory </> "plan"
         Aeson.encodeFile input (replacePerfField "targetComponents" (Aeson.toJSON (["shibuya", "pgmq-hs"] :: [Text])) raw)
@@ -151,7 +151,7 @@ main = hspec do
         doesPathExist output `shouldReturn` False
     it "rejects unknown profiles before fetching immutable sources" do
       withPerfRoot $ withSystemTempDirectory "kenshou-perf-profiles" \directory -> do
-        raw <- Aeson.eitherDecodeFileStrict' "kenshou-core/test/golden/perf-request.json" >>= either fail pure
+        raw <- Aeson.eitherDecodeFileStrict' "fixtures/consumer-baseline/kenshou-core/test/golden/perf-request.json" >>= either fail pure
         let input = directory </> "request.json"
             output = directory </> "plan"
         Aeson.encodeFile input (replacePerfField "profiles" (Aeson.toJSON (["missing"] :: [Text])) raw)

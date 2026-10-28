@@ -24,7 +24,7 @@ import Test.Hspec
 spec :: Spec
 spec = describe "performance sealed runtime observations" do
   it "retains an exit-zero runtime defect even before the outer trial becomes admissible" $ withSystemTempDirectory "perf-cell-defect" \root -> do
-    plan <- eitherDecodeFileStrict' "../kenshou-core/test/golden/perf-plan.json" >>= either fail pure
+    plan <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-plan.json" >>= either fail pure
     entry <- case (plan :: PerfPlan).selected of first : _ -> pure first; _ -> fail "empty plan fixture"
     journal <- eitherDecodeFileStrict' "test/golden/cell-session.json" >>= either fail pure
     slice <- case (journal :: SessionJournal).slices of [first] -> pure first; _ -> fail "expected one slice"

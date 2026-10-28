@@ -145,7 +145,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 1 | Import the harness packages from keiro-runtime-kenshou and build them standalone | docs/plans/1-import-the-harness-packages-from-keiro-runtime-kenshou-and-build-them-standalone.md | None | None | Complete |
-| 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | In Progress |
+| 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | Complete |
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Not Started |
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Not Started |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Not Started |
@@ -318,11 +318,12 @@ Phase A is complete (EP-1, 2026-10-28): the seven generic packages and the gener
 the `kenshou` executable in `kenshou-synthetic` runs the self-test scenarios, and
 `just verify` passes locally. The CI run on a pushed commit is not yet observed.
 
-Phase B is in progress. EP-2 M1 to M3 are accepted (open `LayerId`, suite-supplied
-migration sets with no migration library in the plan, and `Program` carrying rules, the
-component graph, and `PerfContracts`). EP-2 M4 is blocked on a scope decision about the
-perf goldens (see Surprises & Discoveries). EP-3 waits on EP-2; the terminology and
-carried-over ADR part of EP-6 is unblocked.
+Phase B is in progress. EP-2 is complete (2026-10-28): open `LayerId`, suite-supplied
+migration sets composed into one ledger with no migration library in the plan, `Program`
+carrying registry rules, the component graph, and `PerfContracts`, and `kenshou-core` free
+of consumer names except the Kafka lines EP-3 removes from `scripts/coupling-allowlist.txt`.
+EP-3 and EP-4 are now unblocked (EP-4 may start, leaving the route rule for after EP-3);
+the terminology and carried-over ADR part of EP-6 is unblocked.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published
@@ -374,7 +375,8 @@ exec-plan skill's FRICTION.md).
   are captured output of a real `kenshou perf prepare` run and are shared by tests in
   `kenshou-core`, `kenshou-remote`, and `kenshou-cli`. They cannot be regenerated from
   synthetic inputs in this repository, which blocks EP-2 M4 as written and affects EP-5's
-  plan to delete `fixtures/consumer-baseline/`.
+  plan to delete `fixtures/consumer-baseline/`. Resolved by the user's decision recorded
+  in the Decision Log: they stay there as verbatim protocol fixtures.
 
 
 ## Decision Log
@@ -422,6 +424,18 @@ exec-plan skill's FRICTION.md).
   concept keeps the adoption guide, the ADRs, and the CLI help consistent.
   Date: 2026-10-28
 
+
+- Decision: The captured perf documents (the prepared document, plan, request, and
+  aggregate results produced by a real `kenshou perf prepare` and `perf run`), the
+  consumer's component graph, and its perf contracts as data stay verbatim in
+  `fixtures/consumer-baseline/` as protocol fixtures, and the coupling guard excludes that
+  directory together with `kenshou-evidence/test/fixtures/consumer-records/`. Planning
+  specs use synthetic fixtures. Regenerating synthetic perf documents is later work that
+  needs a synthetic perf pipeline (Nix payloads, exact-revision sources, an object store).
+  Rationale: The user chose this over rewriting the documents with recomputed digests or
+  allow-listing them (2026-10-28, during EP-2 M4). It keeps `kenshou-core` clean while the
+  perf protocol tests keep checking real documents.
+  Date: 2026-10-28
 
 ## Outcomes & Retrospective
 

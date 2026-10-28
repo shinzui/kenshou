@@ -72,18 +72,13 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
   line `kenshou - run verification scenarios`; `kenshou plan --graph-check` exits 0 on the
   5-component self-test graph; all suites green. `PerfContracts` gained a fourth field,
   `lanePackages`; see Decision Log.)
-Handoff (2026-10-28): M1 to M3 are accepted and committed. M4 is blocked on a scope
-decision recorded in Surprises & Discoveries: the perf goldens cannot be regenerated from
-synthetic inputs here. Until M4, `kenshou-core/test/Kenshou/ConsumerBaseline.hs` gives the
-plan and perf specs the consumer graph (vendored at
-`fixtures/consumer-baseline/kenshou-core/data/components.json`) and contracts, and
-`kenshou-remote/test/PerfRunnerSpec.hs` has matching `fixtureContracts`.
-
-- [ ] M4: The coupling grep over `kenshou-core/src`, `kenshou-core/test`, and
+- [x] M4: The coupling grep over `kenshou-core/src`, `kenshou-core/test`, and
   `kenshou-core/kenshou-core.cabal` returns no match outside the allow-list file
   `scripts/coupling-allowlist.txt`, and every test fixture under `kenshou-core/test` uses
-  synthetic names.
-
+  synthetic names. (2026-10-28; `just coupling-check` passes and fails when a consumer name
+  is injected; the allow-list holds only the thirteen Kafka lines EP-3 removes; `just
+  verify` exits 0. The captured perf goldens moved to `fixtures/consumer-baseline/` by the
+  user's decision; see Decision Log.)
 
 ## Surprises & Discoveries
 
@@ -186,9 +181,53 @@ plan and perf specs the consumer graph (vendored at
   `kenshou.perf-prepared/v1`.
   Date: 2026-10-28
 
+- Decision: The captured perf goldens (`perf-prepared.fixture.json`, `perf-plan.json`,
+  `perf-request.json`, and six `perf-result.*` fixtures) move verbatim to
+  `fixtures/consumer-baseline/kenshou-core/test/golden/` as protocol fixtures, together with
+  the consumer's former embedded graph (`fixtures/consumer-baseline/kenshou-core/data/
+  components.json`) and its perf contracts as data (`fixtures/consumer-baseline/
+  perf-contracts.json`), and the specs in `kenshou-core`, `kenshou-remote`, and
+  `kenshou-cli` read them from there. The planning and perf-planning specs (`PlanSpec`,
+  `PerfSpec`) use synthetic fixtures under `kenshou-core/test/fixtures/{plan,perf}/`,
+  produced from the consumer's by one consistent word rename (`shibuya`→`acme`,
+  `pgmq`→`quill`, `kiroku`→`tally`, `keiro`→`flux`, `kafka`→`brook`, case preserved), which
+  keeps every planning result identical because no spec pins a digest of those inputs.
+  The lane-stanza test is rewritten with synthetic contracts.
+  Rationale: The user chose this (2026-10-28) over hand-rewriting the captured documents
+  with recomputed digests or allow-listing them, because the captured documents need a real
+  `perf prepare` run to regenerate. The two `kenshou-cli` file-backed perf session tests
+  stay pending until a synthetic perf pipeline exists.
+  Date: 2026-10-28
+
+- Decision: The coupling check runs `grep -riE` without line numbers, so the allow-list's
+  exact `path:text` lines stay valid when lines move, as the MasterPlan's verification gate
+  specifies; the plan's Concrete Steps command used `-rniE`. The check is the `justfile`
+  recipe `coupling-check`, part of `verify`.
+  Rationale: An allow-list keyed on line numbers would break on every unrelated edit.
+  Date: 2026-10-28
+
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+EP-2 delivered its purpose: a suite that is not the Keiro runtime can register its own
+layer, migration sets, and registry rules, and supply its program name, header,
+component graph, and performance contracts, without a change to the kernel; the
+`open registry` tests register an `acme` layer to prove it. `kenshou-core` links no
+Keiro, Kiroku, or PGMQ library, the kernel's own `postgres-roundtrip` runs on the
+`kenshou-selftest` set, and a recorded consumer comparison key still reproduces.
+
+Two things went differently from the plan. The consumer-compatibility proofs live in
+`kenshou-evidence`'s consumer-records area, because the plan's own M4 criterion forbids
+consumer values in `kenshou-core/test`. And the perf goldens were captured output that
+cannot be regenerated here, so by the user's decision they are verbatim protocol fixtures
+in `fixtures/consumer-baseline/`, while the planning specs became synthetic. The coupling
+allow-list still holds the Kafka lines that EP-3 removes.
+
+No friction entry was recorded under this plan. No `docs/adr/` bundle exists yet;
+`docs/plans/6-…` should promote the superseding decision for consumer ADR-4 (recorded in
+this Decision Log), the registration contract (`LayerBundle` with `mkBundle`, migration
+sets resolved by name across the registry, `ScenarioRule`, and `Program`), and the rule
+that consumer data appears only in `kenshou-evidence/test/fixtures/consumer-records/` and
+`fixtures/consumer-baseline/`.
 
 
 ## Context and Orientation

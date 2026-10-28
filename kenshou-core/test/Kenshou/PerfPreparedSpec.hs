@@ -11,12 +11,13 @@ import Data.Either (isLeft)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified
-import Kenshou.ConsumerBaseline (consumerContracts)
+import Kenshou.ConsumerBaseline qualified as ConsumerBaseline
 import Kenshou.Core.Canonical (sha256Hex)
 import Kenshou.Core.Cohort qualified as Cohort
 import Kenshou.Core.Manifest qualified as Manifest
 import Kenshou.Perf.Artifacts
 import Kenshou.Perf.Calibration qualified as Calibration
+import Kenshou.Perf.Contracts (PerfContracts (..), noPerfContracts)
 import Kenshou.Perf.Prepared hiding (plan)
 import Kenshou.Perf.Source qualified as Source
 import System.Directory (createFileLink)
@@ -27,14 +28,16 @@ import Test.Hspec
 spec :: Spec
 spec = describe "performance preparation integrity" do
   it "validates the pinned synthetic protocol fixture and rejects changed build keys" do
-    prepared <- eitherDecodeFileStrict' "test/golden/perf-prepared.fixture.json" >>= right
+    consumerContracts <- loadConsumerContracts
+    prepared <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json" >>= right
     validatePrepared consumerContracts prepared `shouldBe` Right ()
     let baselineArm = (prepared :: PerfPrepared).baseline
     validatePrepared consumerContracts prepared {baseline = baselineArm {buildKey = "sha256:changed"}} `shouldSatisfy` isLeft
     decoded <- right (eitherDecode (encode prepared) :: Either String PerfPrepared)
     toJSON decoded `shouldBe` toJSON prepared
   it "admits resolved-cohort identities, replays legacy identities and rejects a rehashed alias" do
-    prepared <- eitherDecodeFileStrict' "test/golden/perf-prepared.fixture.json" >>= right
+    consumerContracts <- loadConsumerContracts
+    prepared <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json" >>= right
     (request, template, baselineSource, candidateSource) <- right (parseEither (withObject "Inputs" \fields -> (,,,) <$> fields .: "request" <*> fields .: "template" <*> fields .: "baselineSource" <*> fields .: "candidateSource") (prepared :: PerfPrepared).inputs)
     baselineDescriptor <- right (Source.descriptorForSnapshot request template "baseline" baselineSource)
     candidateDescriptor <- right (Source.descriptorForSnapshot request template "candidate" candidateSource)
@@ -60,7 +63,8 @@ spec = describe "performance preparation integrity" do
     alias <- bind baselineDescriptor {Cohort.descriptorName = Cohort.CohortName "perf-unrelated-alias", Cohort.descriptorProjectFile = "perf-unrelated-alias.project"} baseline
     validatePrepared consumerContracts modern {baseline = alias, candidate = alias} `shouldSatisfy` isLeft
   it "binds actual inventories to the planning toolchain while allowing catalog-only promotion" do
-    prepared <- eitherDecodeFileStrict' "test/golden/perf-prepared.fixture.json" >>= right
+    consumerContracts <- loadConsumerContracts
+    prepared <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json" >>= right
     let inventory = (prepared :: PerfPrepared).baseline.buildInventory
     case (prepared.inputs, inventory.toolchain) of
       (Object inputs, Object toolchain) -> do
@@ -72,7 +76,8 @@ spec = describe "performance preparation integrity" do
         validatePrepared consumerContracts prepared {inputs = Object (KeyMap.insert "buildToolchain" (object ["strictBounds" .= False]) inputs)} `shouldSatisfy` isLeft
       _ -> expectationFailure "invalid synthetic inventory fixture"
   it "rejects bound lifting inside a resealed inventory even when its toolchain claims strict bounds" do
-    prepared <- eitherDecodeFileStrict' "test/golden/perf-prepared.fixture.json" >>= right
+    consumerContracts <- loadConsumerContracts
+    prepared <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json" >>= right
     let arm = (prepared :: PerfPrepared).baseline
         corrupt = arm.buildInventory {packages = [entry {settings = object ["jailbreak" .= True, "configureFlags" .= ([] :: [Text])]} | entry <- arm.buildInventory.packages]}
         changed = arm {buildInventory = corrupt, buildKey = buildKeyFor prepared.harnessRevision arm.descriptor arm.sourceLock corrupt arm.boundsInventory}
@@ -96,21 +101,19 @@ spec = describe "performance preparation integrity" do
     cabalInventory "/workspace/harness" "main" plan `shouldSatisfy` isLeft
     eitherDecode (encode resolved) `shouldBe` Right resolved
   it "renders a standalone bounds project and rejects blanket exceptions" do
-    bytes <- ByteString.readFile "../fixtures/consumer-baseline/cohort/released.json"
-    descriptor <- right (eitherDecodeStrict' bytes :: Either String Cohort.CohortDescriptor)
-    project <- right (renderBoundsProject consumerContracts ["/harness/kenshou-core/kenshou-core.cabal"] descriptor)
+    descriptor <- syntheticCohort
+    project <- right (renderBoundsProject noPerfContracts ["/harness/kenshou-core/kenshou-core.cabal"] descriptor)
     project `shouldNotContainText` "active.project"
-    renderBoundsProject consumerContracts ["/harness/package.cabal"] descriptor {Cohort.descriptorAllowNewer = ["all"]} `shouldSatisfy` isLeft
-    renderBoundsProject consumerContracts ["/unsafe path/package.cabal"] descriptor `shouldSatisfy` isLeft
-  it "keeps the isolated current Shibuya cohort independent of runtime suites" do
-    bytes <- ByteString.readFile "../fixtures/consumer-baseline/cohort/shibuya-current.json"
-    descriptor <- right (eitherDecodeStrict' bytes :: Either String Cohort.CohortDescriptor)
-    project <- right (renderBoundsProject consumerContracts ["/harness/kenshou-cli/kenshou-cli.cabal"] descriptor)
-    project `shouldSatisfy` Data.Text.isInfixOf "flags: -runtime-suites"
-    project `shouldSatisfy` Data.Text.isInfixOf "flags: -keiro-schema"
-    released <- ByteString.readFile "../fixtures/consumer-baseline/cohort/released.json" >>= right . eitherDecodeStrict'
-    full <- right (renderBoundsProject consumerContracts ["/harness/kenshou-cli/kenshou-cli.cabal"] released)
-    full `shouldNotContainText` "flags: -runtime-suites"
+    renderBoundsProject noPerfContracts ["/harness/package.cabal"] descriptor {Cohort.descriptorAllowNewer = ["all"]} `shouldSatisfy` isLeft
+    renderBoundsProject noPerfContracts ["/unsafe path/package.cabal"] descriptor `shouldSatisfy` isLeft
+  it "appends the suite's lane stanzas for the cohorts it selects" do
+    descriptor <- syntheticCohort
+    let laneName = Cohort.CohortName "acme-lane"
+        contracts = noPerfContracts {laneStanzas = \selected -> if selected.descriptorName == laneName then ["package acme-suite", "  flags: -extras"] else []}
+    lane <- right (renderBoundsProject contracts ["/harness/acme-suite/acme-suite.cabal"] descriptor {Cohort.descriptorName = laneName})
+    lane `shouldSatisfy` Data.Text.isInfixOf "package acme-suite\n  flags: -extras"
+    full <- right (renderBoundsProject contracts ["/harness/acme-suite/acme-suite.cabal"] descriptor)
+    full `shouldNotContainText` "flags: -extras"
   it "verifies the complete sealed file set and refuses an omitted file" $ withSystemTempDirectory "perf-seal" \root -> do
     writeFile (root </> "input.json") "{}"
     sealPerfDirectory root `shouldReturn` Right ()
@@ -160,3 +163,9 @@ right = either (\problem -> expectationFailure (show problem) >> fail "expected 
 
 shouldNotContainText :: Text -> Text -> Expectation
 shouldNotContainText actual needle = actual `shouldSatisfy` (not . Data.Text.isInfixOf needle)
+
+loadConsumerContracts :: IO PerfContracts
+loadConsumerContracts = ConsumerBaseline.consumerContracts
+
+syntheticCohort :: IO Cohort.CohortDescriptor
+syntheticCohort = ByteString.readFile "test/fixtures/perf/cohort.json" >>= right . eitherDecodeStrict'

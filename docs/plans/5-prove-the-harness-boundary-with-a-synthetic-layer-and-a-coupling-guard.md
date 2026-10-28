@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T14:38:30Z
+      mode: "update"
+      note: "Context updated with implementation state left by EP-1 and EP-2"
 ---
 
 # Prove the harness boundary with a synthetic layer and a coupling guard
@@ -184,6 +190,22 @@ inconclusive, 4 errored or infrastructure) are the acceptance signal.
 immutable and derive baselines) is why the evidence step below records into a scratch copy of a
 bundle outside the repository rather than into a committed one.
 
+
+Implementation state left by EP-1 and EP-2 (added 2026-10-28 while implementing them). The
+repository has a top-level `fixtures/consumer-baseline/` directory of verbatim consumer
+files read by tests (see its README). By the user's decision (EP-2 Decision Log), its
+captured perf documents (`kenshou-core/test/golden/perf-*.json`, the consumer graph, and
+`perf-contracts.json`) stay there as protocol fixtures because they cannot be regenerated
+here; so the coupling guard must exclude `fixtures/consumer-baseline/` as well as
+`kenshou-evidence/test/fixtures/consumer-records/`, and this plan deletes only the
+entries that EP-4 has replaced, not the directory. The coupling check already exists as
+the `justfile` recipe `coupling-check` with the allow-list `scripts/coupling-allowlist.txt`
+(exact `path:text` lines, grep without line numbers); this plan replaces it with
+`scripts/coupling-guard.sh`. The two `kenshou-cli` file-backed perf session tests in
+`kenshou-cli/test/PerfSessionSpec.hs` are pending until a synthetic perf pipeline exists.
+The `kenshou` executable takes a `Program` (`Kenshou.Cli.CliAssembly` is a synonym), and
+`defaultProgram`, `selfTestAssembly`, `PerfContracts`, and `noPerfContracts` are the
+values a synthetic bundle extends.
 
 ## Plan of Work
 

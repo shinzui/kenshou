@@ -62,7 +62,7 @@ spec = describe "performance paired attempts" do
     renameDirectory attempt moved
     verifyAttempt entry schedule policy (VaryControl :| []) moved result `shouldReturn` True
     Bytes.readFile (moved </> "comparison.json") `shouldReturn` originalBytes
-    plan <- eitherDecodeFileStrict' "../kenshou-core/test/golden/perf-plan.json" >>= either fail pure
+    plan <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-plan.json" >>= either fail pure
     aggregate <- either (fail . show) pure (aggregateResult (plan {selected = [entry]} :: PerfPlan) ("sha256:" <> Text.replicate 64 "a") True [result])
     aggregate.exitCode `shouldBe` 1
   it "replaces an invalid raw pair once and detects a genuine retained latency regression" $ withSystemTempDirectory "perf-raw-regression" \directory -> do
@@ -139,7 +139,7 @@ spec = describe "performance paired attempts" do
 
 fixture :: IO (PlannedProfile, RunPlan, Policy.Policy)
 fixture = do
-  plan <- eitherDecodeFileStrict' "../kenshou-core/test/golden/perf-plan.json" >>= either fail pure
+  plan <- eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-plan.json" >>= either fail pure
   entry <- case (plan :: PerfPlan).selected of value : _ -> pure value; _ -> fail "empty profile fixture"
   identifier <- newRunId
   seed <- either (fail . show) pure (mkSeed 37)

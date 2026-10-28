@@ -64,7 +64,7 @@ spec = describe "file-backed performance CLI integration" $ before_ (pendingWith
           replacePayload arm = case fromJSON arm.payload of
             Error problem -> fail problem
             Success payload -> pure arm {Prepared.payload = toJSON (payload {Payload.cell = payload.cell {Payload.bundle = bundle}} :: PayloadDescriptor)}
-      original <- readJSON "kenshou-core/test/golden/perf-prepared.fixture.json"
+      original <- readJSON "fixtures/consumer-baseline/kenshou-core/test/golden/perf-prepared.fixture.json"
       baseline <- replacePayload (original :: Prepared.PerfPrepared).baseline
       candidate <- replacePayload original.candidate
       let prepared = original {Prepared.baseline = baseline, Prepared.candidate = candidate}

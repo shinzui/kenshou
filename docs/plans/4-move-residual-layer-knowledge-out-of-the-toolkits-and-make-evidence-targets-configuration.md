@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T14:38:30Z
+      mode: "update"
+      note: "Context updated with implementation state left by EP-1 and EP-2"
 ---
 
 # Move residual layer knowledge out of the toolkits and make evidence targets configuration
@@ -244,6 +250,19 @@ when its schema relaxes and why no new document shape is introduced here.
 one another) is the reason the oracles can simply leave: shared helpers are promoted to the
 kernel or a toolkit, never imported across layers, and these were never shared.
 
+
+Implementation state left by EP-1 and EP-2 (added 2026-10-28 while implementing them). Some
+imported tests read consumer files from `fixtures/consumer-baseline/` (see its README):
+`kenshou-remote/test/PrepareSpec.hs` reads `policies/cell-routing.json`,
+`kenshou-remote/test/PayloadSpec.hs` reads `cohort/released.json` through
+`PublishOptions "../fixtures/consumer-baseline" "released" …`, and the `kenshou-evidence`
+attestation tests and the `kenshou-cli` history test copy or read the pruned verification
+bundle under `docs/verification/`. This plan replaces the routing-rule read and the
+evidence-bundle reads with synthetic or configured data. `kenshou-evidence/test/fixtures/
+consumer-records/` already exists and holds `layer-strings.json` and
+`run-result.hydration-cost.json` for the `consumer compatibility` group; add this plan's
+verbatim consumer records beside them. `defaultSubject` in `Kenshou.Evidence.Record` is
+already a lookup over rendered layer text, waiting for this plan to replace it.
 
 ## Plan of Work
 

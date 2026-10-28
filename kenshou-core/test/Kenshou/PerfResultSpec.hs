@@ -17,7 +17,7 @@ spec = describe "performance aggregate results" do
     let cases = [("pass", 0), ("incomplete", 3), ("runtime-failure", 1), ("regression", 1), ("inconclusive", 3), ("infrastructure-failure", 4), ("not-applicable", 0)]
     mapM_
       ( \(name, code) -> do
-          result <- eitherDecodeFileStrict' ("test/golden/perf-result." <> name <> ".fixture.json") >>= either fail pure
+          result <- eitherDecodeFileStrict' ((if name == "not-applicable" then "test/golden/" else "../fixtures/consumer-baseline/kenshou-core/test/golden/") <> "perf-result." <> name <> ".fixture.json") >>= either fail pure
           (result :: PerfResult).exitCode `shouldBe` code
       )
       cases
@@ -101,7 +101,7 @@ twoProfiles plan = case plan.selected of
   _ -> error "synthetic plan fixture must contain exactly two profiles"
 
 fixture :: IO PerfPlan
-fixture = eitherDecodeFileStrict' "test/golden/perf-plan.json" >>= either (fail . show) pure
+fixture = eitherDecodeFileStrict' "../fixtures/consumer-baseline/kenshou-core/test/golden/perf-plan.json" >>= either (fail . show) pure
 
 digest :: Text
 digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
