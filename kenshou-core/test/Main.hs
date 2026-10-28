@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FieldSelectors #-}
 
 module Main (main) where
@@ -9,15 +8,18 @@ import Data.Either (isLeft, isRight)
 import Data.Int (Int64)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text.Encoding
+import Database.PostgreSQL.Migrate (migrationComponent, sqlMigration)
 import Kenshou.Core.Bundle (LayerBundle (..), allScenarios, mkRegistry)
 import Kenshou.Core.Canonical (canonicalEncode)
 import Kenshou.Core.Cohort
 import Kenshou.Core.Compat (comparisonKey, compatInputs, seriesKey)
 import Kenshou.Core.Dimension
-import Kenshou.Core.Env (PostgresRequirement (..), SchemaComponent (..))
-import Kenshou.Core.Env.Migration (composePlan)
+import Kenshou.Core.Env (MigrationSet (..), MigrationSetName (..), PostgresRequirement (..))
+import Kenshou.Core.Env.Migration (composePlan, orderMigrationSets)
 import Kenshou.Core.Env.Postgres (EnvError (..), PgSettingsSnapshot (..), PostgresEnv (..), ServerControl (..), StopMode (..), withPostgresEnv, withPostgresEnvNamed)
 import Kenshou.Core.Id
 import Kenshou.Core.Knob
@@ -30,6 +32,7 @@ import Kenshou.Core.RunSpec.Resolve (resolveRunSpec)
 import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), PackageCondition (..), Scenario (..), failedWith)
 import Kenshou.Core.Selector (matchesSelector, parseSelector)
 import Kenshou.Core.Selftest qualified as Selftest
+import Kenshou.Core.Selftest.Schema (selftestMigrationSet, selftestSchema)
 import Kenshou.PerfCalibrationSpec qualified
 import Kenshou.PerfPreparedSpec qualified
 import Kenshou.PerfResultSpec qualified
@@ -77,19 +80,16 @@ main = hspec do
   Kenshou.PerfPreparedSpec.spec
   Kenshou.PerfSpec.spec
 
--- Sealed evidence records already carry these layer strings, so they must keep
--- rendering and parsing byte for byte under the open layer identifier.
+-- The consumer's own layer strings are checked against its sealed records in the
+-- kenshou-evidence consumer compatibility tests; these cases use synthetic names.
 layerIdentifierSpec :: Spec
 layerIdentifierSpec = describe "layer identifiers" do
-  let consumerLayers = ["selftest", "pgmq", "kiroku", "shibuya", "kafka", "keiro", "runtime"] :: [Text]
-  it "renders and parses the seven consumer layer strings byte for byte" do
-    fmap renderLayer <$> traverse parseLayer consumerLayers `shouldBe` Right consumerLayers
+  it "renders the self-test layer" do
     renderLayer selftestLayer `shouldBe` "selftest"
-  it "renders one scenario identifier per layer" do
-    let identifiers = [layer <> "/component/correctness/name" | layer <- consumerLayers]
-    fmap renderScenarioId <$> traverse parseScenarioId identifiers `shouldBe` Right identifiers
-  it "accepts any valid segment and rejects invalid ones" do
+  it "accepts any valid segment and renders scenario identifiers in any layer" do
     renderLayer <$> parseLayer "acme" `shouldBe` Right "acme"
+    renderScenarioId <$> parseScenarioId "acme/widget/correctness/roundtrip" `shouldBe` Right "acme/widget/correctness/roundtrip"
+  it "rejects invalid segments" do
     isLeft (parseLayer "Acme") `shouldBe` True
     isLeft (parseLayer "") `shouldBe` True
 
@@ -328,13 +328,13 @@ postgresEnvironmentSpec :: Spec
 postgresEnvironmentSpec = describe "PostgreSQL environments" do
   it "migrates, clones, restarts, and crash-restarts PostgreSQL 18" $ withSystemTempDirectory "kenshou-pg18" \directory -> do
     runId <- expectRight (parseRunId "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55")
-    let requirement = PostgresRequirement ([SchemaKiroku, SchemaPgmq] <> [SchemaKeiro | hasKeiroSchema]) [] True
-        expectedSchemas = if hasKeiroSchema then "keiro,kiroku,pgmigrate,pgmq" else "kiroku,pgmigrate,pgmq"
+    let requirement = PostgresRequirement [selftestSchema] [] True
+        expectedSchemas = "kenshou_selftest,pgmigrate"
         dimensions = Dimensions Nothing Nothing (Just PgFsyncOff) (Just Pg18)
-    result <- withPostgresEnv nullLogger directory runId requirement (PostgresEphemeral []) dimensions \environment -> do
-      schemas <- psqlTest environment.connectionString "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('kiroku','keiro','pgmq','pgmigrate')"
+    result <- withPostgresEnv selftestSets nullLogger directory runId requirement (PostgresEphemeral []) dimensions \environment -> do
+      schemas <- psqlTest environment.connectionString "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('kenshou_selftest','pgmigrate')"
       clone <- environment.newDatabase "clone"
-      clonedSchemas <- psqlTest clone "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('kiroku','keiro','pgmq','pgmigrate')"
+      clonedSchemas <- psqlTest clone "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('kenshou_selftest','pgmigrate')"
       case environment.control of
         Nothing -> expectationFailure "expected server control"
         Just control -> do
@@ -350,10 +350,10 @@ postgresEnvironmentSpec = describe "PostgreSQL environments" do
     runId <- expectRight (parseRunId "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55")
     let dimensions = Dimensions Nothing Nothing (Just PgFsyncOff) (Just Pg18)
         outerRequirement = PostgresRequirement [] [] False
-        externalRequirement = PostgresRequirement [SchemaPgmq] [("shared_preload_libraries", "'pg_stat_statements'")] False
-    outer <- withPostgresEnv nullLogger directory runId outerRequirement (PostgresEphemeral [("shared_preload_libraries", "'pg_stat_statements'")]) dimensions \server -> do
-      inner <- withPostgresEnv nullLogger directory runId externalRequirement (PostgresExternal (ConnLiteral server.adminConnectionString)) dimensions (\environment -> psqlTest environment.connectionString "select to_regnamespace('pgmq') is not null")
-      missing <- withPostgresEnv nullLogger directory runId (PostgresRequirement [] [("shared_preload_libraries", "'missing_extension'")] False) (PostgresExternal (ConnLiteral server.adminConnectionString)) dimensions (const (pure ()))
+        externalRequirement = PostgresRequirement [selftestSchema] [("shared_preload_libraries", "'pg_stat_statements'")] False
+    outer <- withPostgresEnv selftestSets nullLogger directory runId outerRequirement (PostgresEphemeral [("shared_preload_libraries", "'pg_stat_statements'")]) dimensions \server -> do
+      inner <- withPostgresEnv selftestSets nullLogger directory runId externalRequirement (PostgresExternal (ConnLiteral server.adminConnectionString)) dimensions (\environment -> psqlTest environment.connectionString "select to_regnamespace('kenshou_selftest') is not null")
+      missing <- withPostgresEnv selftestSets nullLogger directory runId (PostgresRequirement [] [("shared_preload_libraries", "'missing_extension'")] False) (PostgresExternal (ConnLiteral server.adminConnectionString)) dimensions (const (pure ()))
       missing `shouldBe` Left (EnvError "external PostgreSQL is missing required preloaded libraries: missing_extension")
       remaining <- psqlTest server.adminConnectionString "select count(*) from pg_database where datname like 'kenshou_01997f3a5b7c7%'"
       pure (inner, remaining)
@@ -363,24 +363,24 @@ postgresEnvironmentSpec = describe "PostgreSQL environments" do
     runId <- expectRight (parseRunId "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e56")
     let dimensions = Dimensions Nothing Nothing (Just PgFsyncOff) (Just Pg18)
         requirement = PostgresRequirement [] [] False
-    outer <- withPostgresEnv nullLogger directory runId requirement (PostgresEphemeral []) dimensions \server -> do
+    outer <- withPostgresEnv selftestSets nullLogger directory runId requirement (PostgresEphemeral []) dimensions \server -> do
       let external = PostgresExternal (ConnLiteral server.adminConnectionString)
-      nested <- withPostgresEnvNamed False (Just "shop") nullLogger directory runId requirement external dimensions \shop ->
-        withPostgresEnvNamed False (Just "warehouse") nullLogger directory runId requirement external dimensions \warehouse ->
+      nested <- withPostgresEnvNamed selftestSets False (Just "shop") nullLogger directory runId requirement external dimensions \shop ->
+        withPostgresEnvNamed selftestSets False (Just "warehouse") nullLogger directory runId requirement external dimensions \warehouse ->
           pure (shop.databaseName /= warehouse.databaseName)
       remaining <- psqlTest server.adminConnectionString "select count(*) from pg_database where datname like 'kenshou_01997f3a5b7c7%'"
       pure (nested, remaining)
     outer `shouldBe` Right (Right (Right True), Right "0")
 
-  it "selects PostgreSQL 17 and applies a composed Kiroku/PGMQ plan" do
+  it "selects PostgreSQL 17 and applies a composed plan" do
     available <- lookupEnv "KENSHOU_PG17_BIN"
     case available of
       Nothing -> pendingWith "KENSHOU_PG17_BIN is not set"
       Just _ -> withSystemTempDirectory "kenshou-pg17" \directory -> do
         runId <- expectRight (parseRunId "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55")
-        let requirement = PostgresRequirement [SchemaKiroku, SchemaPgmq] [] False
+        let requirement = PostgresRequirement [selftestSchema] [] False
             dimensions = Dimensions Nothing Nothing (Just PgFsyncOff) (Just Pg17)
-        result <- withPostgresEnv nullLogger directory runId requirement (PostgresEphemeral []) dimensions (pure . (.snapshot.serverVersionNum))
+        result <- withPostgresEnv selftestSets nullLogger directory runId requirement (PostgresEphemeral []) dimensions (pure . (.snapshot.serverVersionNum))
         case result of
           Left err -> expectationFailure (show err)
           Right version -> (version >= 170000 && version < 180000) `shouldBe` True
@@ -441,16 +441,36 @@ expectRight (Left problem) = expectationFailure (show problem) >> fail "unreacha
 
 migrationPlanSpec :: Spec
 migrationPlanSpec = describe "migration plan composition" do
-  it "composes the Shibuya adapter schemas" do
-    isRight (composePlan [SchemaKiroku, SchemaPgmq]) `shouldBe` True
-  it "rejects an empty schema selection" do
-    isLeft (composePlan []) `shouldBe` True
-  it "honors the build's Keiro schema support" do
-    isRight (composePlan [SchemaKeiro]) `shouldBe` hasKeiroSchema
+  let alpha = syntheticSet "alpha" []
+      beta = syntheticSet "beta" [MigrationSetName "alpha"]
+      gamma = syntheticSet "gamma" [MigrationSetName "beta"]
+      unavailable = MigrationSet (MigrationSetName "delta") [] (Left "not built")
+      cyclic = syntheticSet "epsilon" [MigrationSetName "epsilon"]
+      sets = Map.fromList [(set.name, set) | set <- [alpha, beta, gamma, unavailable, cyclic]]
+      order names = fmap (fmap (.name)) (orderMigrationSets sets (fmap MigrationSetName names))
+  it "composes the self-test migration set" do
+    isRight (composePlan selftestSets [selftestSchema]) `shouldBe` True
+  it "keeps the declared order and inserts required sets first, transitively" do
+    order ["gamma"] `shouldBe` Right (fmap MigrationSetName ["alpha", "beta", "gamma"])
+    order ["beta", "alpha"] `shouldBe` Right (fmap MigrationSetName ["alpha", "beta"])
+    order ["alpha", "gamma", "beta"] `shouldBe` Right (fmap MigrationSetName ["alpha", "beta", "gamma"])
+    isRight (composePlan sets [MigrationSetName "gamma"]) `shouldBe` True
+  it "rejects an empty selection, an undefined set, an unavailable set, and a cycle" do
+    isLeft (composePlan sets []) `shouldBe` True
+    isLeft (composePlan sets [MigrationSetName "missing"]) `shouldBe` True
+    isLeft (composePlan sets [MigrationSetName "delta"]) `shouldBe` True
+    isLeft (order ["epsilon"]) `shouldBe` True
 
-hasKeiroSchema :: Bool
-#ifdef KENSHOU_KEIRO_SCHEMA
-hasKeiroSchema = True
-#else
-hasKeiroSchema = False
-#endif
+-- A set whose one migration creates a schema of the same name.
+syntheticSet :: Text -> [MigrationSetName] -> MigrationSet
+syntheticSet name requires =
+  MigrationSet
+    { name = MigrationSetName name,
+      requires,
+      component = either (Left . Text.pack . show) Right do
+        migration <- sqlMigration "create-schema" (Text.Encoding.encodeUtf8 ("create schema " <> name <> ";\n"))
+        migrationComponent name (Set.fromList [dependency | MigrationSetName dependency <- requires]) (migration :| [])
+    }
+
+selftestSets :: Map.Map MigrationSetName MigrationSet
+selftestSets = Map.singleton selftestSchema selftestMigrationSet

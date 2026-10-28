@@ -2,6 +2,7 @@ module Kenshou.Core.Bundle
   ( LayerBundle (..),
     mkBundle,
     Registry,
+    registryMigrationSets,
     RegistryError (..),
     ListFilter (..),
     emptyListFilter,
@@ -24,7 +25,7 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), Support (..), Supported (..))
-import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..), SchemaComponent (..))
+import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName, PostgresRequirement (..), mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
 import Kenshou.Core.Knob (KnobSpec (..), renderKnobName)
 import Kenshou.Core.Role (RoleName, WorkerRole (..), renderRoleName)
@@ -37,11 +38,14 @@ import Kenshou.Core.Version (suiteVersion)
 data LayerBundle = LayerBundle
   { layer :: LayerId,
     scenarios :: [Scenario],
-    roles :: [WorkerRole]
+    roles :: [WorkerRole],
+    -- | Migration sets this bundle defines. Any scenario in the registry may
+    -- require them by name.
+    migrations :: [MigrationSet]
   }
 
 mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
-mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles}
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = []}
 
 newtype Registry = Registry [LayerBundle]
 
@@ -72,6 +76,32 @@ mkRegistry bundles = case errors of
         <> duplicateErrors "role" (fmap (renderRoleName . (.name)) roles)
         <> [RegistryError ("role layer differs from bundle: " <> renderRoleName role.name) | bundle <- bundles, role <- bundle.roles, not ((renderLayer bundle.layer <> "/") `Text.isPrefixOf` renderRoleName role.name)]
         <> concatMap validateScenario scenarios
+        <> migrationErrors bundles
+
+-- Every set and required name is a valid pg-migrate component name, no two bundles
+-- define the same set, and every set a scenario or another set requires is defined.
+migrationErrors :: [LayerBundle] -> [RegistryError]
+migrationErrors bundles =
+  [RegistryError problem | name <- definedNames <> requiredNames, Left problem <- [mkMigrationSetName (renderMigrationSetName name)]]
+    <> duplicateErrors "migration set" (fmap renderMigrationSetName definedNames)
+    <> [ RegistryError (renderScenarioId scenario.id <> ": no registered bundle defines migration set " <> renderMigrationSetName name)
+       | scenario <- concatMap (.scenarios) bundles,
+         name <- scenarioSets scenario,
+         name `notElem` definedNames
+       ]
+    <> [ RegistryError ("migration set " <> renderMigrationSetName set.name <> " requires undefined set " <> renderMigrationSetName name)
+       | set <- sets,
+         name <- set.requires,
+         name `notElem` definedNames
+       ]
+  where
+    sets = concatMap (.migrations) bundles
+    definedNames = fmap (.name) sets
+    requiredNames = concatMap scenarioSets (concatMap (.scenarios) bundles) <> concatMap (.requires) sets
+    scenarioSets scenario = concatMap (.schemas) (maybe [] pure scenario.requires.postgres <> fmap snd scenario.requires.extraPostgres)
+
+registryMigrationSets :: Registry -> Map.Map MigrationSetName MigrationSet
+registryMigrationSets (Registry bundles) = Map.fromList [(set.name, set) | bundle <- bundles, set <- bundle.migrations]
 
 duplicateErrors :: Text -> [Text] -> [RegistryError]
 duplicateErrors label values = [RegistryError ("duplicate " <> label <> ": " <> item) | items@(item : _) <- group (sort values), length items > 1]
@@ -91,9 +121,6 @@ validateScenario scenario =
       _ -> True
     postgresErrors =
       [RegistryError (renderScenarioId scenario.id <> ": PostgreSQL dimensions disagree with environment requirement") | hasPostgres /= pgApplicable]
-        <> case scenario.requires.postgres of
-          Just requirement | SchemaKeiro `elem` requirement.schemas && not (supportsOnly18 scenario.dimensions.pgVersion) -> [RegistryError (renderScenarioId scenario.id <> ": keiro scenarios require PostgreSQL 18")]
-          _ -> []
     benchmarkErrors = case (scenario.id.kind, scenario.requires.postgres, scenario.dimensions.pgDurability) of
       (Benchmark, Just _, Supported support) | PgFsyncOff `elem` support.values -> [RegistryError (renderScenarioId scenario.id <> ": benchmark supports fsync-off")]
       _ -> []
@@ -102,8 +129,6 @@ validateScenario scenario =
       | defect <- maybe [] individualKnownDefects scenario.knownDefect,
         not ("mori://" `Text.isPrefixOf` defect.reference || "https://" `Text.isPrefixOf` defect.reference)
       ]
-    supportsOnly18 NotApplicable = False
-    supportsOnly18 (Supported support) = all ((== "Pg18") . show) support.values
 
 allScenarios :: Registry -> [Scenario]
 allScenarios (Registry bundles) = sortOn (renderScenarioId . (.id)) (concatMap (.scenarios) bundles)

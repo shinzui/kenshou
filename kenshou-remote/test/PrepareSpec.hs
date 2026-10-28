@@ -19,6 +19,7 @@ import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), Postgr
 import Kenshou.Core.RunSpec qualified as RunSpec
 import Kenshou.Core.Scenario (Scenario (..))
 import Kenshou.Core.Selftest qualified as Selftest
+import Kenshou.Core.Selftest.Schema (selftestMigrationSet)
 import Kenshou.Plan.Change (Change (..), ChangeSource (..), Reason (..))
 import Kenshou.Plan.Components (ComponentId (..), ComponentRef (..))
 import Kenshou.Plan.Policy (defaultPlanPolicy)
@@ -81,7 +82,7 @@ spec = describe "cell run slicing" do
         requirement = maybe (error "missing PostgreSQL requirement") id original.requires.postgres
         required = PostgresRequirement requirement.schemas [("shared_preload_libraries", "'pg_stat_statements'")] requirement.needsServerControl
         withPreload = Scenario original.id original.revision original.summary original.tier original.placement original.knobs original.dimensions original.phases (EnvRequirements (Just required) original.requires.extraPostgres original.requires.kafka) original.knownDefect original.run
-        registry = either (error . show) id (mkRegistry [mkBundle selftestLayer [withPreload] []])
+        registry = either (error . show) id (mkRegistry [(mkBundle selftestLayer [withPreload] []) {migrations = [selftestMigrationSet]}])
         prepared = prepareForCell registry descriptor Nothing [] (Map.singleton "default" payload) (PrepareOptions True False [] Cold) plan
     case prepared.accepted of
       [run] -> case run.reset.postgres of
@@ -115,7 +116,7 @@ spec = describe "cell run slicing" do
         original = maybe (error "missing selftest") id (lookupScenario originalRegistry scenarioId)
         requirement = maybe (error "missing PostgreSQL requirement") id original.requires.postgres
         controlled = Scenario original.id original.revision original.summary original.tier original.placement original.knobs original.dimensions original.phases (EnvRequirements (Just (requirement {needsServerControl = True})) original.requires.extraPostgres original.requires.kafka) original.knownDefect original.run
-        registry = either (error . show) id (mkRegistry [mkBundle selftestLayer [controlled] []])
+        registry = either (error . show) id (mkRegistry [(mkBundle selftestLayer [controlled] []) {migrations = [selftestMigrationSet]}])
         payloads = Map.singleton "default" payload
         options = PrepareOptions False False [] Cold
     fmap snd (prepareForCell registry descriptor Nothing [] payloads options plan).rejected `shouldBe` [NeedsServerControl "primary"]
@@ -142,7 +143,7 @@ spec = describe "cell run slicing" do
         baseRegistry = either (error . show) id (mkRegistry [Selftest.bundle])
         scenario = maybe (error "missing selftest") id (lookupScenario baseRegistry firstSpec.scenario)
         bothMajors = Scenario scenario.id scenario.revision scenario.summary scenario.tier scenario.placement scenario.knobs (postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) noDimensions) scenario.phases (EnvRequirements (Just (PostgresRequirement [] [] False)) [] False) scenario.knownDefect scenario.run
-        registry = either (error . show) id (mkRegistry [mkBundle selftestLayer [bothMajors] []])
+        registry = either (error . show) id (mkRegistry [(mkBundle selftestLayer [bothMajors] []) {migrations = [selftestMigrationSet]}])
         routed = routePlan registry ((descriptor17, Nothing) :| [(descriptor18, Nothing)]) [] (Map.singleton "default" payload) (PrepareOptions True False [] Cold) twoRunPlan
         runIds selected = fmap (\(PlannedRun _ identifier _ _ _ _) -> identifier) selected.runs
     fmap runIds (Map.lookup "alpha" routed.perCell) `shouldBe` Just [case plan.runs of [PlannedRun _ identifier _ _ _ _] -> identifier; _ -> error "expected one planned run"]

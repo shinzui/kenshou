@@ -92,7 +92,7 @@ lockCaptureCase version = withSystemTempDirectory "kenshou-diagnose-lock" \direc
   runId <- either (expectationFailure . show >=> const (fail "invalid run id")) pure (parseRunId "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55")
   let requirement = PostgresRequirement [] [] False
       dimensions = Dimensions Nothing Nothing (Just PgFsyncOff) (Just version)
-  result <- withPostgresEnv nullLogger directory runId requirement (PostgresEphemeral []) dimensions exerciseLockCapture
+  result <- withPostgresEnv mempty nullLogger directory runId requirement (PostgresEphemeral []) dimensions exerciseLockCapture
   case result of
     Left err -> expectationFailure (show err)
     Right () -> pure ()

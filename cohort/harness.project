@@ -4,13 +4,8 @@
 -- (mori://shinzui/keiro-runtime-kenshou, cohort/released.project).
 index-state: 2026-09-20T13:44:47Z
 
--- Exact pins for the narrowly bound Hackage packages. The three migration
--- libraries are removed by
--- docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md.
+-- Exact pins for the narrowly bound Hackage packages.
 constraints:
-  keiro-migrations ==0.17.0.0,
-  kiroku-store-migrations ==0.4.0.0,
-  pgmq-migration ==0.6.1.0,
   pg-migrate ==1.1.0.0,
   ephemeral-pg ==0.3.1.0,
   settei ==0.2.0.0,

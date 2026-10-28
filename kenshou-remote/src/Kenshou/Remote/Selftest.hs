@@ -9,7 +9,7 @@ import Data.Text qualified as Text
 import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
 import Kenshou.Core.Context (RunContext (..), SummarySection (..), putSummary, requirePostgres)
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
-import Kenshou.Core.Env (PostgresRequirement (..), SchemaComponent (..), noEnvironment)
+import Kenshou.Core.Env (PostgresRequirement (..), noEnvironment)
 import Kenshou.Core.Env qualified as Env
 import Kenshou.Core.Env.Postgres (PgSettingsSnapshot (..), PostgresEnv (..), PostgresMode (..))
 import Kenshou.Core.Id (parseScenarioId, selftestLayer)
@@ -17,6 +17,7 @@ import Kenshou.Core.Knob (Allowed (..), KnobName, KnobSpec (..), KnobType (..), 
 import Kenshou.Core.Phase (zeroPhases)
 import Kenshou.Core.RunSpec (EnvironmentSpec (..), SpecPlacement (..))
 import Kenshou.Core.Scenario (Placement (..), Scenario (..), ScenarioReport, Tier (..), failedWith, passed)
+import Kenshou.Core.Selftest.Schema (selftestSchema)
 import Network.HTTP.Client (Request (..), RequestBody (..), httpLbs, newManager, parseRequest, responseStatus, responseTimeoutMicro)
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (statusCode)
@@ -44,7 +45,7 @@ cellEnvironment =
         ],
       dimensions = postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) noDimensions,
       phases = zeroPhases,
-      requires = noEnvironment {Env.postgres = Just (PostgresRequirement [SchemaKiroku] [] False)},
+      requires = noEnvironment {Env.postgres = Just (PostgresRequirement [selftestSchema] [] False)},
       knownDefect = Nothing,
       run = runCellEnvironment
     }
@@ -60,7 +61,7 @@ runCellEnvironment context = do
       major = postgres.snapshot.serverVersionNum `div` 10000
       versionOk = major == case context.dimensions.pgVersion of Just Pg17 -> 17; Just Pg18 -> 18; Nothing -> 0
       durabilityOk = Map.lookup "fsync" postgres.snapshot.settings == Just (if context.dimensions.pgDurability == Just PgDurable then "on" else "off")
-  fresh <- (== Right "0") <$> psql postgres.connectionString "SELECT count(*) FROM kiroku.events"
+  fresh <- (== Right "0") <$> psql postgres.connectionString "SELECT count(*) FROM kenshou_selftest.roundtrip"
   otlp <- reachableOtlp (knobText context.knobs otlpEndpoint)
   kafka <- reachableKafka (knobText context.knobs kafkaBootstrap)
   let checks =

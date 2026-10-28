@@ -24,9 +24,6 @@
         okf-core = { ver = "0.9.0.0"; sha256 = "sha256-a34kTE5G3o+6Q+Kv/TVRpbGVzfTiaoPvKxsMZmeqYcE="; };
         pg-migrate = { ver = "1.1.0.0"; sha256 = "sha256-S+ixJ+pi96TR6+LUu5C5MDpqP2bOQmpl3hcU29oSfoA="; };
         pg-migrate-embed = { ver = "1.1.0.0"; sha256 = "sha256-ZQz4EIAP8iJbsWRgliynePLqu2XBmWeWwIYmh1nG/QU="; };
-        keiro-migrations = { ver = "0.17.0.0"; sha256 = "sha256-GIVefwcc1424grmE/3CVWgDpsPS8bYj+bBqlnbCBpZs="; };
-        kiroku-store-migrations = { ver = "0.4.0.0"; sha256 = "sha256-vl3FHaDPeFqy5eLPOX82uJDyR+VUjVNvwrCg5jk7vhk="; };
-        pgmq-migration = { ver = "0.6.1.0"; sha256 = "sha256-6Nu5KrNU6XZogZ0yuyKmvsuQVZUryyUjIGuVwgpcaes="; };
         hs-opentelemetry-exporter-prometheus = { ver = "1.0.0.0"; sha256 = "sha256-6yCjTQ/1hriFD2n3zprJDHKBsjLAD5jzlSfOuN/3ej0="; };
       };
       cohortOverlay = hself: _hsuper:

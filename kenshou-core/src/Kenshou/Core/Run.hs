@@ -17,7 +17,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (diffUTCTime, getCurrentTime)
-import Kenshou.Core.Bundle (Registry)
+import Kenshou.Core.Bundle (Registry, registryMigrationSets)
 import Kenshou.Core.Canonical (sha256Hex)
 import Kenshou.Core.Cohort (CohortIdentity (..), PlanHash (..))
 import Kenshou.Core.Compat (comparisonKey, compatInputs, seriesKey)
@@ -102,14 +102,14 @@ runScenario config scenario spec context
       pure (either (\err -> (infrastructureFailureBecause (Text.pack (show err)), Nothing, Map.empty)) id provisioned)
   where
     withPrimary Nothing _ action = Right <$> action Nothing
-    withPrimary (Just requirement) (Just postgresSpec) action = withPostgresEnvKeeping config.keepEnvironment context.logger context.outDir spec.runId requirement postgresSpec spec.dimensions (action . Just)
+    withPrimary (Just requirement) (Just postgresSpec) action = withPostgresEnvKeeping (registryMigrationSets config.registry) config.keepEnvironment context.logger context.outDir spec.runId requirement postgresSpec spec.dimensions (action . Just)
     withPrimary (Just _) Nothing _ = pure (Left (EnvError "PostgreSQL specification is missing"))
 
     withExtras [] _ accumulated action = Right <$> action accumulated
     withExtras ((name, requirement) : rest) postgresSpecs accumulated action = case Map.lookup name postgresSpecs of
       Nothing -> pure (Left (EnvError ("extra PostgreSQL specification is missing: " <> name)))
       Just postgresSpec -> do
-        provisioned <- withPostgresEnvNamed config.keepEnvironment (Just name) context.logger context.outDir spec.runId requirement postgresSpec spec.dimensions \postgres ->
+        provisioned <- withPostgresEnvNamed (registryMigrationSets config.registry) config.keepEnvironment (Just name) context.logger context.outDir spec.runId requirement postgresSpec spec.dimensions \postgres ->
           withExtras rest postgresSpecs (Map.insert name postgres accumulated) action
         pure (provisioned >>= id)
 

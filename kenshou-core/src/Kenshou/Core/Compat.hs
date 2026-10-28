@@ -16,7 +16,7 @@ import Data.Text (Text)
 import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cohort (CohortIdentity (..), PlanHash (..))
 import Kenshou.Core.Dimension (DimensionName (..), Dimensions (..))
-import Kenshou.Core.Env (SchemaComponent)
+import Kenshou.Core.Env (MigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Env.Postgres (PgSettingsSnapshot)
 import Kenshou.Core.Knob (KnobName)
 import Kenshou.Core.Knob qualified as Knob
@@ -39,12 +39,12 @@ data CompatInputs = CompatInputs
   { suiteVersion :: Text,
     spec :: EffectiveRunSpec,
     postgres :: Maybe PgSettingsSnapshot,
-    schemas :: [SchemaComponent],
+    schemas :: [MigrationSetName],
     cohortPlanHash :: Text
   }
   deriving stock (Eq, Show)
 
-compatInputs :: EffectiveRunSpec -> Maybe PgSettingsSnapshot -> [SchemaComponent] -> CohortIdentity -> CompatInputs
+compatInputs :: EffectiveRunSpec -> Maybe PgSettingsSnapshot -> [MigrationSetName] -> CohortIdentity -> CompatInputs
 compatInputs spec postgres schemas cohort = CompatInputs suiteVersion spec postgres schemas (unPlanHash cohort.identityPlanHash)
 
 comparisonKey :: CompatInputs -> Text
@@ -75,12 +75,10 @@ compatibilityValue includeCohort inputs =
       "phases" .= inputs.spec.phases,
       "machineProfile" .= inputs.spec.environment.machineProfile,
       "postgresProfile" .= inputs.postgres,
-      "schemas" .= fmap schemaText inputs.schemas
+      "schemas" .= fmap renderMigrationSetName inputs.schemas
     ]
       <> maybe [] (pure . ("kafka" .=)) inputs.spec.environment.kafka
       <> ["cohortPlanHash" .= inputs.cohortPlanHash | includeCohort]
-  where
-    schemaText schema = case show schema of "SchemaKiroku" -> ("kiroku" :: Text); "SchemaKeiro" -> "keiro"; _ -> "pgmq"
 
 differences :: CompatInputs -> CompatInputs -> [CompatField]
 differences left right =

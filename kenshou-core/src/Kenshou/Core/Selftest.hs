@@ -2,6 +2,7 @@ module Kenshou.Core.Selftest (bundle) where
 
 import Control.Concurrent (threadDelay)
 import Data.Aeson (object, (.=))
+import Data.Either (isLeft)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -9,7 +10,7 @@ import Data.Text qualified as Text
 import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
 import Kenshou.Core.Context (RunContext (..), SummarySection (..), putSummary, requirePostgres)
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
-import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..), SchemaComponent (..), noEnvironment)
+import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..), noEnvironment)
 import Kenshou.Core.Env.Postgres (PgSettingsSnapshot (..), PostgresEnv (..))
 import Kenshou.Core.Id (parseScenarioId, selftestLayer)
 import Kenshou.Core.Knob
@@ -18,11 +19,12 @@ import Kenshou.Core.Phase (zeroPhases)
 import Kenshou.Core.Role
 import Kenshou.Core.Role.Spawn (WorkerHandle (..), withWorker)
 import Kenshou.Core.Scenario
+import Kenshou.Core.Selftest.Schema (selftestMigrationSet, selftestSchema)
 import System.Exit (ExitCode (..))
 import System.Process (readProcessWithExitCode)
 
 bundle :: LayerBundle
-bundle = mkBundle selftestLayer [alwaysFail, alwaysPass, errors, outcomeScenario, knownDefectScenario, postgresRoundtripScenario, workerEchoScenario] [echoRole]
+bundle = (mkBundle selftestLayer [alwaysFail, alwaysPass, errors, outcomeScenario, knownDefectScenario, postgresRoundtripScenario, workerEchoScenario] [echoRole]) {migrations = [selftestMigrationSet]}
 
 alwaysPass, alwaysFail, errors :: Scenario
 alwaysPass = scenario "selftest/kernel/correctness/always-pass" "Always reports passed." (const (pure passed))
@@ -41,7 +43,7 @@ outcomeScenario =
 knownDefectScenario :: Scenario
 knownDefectScenario =
   (scenario "selftest/kernel/correctness/known-defect" "Reproduces a declared known defect." (const (pure (failedWith ["seeded-defect"] "seeded known defect"))))
-    { knownDefect = Just (KnownDefect "mori://shinzui/keiro-runtime-kenshou/plans/2-build-the-harness-kernel-for-scenarios-dimensions-run-specs-and-results" "Seeded harness defect" ["seeded-defect"] AllCohorts)
+    { knownDefect = Just (KnownDefect "mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites" "Seeded harness defect" ["seeded-defect"] AllCohorts)
     }
 
 workerEchoScenario :: Scenario
@@ -52,10 +54,11 @@ workerEchoScenario =
 
 postgresRoundtripScenario :: Scenario
 postgresRoundtripScenario =
-  (scenario "selftest/kernel/correctness/postgres-roundtrip" "Verifies composed migrations and PostgreSQL durability." runPostgresRoundtrip)
-    { knobs = [KnobSpec eventsKnob "Rows to round-trip" KnobInt (VInt 3) (IntRange 1 1000) [VInt 1, VInt 100]],
+  (scenario "selftest/kernel/correctness/postgres-roundtrip" "Verifies a composed migration ledger and PostgreSQL durability." runPostgresRoundtrip)
+    { revision = 2,
+      knobs = [KnobSpec eventsKnob "Rows to round-trip" KnobInt (VInt 3) (IntRange 1 1000) [VInt 1, VInt 100]],
       dimensions = postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| []) noDimensions,
-      requires = noEnvironment {postgres = Just (PostgresRequirement [SchemaKiroku, SchemaKeiro, SchemaPgmq] [] False)}
+      requires = noEnvironment {postgres = Just (PostgresRequirement [selftestSchema] [] False)}
     }
 
 echoRole :: WorkerRole
@@ -92,17 +95,18 @@ runPostgresRoundtrip :: RunContext -> IO ScenarioReport
 runPostgresRoundtrip context = do
   let environment = requirePostgres context
       count = knobInt context.knobs eventsKnob
-  schemas <- psql environment.connectionString "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('kiroku','keiro','pgmq','pgmigrate')"
+  schemas <- psql environment.connectionString "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name not like 'pg\\_%' and schema_name not in ('information_schema','public')"
   ledger <- psql environment.connectionString "select string_agg(distinct component, ',' order by component) from pgmigrate.migrations"
-  roundtrip <- psql environment.connectionString ("select count(*) from generate_series(1," <> Text.pack (show count) <> ")")
+  inserted <- psql environment.connectionString ("insert into kenshou_selftest.roundtrip (id, payload) select n, 'row-' || n from generate_series(1," <> Text.pack (show count) <> ") as n")
+  roundtrip <- psql environment.connectionString "select count(*) from kenshou_selftest.roundtrip where payload = 'row-' || id"
   let actualFsync = Map.lookup "fsync" environment.snapshot.settings
       expectedFsync = case context.dimensions.pgDurability of Just PgDurable -> "on"; _ -> "off"
       failures =
-        ["schemas" | schemas /= Right "keiro,kiroku,pgmigrate,pgmq"]
-          <> ["one-ledger" | ledger /= Right "keiro,kiroku,pgmq"]
-          <> ["roundtrip" | roundtrip /= Right (Text.pack (show count))]
+        ["schemas" | schemas /= Right "kenshou_selftest,pgmigrate"]
+          <> ["one-ledger" | ledger /= Right "kenshou-selftest"]
+          <> ["roundtrip" | isLeft inserted || roundtrip /= Right (Text.pack (show count))]
           <> ["durability-honoured" | actualFsync /= Just expectedFsync]
-  putSummary context Verdicts "postgres-roundtrip" (object ["kirokuEvents" .= count, "keiroTimers" .= (1 :: Int), "pgmqMessages" .= (1 :: Int), "ledgerComponents" .= (["keiro", "kiroku", "pgmq"] :: [Text])])
+  putSummary context Verdicts "postgres-roundtrip" (object ["rows" .= count, "ledgerComponents" .= (["kenshou-selftest"] :: [Text])])
   pure (if null failures then passed else failedWith failures "PostgreSQL round-trip checks failed")
 
 psql :: Text -> Text -> IO (Either Text Text)

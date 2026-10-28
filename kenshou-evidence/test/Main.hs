@@ -13,9 +13,10 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Time (UTCTime (..), fromGregorian)
-import Kenshou.Core.Canonical (sha256Hex)
+import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cli.Config (ConfigInputs (..))
-import Kenshou.Core.Id (parseRunId, parseScenarioId)
+import Kenshou.Core.Env (mkMigrationSetName, renderMigrationSetName)
+import Kenshou.Core.Id (parseLayer, parseRunId, parseScenarioId, renderLayer, renderScenarioId)
 import Kenshou.Core.Manifest (writeManifest)
 import Kenshou.Core.Outcome (Outcome (InfrastructureFailure, Passed))
 import Kenshou.Evidence.Attest (AttestOptions (..), AttestResult (..), Recomputation (..), Recomputer (..), attest, coreRecomputers)
@@ -45,6 +46,32 @@ import Test.Hspec
 
 main :: IO ()
 main = hspec do
+  -- Verbatim data from the first consumer: what it has already sealed must keep
+  -- decoding, and its comparison keys must not change when it adopts this release.
+  describe "consumer compatibility" do
+    it "renders and parses the consumer's layer strings byte for byte" do
+      layers <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/layer-strings.json" >>= either fail pure
+      fmap renderLayer <$> traverse parseLayer layers `shouldBe` Right (layers :: [Text])
+      let identifiers = [layer <> "/component/correctness/name" | layer <- layers]
+      fmap renderScenarioId <$> traverse parseScenarioId identifiers `shouldBe` Right identifiers
+    it "keeps a recorded comparison key a function of its inputs and migration set names" do
+      document <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-result.hydration-cost.json" >>= either fail pure
+      (recordedKey, inputs) <- case document of
+        Object fields
+          | Just (Object compatibility) <- KeyMap.lookup "compatibility" fields,
+            Just (String key) <- KeyMap.lookup "comparisonKey" compatibility,
+            Just (Object recorded) <- KeyMap.lookup "inputs" compatibility ->
+              pure (key, recorded)
+        _ -> fail "run result has no compatibility block"
+      -- The comparison key covers every input except the cohort plan hash.
+      sha256Hex (canonicalEncode (Object (KeyMap.delete "cohortPlanHash" inputs))) `shouldBe` recordedKey
+      schemas <- case Aeson.fromJSON <$> KeyMap.lookup "schemas" inputs of
+        Just (Aeson.Success names) -> pure names
+        _ -> fail "compatibility inputs have no schemas"
+      length schemas `shouldSatisfy` (> 0)
+      -- The kernel renders a migration set's name as the schema text, so the same
+      -- names reproduce the recorded inputs and therefore the recorded key.
+      fmap renderMigrationSetName <$> traverse mkMigrationSetName schemas `shouldBe` Right (schemas :: [Text])
   describe "loadComparisonSource" do
     it "accepts a self-contained comparison and refuses inconsistent arms" do
       withSystemTempDirectory "kenshou-comparison-source" $ \root -> do

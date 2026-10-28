@@ -16,6 +16,7 @@ import Kenshou.Core.Knob (Allowed (..), KnobSpec (..), KnobType (..), KnobValue 
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..), minimalRunSpec)
 import Kenshou.Core.Scenario (Scenario (..))
 import Kenshou.Core.Selftest qualified as Selftest
+import Kenshou.Core.Selftest.Schema (selftestMigrationSet)
 import Kenshou.Plan.Change (Change (..), ChangeSource (..), Reason (..))
 import Kenshou.Plan.Components (ComponentId (..), ComponentRef (..))
 import Kenshou.Plan.Policy (defaultPlanPolicy)
@@ -156,7 +157,7 @@ remoteRegistry :: Registry
 remoteRegistry = either (error . show) id (mkRegistry [Selftest.bundle, RemoteSelftest.bundle])
 
 tracingRegistry :: Registry
-tracingRegistry = either (error . show) id (mkRegistry [mkBundle selftestLayer [enhanced] []])
+tracingRegistry = either (error . show) id (mkRegistry [(mkBundle selftestLayer [enhanced] []) {migrations = [selftestMigrationSet]}])
   where
     scenarioId = either (error . Text.unpack) id (parseScenarioId "selftest/kernel/correctness/postgres-roundtrip")
     original = maybe (error "missing PostgreSQL selftest") id (lookupScenario registry scenarioId)

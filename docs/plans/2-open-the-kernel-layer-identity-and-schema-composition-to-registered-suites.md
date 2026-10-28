@@ -57,10 +57,14 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
   only minimal adaptations in `kenshou-evidence`, `kenshou-remote`, and `kenshou-cli`.
   (2026-10-28; `layer identifiers` group passes; `just haskell-test` green, 120 kernel
   examples. The invalid-layer message is now `invalid layer "X": invalid segment "X"`.)
-- [ ] M2: Bundles supply migration sets; `Kenshou.Core.Env.Migration` composes them into one
+- [x] M2: Bundles supply migration sets; `Kenshou.Core.Env.Migration` composes them into one
   `pg-migrate` ledger; `kenshou-core.cabal` no longer depends on `keiro-migrations`,
   `kiroku-store-migrations`, or `pgmq-migration` and the `keiro-schema` flag is gone;
   `selftest/kernel/correctness/postgres-roundtrip` passes on the self-test schema.
+  (2026-10-28; `cabal build all --dry-run` names none of the three; both durability
+  dimensions pass with summary `{"ledgerComponents":["kenshou-selftest"],"rows":3}` and
+  compatibility schemas `["kenshou-selftest"]`; all suites green; the consumer comparison
+  key `sha256:dacb05fc…a843` reproduces from its recorded inputs.)
 - [ ] M3: Registry rules, the component graph, the performance validation contracts, and the
   program name and header are supplied by the executable through `Kenshou.Core.Cli.Program`;
   the synthetic `acme` registry test passes; `kenshou --help` shows the generic header.

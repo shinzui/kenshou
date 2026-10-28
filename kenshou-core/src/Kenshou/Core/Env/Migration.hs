@@ -1,49 +1,52 @@
-{-# LANGUAGE CPP #-}
-
 module Kenshou.Core.Env.Migration
   ( MigrationSetupError (..),
     composePlan,
+    orderMigrationSets,
     migrateDatabase,
   )
 where
 
-import Data.List (nub, sort)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Database.PostgreSQL.Migrate (MigrationComponent, MigrationPlan, defaultRunOptions, migrationPlan, runMigrationPlan)
+import Database.PostgreSQL.Migrate (MigrationPlan, defaultRunOptions, migrationPlan, runMigrationPlan)
 import Hasql.Connection.Settings qualified as Settings
-#ifdef KENSHOU_KEIRO_SCHEMA
-import Keiro.Migrations (keiroMigrations)
-#endif
-import Kenshou.Core.Env (SchemaComponent (..))
-import Kiroku.Store.Migrations (kirokuMigrations)
-import Pgmq.Migration (pgmqMigrations)
+import Kenshou.Core.Env (MigrationSet (..), MigrationSetName, renderMigrationSetName)
 
 newtype MigrationSetupError = MigrationSetupError Text deriving stock (Eq, Show)
 
-composePlan :: [SchemaComponent] -> Either MigrationSetupError MigrationPlan
-composePlan requested = do
-  let components = sort . nub $ requested <> [SchemaKiroku | SchemaKeiro `elem` requested]
-  migrations <- traverse component components
-  case migrations of
+-- | Compose the requested migration sets into one ordered pg-migrate plan, applied
+-- as one ledger, in the order 'orderMigrationSets' gives.
+composePlan :: Map MigrationSetName MigrationSet -> [MigrationSetName] -> Either MigrationSetupError MigrationPlan
+composePlan sets requested = do
+  ordered <- orderMigrationSets sets requested
+  components <- traverse component ordered
+  case components of
     [] -> Left (MigrationSetupError "cannot compose an empty migration plan")
     first : rest -> mapError (migrationPlan (first :| rest))
   where
-    component SchemaKiroku = mapError kirokuMigrations
-    component SchemaKeiro = keiroSchema
-    component SchemaPgmq = mapError pgmqMigrations
+    component set = either (\problem -> Left (MigrationSetupError (renderMigrationSetName set.name <> ": " <> problem))) Right set.component
     mapError :: (Show problem) => Either problem value -> Either MigrationSetupError value
     mapError = either (Left . MigrationSetupError . Text.pack . show) Right
 
-keiroSchema :: Either MigrationSetupError MigrationComponent
-#ifdef KENSHOU_KEIRO_SCHEMA
-keiroSchema =
-  either (Left . MigrationSetupError . Text.pack . show) Right keiroMigrations
-#else
-keiroSchema =
-  Left (MigrationSetupError "Keiro schema migrations are disabled in this isolated build")
-#endif
+-- | The sets to apply, in application order. Sets keep the order the scenario
+-- declared them; each set's 'requires' are inserted, transitively, before the set
+-- that needs them, and a set appears once, at its first position.
+orderMigrationSets :: Map MigrationSetName MigrationSet -> [MigrationSetName] -> Either MigrationSetupError [MigrationSet]
+orderMigrationSets sets requested = fmap (fmap snd) (foldlM (visit []) [] requested)
+  where
+    visit path placed wanted
+      | wanted `elem` fmap fst placed = Right placed
+      | wanted `elem` path = Left (MigrationSetupError ("migration sets require one another in a cycle: " <> render (reverse (wanted : path))))
+      | otherwise = case Map.lookup wanted sets of
+          Nothing -> Left (MigrationSetupError ("no registered bundle defines migration set " <> renderMigrationSetName wanted))
+          Just set -> do
+            withRequired <- foldlM (visit (wanted : path)) placed set.requires
+            Right (withRequired <> [(wanted, set)])
+    render = Text.intercalate " -> " . fmap renderMigrationSetName
+    foldlM step initial = foldl (\accumulated item -> accumulated >>= (`step` item)) (Right initial)
 
 migrateDatabase :: Text -> MigrationPlan -> IO (Either MigrationSetupError ())
 migrateDatabase connectionString plan = do

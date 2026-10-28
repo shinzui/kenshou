@@ -23,7 +23,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import EphemeralPg qualified as Pg
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..))
-import Kenshou.Core.Env (PostgresRequirement (..))
+import Kenshou.Core.Env (MigrationSet, MigrationSetName, PostgresRequirement (..))
 import Kenshou.Core.Env.Migration (composePlan, migrateDatabase)
 import Kenshou.Core.Id (RunId, renderRunId)
 import Kenshou.Core.Log (Logger, Severity (Warning), logAt)
@@ -67,17 +67,17 @@ newtype EnvError = EnvError Text deriving stock (Eq, Show)
 instance ToJSON PgSettingsSnapshot where
   toJSON snapshot = object ["serverVersion" .= snapshot.serverVersion, "serverVersionNum" .= snapshot.serverVersionNum, "settings" .= snapshot.settings, "superuser" .= snapshot.superuser, "collation" .= snapshot.collation, "encoding" .= snapshot.encoding]
 
-withPostgresEnv :: Logger -> FilePath -> RunId -> PostgresRequirement -> PostgresSpec -> Dimensions -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
-withPostgresEnv = withPostgresEnvKeeping False
+withPostgresEnv :: Map MigrationSetName MigrationSet -> Logger -> FilePath -> RunId -> PostgresRequirement -> PostgresSpec -> Dimensions -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
+withPostgresEnv sets = withPostgresEnvKeeping sets False
 
-withPostgresEnvKeeping :: Bool -> Logger -> FilePath -> RunId -> PostgresRequirement -> PostgresSpec -> Dimensions -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
-withPostgresEnvKeeping keepEnvironment = withPostgresEnvNamed keepEnvironment Nothing
+withPostgresEnvKeeping :: Map MigrationSetName MigrationSet -> Bool -> Logger -> FilePath -> RunId -> PostgresRequirement -> PostgresSpec -> Dimensions -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
+withPostgresEnvKeeping sets keepEnvironment = withPostgresEnvNamed sets keepEnvironment Nothing
 
 -- | Like 'withPostgresEnvKeeping', for a named context of a scenario. On an
 -- external server several contexts share one server, so the context name
 -- becomes part of every database name the run creates there.
-withPostgresEnvNamed :: Bool -> Maybe Text -> Logger -> FilePath -> RunId -> PostgresRequirement -> PostgresSpec -> Dimensions -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
-withPostgresEnvNamed keepEnvironment contextName logger runDirectory runId requirement postgresSpec dimensions action = case postgresSpec of
+withPostgresEnvNamed :: Map MigrationSetName MigrationSet -> Bool -> Maybe Text -> Logger -> FilePath -> RunId -> PostgresRequirement -> PostgresSpec -> Dimensions -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
+withPostgresEnvNamed sets keepEnvironment contextName logger runDirectory runId requirement postgresSpec dimensions action = case postgresSpec of
   PostgresEphemeral extraSettings -> withSelectedBinaries dimensions.pgVersion $ do
     createDirectoryIfMissing True (runDirectory </> "logs")
     uid <- getRealUserID
@@ -112,10 +112,10 @@ withPostgresEnvNamed keepEnvironment contextName logger runDirectory runId requi
           Left err -> pure (Left err)
           Right () -> do
             unless (null (filter ((/= "shared_preload_libraries") . fst) requirement.settings)) $ logAt logger Warning "external PostgreSQL settings cannot be applied" []
-            withExternalDatabases keepEnvironment maintenanceConnection runId contextName requirement action
+            withExternalDatabases sets keepEnvironment maintenanceConnection runId contextName requirement action
   where
     setup databaseRef database = do
-      migration <- migrateIfNeeded (Pg.connectionString database) requirement
+      migration <- migrateIfNeeded sets (Pg.connectionString database) requirement
       case migration of
         Left err -> pure (Left err)
         Right () -> do
@@ -148,8 +148,8 @@ withPostgresEnvNamed keepEnvironment contextName logger runDirectory runId requi
           current <- readIORef databaseRef
           Pg.restart current >>= either (ioError . userError . show) (writeIORef databaseRef)
 
-withExternalDatabases :: Bool -> Text -> RunId -> Maybe Text -> PostgresRequirement -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
-withExternalDatabases keepEnvironment maintenanceConnection runId contextName requirement action = do
+withExternalDatabases :: Map MigrationSetName MigrationSet -> Bool -> Text -> RunId -> Maybe Text -> PostgresRequirement -> (PostgresEnv -> IO value) -> IO (Either EnvError value)
+withExternalDatabases sets keepEnvironment maintenanceConnection runId contextName requirement action = do
   counter <- newIORef (0 :: Int)
   created <- newIORef []
   let context = maybe "" (\name -> "_" <> Text.take 16 (Text.map (\character -> if isAlphaNum character then toLower character else '_') name)) contextName
@@ -167,7 +167,7 @@ withExternalDatabases keepEnvironment maintenanceConnection runId contextName re
           Left err -> pure (Left err)
           Right () -> do
             let templateConnection = connectionForExternal maintenanceConnection templateName
-            migrated <- migrateIfNeeded templateConnection requirement
+            migrated <- migrateIfNeeded sets templateConnection requirement
             case migrated of
               Left err -> pure (Left err)
               Right () -> do
@@ -199,9 +199,9 @@ resolveConnection :: ConnectionSource -> IO (Either EnvError Text)
 resolveConnection (ConnLiteral value) = pure (Right value)
 resolveConnection (ConnFromEnv name) = maybe (Left (EnvError ("environment variable is not set: " <> name))) (Right . Text.pack) <$> lookupEnv (Text.unpack name)
 
-migrateIfNeeded :: Text -> PostgresRequirement -> IO (Either EnvError ())
-migrateIfNeeded _ requirement | null requirement.schemas = pure (Right ())
-migrateIfNeeded connection requirement = case composePlan requirement.schemas of
+migrateIfNeeded :: Map MigrationSetName MigrationSet -> Text -> PostgresRequirement -> IO (Either EnvError ())
+migrateIfNeeded _ _ requirement | null requirement.schemas = pure (Right ())
+migrateIfNeeded sets connection requirement = case composePlan sets requirement.schemas of
   Left err -> pure (Left (EnvError (Text.pack (show err))))
   Right plan -> fmap (either (Left . EnvError . Text.pack . show) Right) (migrateDatabase connection plan)
 
