@@ -15,3 +15,6 @@ result-*
 .pre-commit-config.yaml
 .mina/
 .envrc
+runs/
+.dev/
+dist-newstyle/

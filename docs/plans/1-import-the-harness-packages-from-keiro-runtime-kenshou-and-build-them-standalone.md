@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T13:02:34Z
+      mode: "implement"
+      note: "Implemented workspace scaffold, import, CLI assembly, and verify gate"
 ---
 
 # Import the harness packages from keiro-runtime-kenshou and build them standalone

@@ -1,0 +1,13 @@
+cabal-version: 3.12
+name: kenshou-synthetic
+version: 0.1.0.0
+synopsis: Placeholder for the synthetic reference suite and the kenshou executable
+license: NONE
+build-type: Simple
+
+executable kenshou
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >=4.21 && <5
+  default-language: GHC2024
+  ghc-options: -Wall
