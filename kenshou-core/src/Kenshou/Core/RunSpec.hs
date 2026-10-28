@@ -9,6 +9,7 @@ module Kenshou.Core.RunSpec
     EffectiveRunSpec (..),
     minimalRunSpec,
     redactConnectionString,
+    withLegacyResource,
   )
 where
 
@@ -24,6 +25,7 @@ import Kenshou.Core.Id (RunId, ScenarioId, Seed)
 import Kenshou.Core.Knob (KnobName, RawKnob (..), ResolvedKnobs)
 import Kenshou.Core.Knob qualified
 import Kenshou.Core.Phase (PhasePlan)
+import Kenshou.Core.Resource.Types (ResourceName, legacyKafkaName)
 
 data SpecPlacement = RunLocal | RunOnCell deriving stock (Eq, Show)
 
@@ -36,7 +38,8 @@ data EnvironmentSpec = EnvironmentSpec
     machineProfile :: Maybe Text,
     postgres :: Maybe PostgresSpec,
     extraPostgres :: Map Text PostgresSpec,
-    kafka :: Maybe Value,
+    -- | Per-resource specification values, keyed by the resource name.
+    resources :: Map ResourceName Value,
     telemetry :: Maybe Value
   }
   deriving stock (Eq, Show)
@@ -78,7 +81,7 @@ data EffectiveRunSpec = EffectiveRunSpec
   deriving stock (Eq, Show)
 
 minimalRunSpec :: ScenarioId -> RunSpec
-minimalRunSpec scenario = RunSpec Nothing scenario Nothing [] [] Nothing Nothing Nothing (EnvironmentSpec RunLocal Nothing Nothing Map.empty Nothing Nothing) Nothing Nothing Map.empty
+minimalRunSpec scenario = RunSpec Nothing scenario Nothing [] [] Nothing Nothing Nothing (EnvironmentSpec RunLocal Nothing Nothing Map.empty Map.empty Nothing) Nothing Nothing Map.empty
 
 redactConnectionString :: Text -> Text
 redactConnectionString value = redactUri (Text.unwords (fmap redactWord (Text.words value)))
@@ -112,7 +115,7 @@ instance FromJSON RunSpec where
     seed <- value .:? "seed"
     phases <- value .:? "phases"
     timeoutSeconds <- value .:? "timeoutSeconds"
-    environment <- value .:? "environment" .!= EnvironmentSpec RunLocal Nothing Nothing Map.empty Nothing Nothing
+    environment <- value .:? "environment" .!= EnvironmentSpec RunLocal Nothing Nothing Map.empty Map.empty Nothing
     cohortExpectation <- value .:? "cohortExpectation"
     comparison <- value .:? "comparison"
     labels <- value .:? "labels" .!= Map.empty
@@ -166,10 +169,26 @@ instance ToJSON EnvironmentSpec where
     object $
       ["placement" .= placementText environment.placement, "machineProfile" .= environment.machineProfile, "postgres" .= environment.postgres]
         <> ["extraPostgres" .= environment.extraPostgres | not (Map.null environment.extraPostgres)]
-        <> ["kafka" .= environment.kafka, "telemetry" .= environment.telemetry]
+        <> ["resources" .= environment.resources | not (Map.null environment.resources)]
+        <> ["telemetry" .= environment.telemetry]
 
 instance FromJSON EnvironmentSpec where
-  parseJSON = withObject "EnvironmentSpec" \value -> EnvironmentSpec <$> (value .:? "placement" .!= RunLocal) <*> value .:? "machineProfile" <*> value .:? "postgres" <*> (value .:? "extraPostgres" .!= Map.empty) <*> value .:? "kafka" <*> value .:? "telemetry"
+  parseJSON = withObject "EnvironmentSpec" \value -> do
+    resources <- (value .:? "resources" .!= Map.empty) >>= withLegacyResource "environment" value
+    EnvironmentSpec <$> (value .:? "placement" .!= RunLocal) <*> value .:? "machineProfile" <*> value .:? "postgres" <*> (value .:? "extraPostgres" .!= Map.empty) <*> pure resources <*> value .:? "telemetry"
+
+-- | Documents written before named resources carried the one resource they knew as a
+-- top-level field; read a non-null one as that named resource.
+withLegacyResource :: Text -> Object -> Map ResourceName Value -> Parser (Map ResourceName Value)
+withLegacyResource label value resources = do
+  legacy <- value .:? "kafka"
+  case (legacy, Map.lookup legacyKafkaName resources) of
+    (Nothing, _) -> pure resources
+    (Just Null, _) -> pure resources
+    (Just found, Nothing) -> pure (Map.insert legacyKafkaName found resources)
+    (Just found, Just current)
+      | found == current -> pure resources
+      | otherwise -> fail (Text.unpack label <> ".kafka and " <> Text.unpack label <> ".resources.kafka disagree")
 
 instance ToJSON SpecPlacement where toJSON = String . placementText
 

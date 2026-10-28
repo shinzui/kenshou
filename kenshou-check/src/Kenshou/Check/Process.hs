@@ -124,7 +124,7 @@ roleProcess environment role index arguments = do
       proc = ProcId role index 0
       instanceName = role <> "-" <> Text.pack (show index)
       postgres = fmap (\postgres -> PostgresConnInfo postgres.connectionString postgres.adminConnectionString) context.env.postgres
-      workerInit = WorkerInit context.runId context.scenario roleName instanceName context.seed context.knobs context.dimensions postgres context.environmentSpec.kafka context.environmentSpec.telemetry context.outDir arguments
+      workerInit = WorkerInit context.runId context.scenario roleName instanceName context.seed context.knobs context.dimensions postgres context.environmentSpec.resources context.environmentSpec.telemetry context.outDir arguments
       appName = "kenshou-" <> Text.unpack (Text.take 8 (renderRunId context.runId)) <> "-" <> Text.unpack role <> "-" <> show index
   pure (ProcessSpec proc executable ["worker", "--role", Text.unpack role] [("PGAPPNAME", appName)] (Just (CtlInit workerInit)))
 

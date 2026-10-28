@@ -34,6 +34,7 @@ import Kenshou.Core.Cohort (CohortIdentity (..), PlanHash (..))
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..), resolveDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
 import Kenshou.Core.Id (Kind (..), RunId, ScenarioId (..), renderRunId)
+import Kenshou.Core.Resource.Types (legacyKafkaName)
 import Kenshou.Core.RunSpec (CohortExpectation (..), ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..))
 import Kenshou.Core.Scenario (Placement (..), Scenario (..))
 import Kenshou.Plan.RunPlan (PlannedRun (..), RunPlan (..), TrialInfo (..))
@@ -158,7 +159,7 @@ prepareWithPayload registry descriptor cachedCapabilities routingRules payloads 
       case controlled of
         Just name | not driverLocal -> Left (NeedsServerControl name)
         _ -> pure ()
-      if requirements.kafka && Text.null descriptor.images.broker then Left NeedsBrokerButCellHasNone else pure ()
+      if legacyKafkaName `elem` requirements.resources && Text.null descriptor.images.broker then Left NeedsBrokerButCellHasNone else pure ()
       let rules = matchingRules routingRules entry.spec
           denied = find (\rule -> maybe False (\cache -> capabilityKnown cache rule.requires == Just False) activeCapabilities) rules
       case denied of
@@ -193,13 +194,13 @@ prepareWithPayload registry descriptor cachedCapabilities routingRules payloads 
             if driverLocal
               then Map.fromList [(name, case Map.lookup name prior.extraPostgres of Just ephemeral@(PostgresEphemeral _) -> ephemeral; _ -> PostgresEphemeral []) | (name, _) <- requirements.extraPostgres]
               else Map.fromList [(name, PostgresExternal (ConnFromEnv ("KENSHOU_CELL_PG_URL_" <> variableName name))) | (name, _) <- requirements.extraPostgres]
-          env = EnvironmentSpec RunOnCell (Just profile) primary extras prior.kafka prior.telemetry
+          env = EnvironmentSpec RunOnCell (Just profile) primary extras prior.resources prior.telemetry
           expectation = maybe originalSpec.cohortExpectation (\selected -> Just (CohortExpectation (Just selected.cohort) selected.cohortIdentity.identityPlanHash.unPlanHash)) payload
           labels = Map.insert "postgresPlacement" (if driverLocal then "driver-ephemeral" else "cell-server") originalSpec.labels
           spec = RunSpec (Just entry.runId) originalSpec.scenario originalSpec.scenarioRevision originalSpec.knobs dimensions originalSpec.seed originalSpec.phases originalSpec.timeoutSeconds env expectation originalSpec.comparison labels
           -- The released cell agent currently requires a PostgreSQL role reset
           -- even when the scenario itself has no database requirement.
-          reset = ResetBlock options.cachePolicy (Just (PgReset descriptor.postgresMajor [] settings)) (if requirements.kafka then Just (BrokerReset True) else Nothing)
+          reset = ResetBlock options.cachePolicy (Just (PgReset descriptor.postgresMajor [] settings)) (if legacyKafkaName `elem` requirements.resources then Just (BrokerReset True) else Nothing)
           timeout = fromMaybe (max 60 (entry.estimateMinutes * 60)) originalSpec.timeoutSeconds
           notices =
             ["coerced pg.durability=durable for " <> renderRunId entry.runId | dimensions /= originalSpec.dimensions]

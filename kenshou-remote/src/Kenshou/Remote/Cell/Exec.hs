@@ -17,6 +17,7 @@ import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
 import Kenshou.Core.Id (Kind (..), RunId, ScenarioId (..), parseRunId, renderScenarioId)
 import Kenshou.Core.Knob (KnobSpec (..), RawKnob (..), mkKnobName)
+import Kenshou.Core.Resource.Types (legacyKafkaName, renderResourceName)
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..))
 import Kenshou.Core.Scenario (Placement (..), Scenario (..))
 import Kenshou.Plan.Execute (ExecuteOptions (..), executePlan)
@@ -86,11 +87,11 @@ resolveSpec registry environment sink spec = do
   dimensions <- either (Left . Text.intercalate "; " . NonEmpty.toList) Right (resolveDimensions scenario.dimensions spec.dimensions)
   postgres <- bindPostgres scenario dimensions
   extras <- bindExtras scenario postgres
-  kafka <- bindKafka scenario
+  resources <- Map.fromList <$> traverse (bindResource scenario) scenario.requires.resources
   telemetryKnobs <- bindOtlp scenario dimensions
   knobs <- bindRemoteScenario telemetryKnobs
   let prior = spec.environment
-      cellEnvironment = EnvironmentSpec RunOnCell prior.machineProfile postgres extras kafka prior.telemetry
+      cellEnvironment = EnvironmentSpec RunOnCell prior.machineProfile postgres extras resources prior.telemetry
   pure (RunSpec spec.runId spec.scenario spec.scenarioRevision knobs spec.dimensions spec.seed spec.phases spec.timeoutSeconds cellEnvironment spec.cohortExpectation spec.comparison spec.labels)
   where
     bindPostgres scenario dimensions = case scenario.requires.postgres of
@@ -129,15 +130,15 @@ resolveSpec registry environment sink spec = do
           Just local@(PostgresEphemeral _) -> pure (name, local)
           Just (PostgresExternal _) -> Left ("driver-local PostgreSQL requires every extra server to be ephemeral: " <> name)
 
-    bindKafka scenario
-      | not scenario.requires.kafka = pure Nothing
-      | otherwise = case environment.broker of
+    bindResource scenario name
+      | name == legacyKafkaName = case environment.broker of
           Nothing -> Left ("cell has no Kafka broker for " <> renderScenarioId scenario.id)
           Just broker ->
             let addresses = filter (not . Text.null) (fmap Text.strip (Text.splitOn "," broker.bootstrapServers))
              in if null addresses
                   then Left "cell broker has no bootstrap servers"
-                  else pure (Just (object ["backend" .= ("external" :: Text), "brokers" .= addresses, "lanes" .= (0 :: Int)]))
+                  else pure (name, object ["backend" .= ("external" :: Text), "brokers" .= addresses, "lanes" .= (0 :: Int)])
+      | otherwise = Left ("cell has no resource " <> renderResourceName name <> " for " <> renderScenarioId scenario.id)
 
     bindOtlp scenario dimensions
       | dimensions.tracing /= Just TracingSdkOtlp = pure spec.knobs

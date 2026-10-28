@@ -41,6 +41,7 @@ import Kenshou.PerfPreparedSpec qualified
 import Kenshou.PerfResultSpec qualified
 import Kenshou.PerfSpec qualified
 import Kenshou.PlanSpec qualified
+import Kenshou.ResourceSpec qualified
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.IO.Temp (withSystemTempDirectory)
@@ -81,6 +82,7 @@ main = hspec do
   postgresEnvironmentSpec
   migrationPlanSpec
   Kenshou.PlanSpec.spec
+  Kenshou.ResourceSpec.spec
   Kenshou.PerfPreparedSpec.spec
   Kenshou.PerfSpec.spec
 

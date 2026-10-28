@@ -40,7 +40,7 @@ withWorker context roleName instanceName arguments action = do
           receiveMessage timeoutMillis = timeout (timeoutMillis * 1000) (readWorker output) >>= pure . joinMaybe
           workerHandle = WorkerHandle instanceName processId sendMessage receiveMessage (waitForProcess processHandle)
           postgres = fmap (\environment -> PostgresConnInfo environment.connectionString environment.adminConnectionString) context.env.postgres
-          workerInit = WorkerInit context.runId context.scenario roleName instanceName context.seed context.knobs context.dimensions postgres context.environmentSpec.kafka context.environmentSpec.telemetry context.outDir arguments
+          workerInit = WorkerInit context.runId context.scenario roleName instanceName context.seed context.knobs context.dimensions postgres context.environmentSpec.resources context.environmentSpec.telemetry context.outDir arguments
       sendMessage (CtlInit workerInit)
       pure (workerHandle, (input, output, errorHandle, processHandle))
     stop (_, (input, output, errorHandle, processHandle)) = do

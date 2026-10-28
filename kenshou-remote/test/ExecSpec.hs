@@ -5,6 +5,7 @@ import Data.Aeson (Value (..), eitherDecodeFileStrict', object, (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (getCurrentTime)
@@ -13,6 +14,7 @@ import Kenshou.Core.Dimension (allTelemetryArms)
 import Kenshou.Core.Env (EnvRequirements (..))
 import Kenshou.Core.Id (mkSeed, newRunId, parseScenarioId, renderRunId, selftestLayer)
 import Kenshou.Core.Knob (Allowed (..), KnobSpec (..), KnobType (..), KnobValue (..), RawKnob (..), mkKnobName)
+import Kenshou.Core.Resource.Types (legacyKafkaName)
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..), minimalRunSpec)
 import Kenshou.Core.Scenario (Scenario (..))
 import Kenshou.Core.Selftest qualified as Selftest
@@ -69,7 +71,7 @@ execSpec = describe "cell-side run-plan resolution" do
       Left problem -> expectationFailure (show problem)
       Right resolved -> case resolved.runs of
         [run] -> do
-          run.spec.environment.kafka `shouldBe` Just (object ["backend" .= ("external" :: Text), "brokers" .= (["10.0.0.5:9092"] :: [Text]), "lanes" .= (0 :: Int)])
+          Map.lookup legacyKafkaName run.spec.environment.resources `shouldBe` Just (object ["backend" .= ("external" :: Text), "brokers" .= (["10.0.0.5:9092"] :: [Text]), "lanes" .= (0 :: Int)])
           lookup endpoint run.spec.knobs `shouldBe` Just (RawText "http://10.0.0.4:5318")
         _ -> expectationFailure "expected one tracing run"
     resolveOnCell tracingRegistry environment FileSink tracing `shouldSatisfy` isLeft
@@ -163,7 +165,7 @@ tracingRegistry = either (error . show) id (mkRegistry [(mkBundle selftestLayer 
     original = maybe (error "missing PostgreSQL selftest") id (lookupScenario registry scenarioId)
     endpoint = either (error . Text.unpack) id (mkKnobName "otel.endpoint")
     knob = KnobSpec endpoint "OTLP endpoint" KnobText (VText "") AnyValue []
-    requirements = EnvRequirements original.requires.postgres original.requires.extraPostgres True
+    requirements = EnvRequirements original.requires.postgres original.requires.extraPostgres [legacyKafkaName]
     enhanced = Scenario original.id original.revision original.summary original.tier original.placement (knob : original.knobs) (allTelemetryArms original.dimensions) original.phases requirements original.knownDefect original.run
 
 withEndpoints :: CellEnvironment -> Maybe CellBroker -> Maybe OtlpSinks -> CellEnvironment

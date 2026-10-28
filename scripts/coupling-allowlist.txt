@@ -1,20 +1,20 @@
 # Permitted matches of the coupling check (just coupling-check): one exact
 # `path:text` line per line that `grep -riE 'keiro|kiroku|pgmq|shibuya|kafka'`
-# prints for the audited paths. Only generic prose belongs here, never a type,
-# identifier, URI, schema name, or fixture value. The lines below are the
-# Kafka environment fields that
-# docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md
-# removes; that plan deletes them from this file.
-kenshou-core/src/Kenshou/Core/Compat.hs:      <> maybe [] (pure . ("kafka" .=)) inputs.spec.environment.kafka
-kenshou-core/src/Kenshou/Core/Env.hs:    kafka :: Bool
-kenshou-core/src/Kenshou/Core/Env.hs:    kafkaEnvironment,
-kenshou-core/src/Kenshou/Core/Env.hs:kafkaEnvironment :: EnvRequirements
-kenshou-core/src/Kenshou/Core/Env.hs:kafkaEnvironment = noEnvironment {kafka = True}
-kenshou-core/src/Kenshou/Core/Role.hs:    WorkerInit <$> value .: "runId" <*> value .: "scenario" <*> value .: "role" <*> value .: "instance" <*> value .: "seed" <*> value .: "knobs" <*> value .: "dimensions" <*> value .:? "postgres" <*> value .:? "kafka" <*> value .:? "telemetry" <*> value .: "outDir" <*> value .: "args"
-kenshou-core/src/Kenshou/Core/Role.hs:    kafka :: Maybe Value,
-kenshou-core/src/Kenshou/Core/Role.hs:  toJSON value = object ["schema" .= ("kenshou.worker-init/v1" :: Text), "runId" .= value.runId, "scenario" .= value.scenario, "role" .= value.role, "instance" .= value.instanceName, "seed" .= value.seed, "knobs" .= value.knobs, "dimensions" .= value.dimensions, "postgres" .= value.postgres, "kafka" .= value.kafka, "telemetry" .= value.telemetry, "outDir" .= value.outDir, "args" .= value.args]
-kenshou-core/src/Kenshou/Core/Role/Spawn.hs:          workerInit = WorkerInit context.runId context.scenario roleName instanceName context.seed context.knobs context.dimensions postgres context.environmentSpec.kafka context.environmentSpec.telemetry context.outDir arguments
-kenshou-core/src/Kenshou/Core/RunSpec.hs:        <> ["kafka" .= environment.kafka, "telemetry" .= environment.telemetry]
-kenshou-core/src/Kenshou/Core/RunSpec.hs:    kafka :: Maybe Value,
-kenshou-core/src/Kenshou/Core/RunSpec.hs:  parseJSON = withObject "EnvironmentSpec" \value -> EnvironmentSpec <$> (value .:? "placement" .!= RunLocal) <*> value .:? "machineProfile" <*> value .:? "postgres" <*> (value .:? "extraPostgres" .!= Map.empty) <*> value .:? "kafka" <*> value .:? "telemetry"
-kenshou-core/test/golden/run-spec.effective.json:{"schema":"kenshou.run-spec/v1","runId":"01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55","scenario":"selftest/kernel/correctness/postgres-roundtrip","scenarioRevision":1,"knobs":{"selftest.events":3},"dimensions":{"pg.durability":"durable","pg.version":"18"},"seed":7,"phases":{"warmUpSeconds":0,"steadySeconds":0,"drainSeconds":0},"timeoutSeconds":120,"environment":{"placement":"local","machineProfile":"local/darwin-aarch64","postgres":{"mode":"ephemeral","settings":{}},"kafka":null,"telemetry":null},"cohortExpectation":null,"comparison":null,"labels":{}}
+# prints for the audited paths. Only generic prose and the enumerated
+# compatibility shim belong here, never a new type, identifier, URI, schema name,
+# or fixture value. The shim is the legacy resource name constant, the readers
+# that map the field documents wrote before named resources, and the
+# compat-key/v1 renderer that keeps recorded comparison keys stable
+# (docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md).
+kenshou-core/src/Kenshou/Core/Compat.hs:    others = Map.delete legacyKafkaName resources
+kenshou-core/src/Kenshou/Core/Compat.hs:  maybe [] (pure . (Key.fromText (renderResourceName legacyKafkaName) .=)) (Map.lookup legacyKafkaName resources)
+kenshou-core/src/Kenshou/Core/Compat.hs:-- | compat-key/v1 shim: keeps Kafka comparison keys stable for recorded baselines.
+kenshou-core/src/Kenshou/Core/Compat.hs:import Kenshou.Core.Resource.Types (ResourceName, legacyKafkaName, renderResourceName)
+kenshou-core/src/Kenshou/Core/Resource/Types.hs:    legacyKafkaName,
+kenshou-core/src/Kenshou/Core/Resource/Types.hs:legacyKafkaName :: ResourceName
+kenshou-core/src/Kenshou/Core/Resource/Types.hs:legacyKafkaName = ResourceName "kafka"
+kenshou-core/src/Kenshou/Core/RunSpec.hs:      | otherwise -> fail (Text.unpack label <> ".kafka and " <> Text.unpack label <> ".resources.kafka disagree")
+kenshou-core/src/Kenshou/Core/RunSpec.hs:    (Just found, Nothing) -> pure (Map.insert legacyKafkaName found resources)
+kenshou-core/src/Kenshou/Core/RunSpec.hs:  case (legacy, Map.lookup legacyKafkaName resources) of
+kenshou-core/src/Kenshou/Core/RunSpec.hs:  legacy <- value .:? "kafka"
+kenshou-core/src/Kenshou/Core/RunSpec.hs:import Kenshou.Core.Resource.Types (ResourceName, legacyKafkaName)

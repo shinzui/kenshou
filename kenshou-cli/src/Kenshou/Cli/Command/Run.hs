@@ -4,6 +4,7 @@ import Data.Aeson qualified as Aeson
 import Data.Bifunctor (first)
 import Data.ByteString.Lazy.Char8 qualified as LazyByteString
 import Data.List.NonEmpty qualified as NonEmpty
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
@@ -15,6 +16,7 @@ import Kenshou.Core.Id
 import Kenshou.Core.Knob (parseAssignment)
 import Kenshou.Core.Outcome (renderOutcome)
 import Kenshou.Core.Phase (PhasePlan (..), zeroPhases)
+import Kenshou.Core.Resource.Types (legacyKafkaName)
 import Kenshou.Core.Run
 import Kenshou.Core.RunResult (RunResult (..))
 import Kenshou.Core.RunSpec
@@ -96,7 +98,7 @@ runHandler options environment = case schemaDiagnostic options.config.diagnostic
           input <- loadInput options
           case input >>= applyOverrides options of
             Left err -> Text.IO.hPutStrLn stderr ("kenshou: " <> err) >> pure (ExitFailure 2)
-            Right spec -> case validateKafkaEnvironment spec.environment.kafka of
+            Right spec -> case validateKafkaEnvironment (Map.lookup legacyKafkaName spec.environment.resources) of
               Left err -> Text.IO.hPutStrLn stderr ("kenshou: " <> err) >> pure (ExitFailure 2)
               Right _ -> do
                 resolved <- resolveRunSpec environment.registry spec

@@ -3,7 +3,9 @@ module Main (main) where
 import Control.Exception (bracket_)
 import Data.Aeson (Value (..), encode, object, toJSON, (.=))
 import Data.Aeson qualified as Aeson
+import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.Types qualified as Aeson
 import Data.ByteString qualified as ByteString
 import Data.ByteString.Char8 qualified as ByteString.Char8
 import Data.ByteString.Lazy qualified as LazyByteString
@@ -15,10 +17,14 @@ import Data.Text.IO qualified as Text.IO
 import Data.Time (UTCTime (..), fromGregorian)
 import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cli.Config (ConfigInputs (..))
+import Kenshou.Core.Compat (renderResourceInputs)
 import Kenshou.Core.Env (mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (parseLayer, parseRunId, parseScenarioId, renderLayer, renderScenarioId)
 import Kenshou.Core.Manifest (writeManifest)
 import Kenshou.Core.Outcome (Outcome (InfrastructureFailure, Passed))
+import Kenshou.Core.Resource.Types (legacyKafkaName, renderResourceName)
+import Kenshou.Core.Role qualified as Role
+import Kenshou.Core.RunSpec qualified as RunSpec
 import Kenshou.Evidence.Attest (AttestOptions (..), AttestResult (..), Recomputation (..), Recomputer (..), attest, coreRecomputers)
 import Kenshou.Evidence.Bundle (BundleWriteError (..), BundleWriteResult (..), runRecordPath, writeAttestationRecord, writeRunRecord, writeRunRecordWith)
 import Kenshou.Evidence.Check (CheckOptions (..), Finding (..), checkBundle, checkBundleWithStore, checkDocument)
@@ -54,6 +60,24 @@ main = hspec do
       fmap renderLayer <$> traverse parseLayer layers `shouldBe` Right (layers :: [Text])
       let identifiers = [layer <> "/component/correctness/name" | layer <- layers]
       fmap renderScenarioId <$> traverse parseScenarioId identifiers `shouldBe` Right identifiers
+    it "reads a run specification with a null legacy resource field as no resources" do
+      decoded <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-spec.selftest-null-kafka.json" >>= either fail pure
+      (decoded :: RunSpec.RunSpec).environment.resources `shouldBe` Map.empty
+      environmentKeys (toJSON decoded) `shouldSatisfy` notElem (Key.fromText (renderResourceName legacyKafkaName))
+    it "reads the legacy resource field of a run specification as the named resource" do
+      raw <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-spec.kafka-redpanda-container.json" >>= either fail pure
+      decoded <- either fail pure (Aeson.parseEither Aeson.parseJSON raw) :: IO RunSpec.RunSpec
+      let legacy = environmentField (renderResourceName legacyKafkaName) raw
+      Map.lookup legacyKafkaName decoded.environment.resources `shouldBe` legacy
+      environmentKeys (toJSON decoded) `shouldSatisfy` notElem (Key.fromText (renderResourceName legacyKafkaName))
+      Aeson.parseEither Aeson.parseJSON (toJSON decoded) `shouldBe` Right decoded
+      -- compat-key/v1 renders that resource where the legacy field sat, so recorded keys hold.
+      object (renderResourceInputs decoded.environment.resources) `shouldBe` object [Key.fromText (renderResourceName legacyKafkaName) .= legacy]
+    it "reads the legacy resource field of a worker initialization as the named resource" do
+      raw <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/worker-init.legacy-kafka.json" >>= either fail pure
+      decoded <- either fail pure (Aeson.parseEither Aeson.parseJSON raw) :: IO Role.WorkerInit
+      Just (Map.lookup legacyKafkaName decoded.resources) `shouldBe` fmap Just (topField (renderResourceName legacyKafkaName) raw)
+      Aeson.parseEither Aeson.parseJSON (toJSON decoded) `shouldBe` Right decoded
     it "keeps a recorded comparison key a function of its inputs and migration set names" do
       document <- Aeson.eitherDecodeFileStrict' "test/fixtures/consumer-records/run-result.hydration-cost.json" >>= either fail pure
       (recordedKey, inputs) <- case document of
@@ -816,3 +840,19 @@ writeCellRunFixture runDirectory outerPath cellRunId revision includeGce = do
       names
   let outer = CellManifest cellId "alpha" leaseId 1 timestamp "0.1.0" (ManifestPayload (Text.replicate 64 "a") ("/nix/store/" <> Text.replicate 32 "a" <> "-fixture")) Cell.InfrastructureFailure 3600 artifacts
   LazyByteString.writeFile outerPath (encode outer)
+
+environmentKeys :: Value -> [Key.Key]
+environmentKeys (Object fields) = case KeyMap.lookup "environment" fields of
+  Just (Object environment) -> KeyMap.keys environment
+  _ -> []
+environmentKeys _ = []
+
+environmentField :: Text -> Value -> Maybe Value
+environmentField name (Object fields) = case KeyMap.lookup "environment" fields of
+  Just (Object environment) -> KeyMap.lookup (Key.fromText name) environment
+  _ -> Nothing
+environmentField _ _ = Nothing
+
+topField :: Text -> Value -> Maybe Value
+topField name (Object fields) = KeyMap.lookup (Key.fromText name) fields
+topField _ _ = Nothing

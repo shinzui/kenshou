@@ -33,7 +33,7 @@ proxyPartitionScenario =
       knobs = [],
       dimensions = postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) telemetryOff,
       phases = zeroPhases,
-      requires = EnvRequirements (Just (PostgresRequirement [] [] False)) [] False,
+      requires = EnvRequirements (Just (PostgresRequirement [] [] False)) [] [],
       knownDefect = Nothing,
       run = runProxyPartition
     }

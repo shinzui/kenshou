@@ -6,13 +6,14 @@ module Kenshou.Core.Env
     PostgresRequirement (..),
     EnvRequirements (..),
     noEnvironment,
-    kafkaEnvironment,
+    requiresResource,
   )
 where
 
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Database.PostgreSQL.Migrate (MigrationComponent, componentName)
+import Kenshou.Core.Resource.Types (ResourceName)
 
 -- | The name of a migration set, which is also its pg-migrate component name and the
 -- text a scenario's comparison key records. 'Kenshou.Core.Bundle.mkRegistry' rejects
@@ -47,12 +48,14 @@ data PostgresRequirement = PostgresRequirement
 data EnvRequirements = EnvRequirements
   { postgres :: Maybe PostgresRequirement,
     extraPostgres :: [(Text, PostgresRequirement)],
-    kafka :: Bool
+    -- | Named resources the scenario needs, provisioned by registered providers.
+    resources :: [ResourceName]
   }
   deriving stock (Eq, Show)
 
 noEnvironment :: EnvRequirements
-noEnvironment = EnvRequirements Nothing [] False
+noEnvironment = EnvRequirements Nothing [] []
 
-kafkaEnvironment :: EnvRequirements
-kafkaEnvironment = noEnvironment {kafka = True}
+-- | An environment that needs one named resource and nothing else.
+requiresResource :: ResourceName -> EnvRequirements
+requiresResource name = noEnvironment {resources = [name]}

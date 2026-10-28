@@ -1,0 +1,12 @@
+Verbatim data from mori://shinzui/keiro-runtime-kenshou, read by the consumer compatibility
+group of kenshou-evidence/test/Main.hs.
+
+layer-strings.json                     the layer identifiers its sealed records carry
+run-result.hydration-cost.json         working-tree run 01a0d05d-17b6-7680-ba1c-1baa84dcd1ce
+run-spec.selftest-null-kafka.json      kenshou-core/test/golden/run-spec.effective.json at commit
+                                       a1648293443ad88ff1695ed800ff44c99993574e
+run-spec.kafka-redpanda-container.json working-tree run 01a0d5bf-09e3-7727-91f9-5a6b3f04ce2c,
+                                       run-spec.json
+worker-init.legacy-kafka.json          constructed in the kenshou.worker-init/v1 shape that
+                                       commit's WorkerInit codec writes; the consumer commits
+                                       no worker-init document

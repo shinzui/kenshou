@@ -51,10 +51,15 @@ the resource named `kafka`.
 
 ## Progress
 
-- [ ] M1: `Kenshou.Core.Resource` exists; `EnvRequirements`, `EnvironmentSpec`, `WorkerInit`,
+- [x] M1: `Kenshou.Core.Resource` exists; `EnvRequirements`, `EnvironmentSpec`, `WorkerInit`,
   and `CompatInputs` carry named resources; the compatibility golden test in
   `kenshou-core/test/Kenshou/ResourceSpec.hs` decodes the consumer-produced fixtures and the
   synthetic resource-map fixture and round-trips both; `cabal test kenshou-core` passes.
+  (2026-10-28; the types are in `Kenshou.Core.Resource.Types`; the consumer-document cases
+  are in the `consumer compatibility` group of `kenshou-evidence/test/Main.hs` with goldens in
+  `kenshou-evidence/test/fixtures/consumer-records/`, and the synthetic `named resources`
+  group is in `ResourceSpec`; see Decision Log. All suites green; the allow-list holds only
+  the legacy shim lines.)
 - [ ] M2: `LayerBundle` carries resource providers; `mkRegistry` rejects an unprovided or
   duplicate resource; `Kenshou.Core.Run` brackets providers and `Kenshou.Core.Role.Spawn` and
   `Kenshou.Check.Process` send provisioned values to workers; every self-test bundle registers
@@ -105,6 +110,21 @@ the resource named `kafka`.
   broker cells have today. The adapter is the one place that knowledge lives.
   Date: 2026-10-28
 
+
+- Decision: The resource types live in `Kenshou.Core.Resource.Types` (`ResourceName`,
+  `ProvisionedResource`, `CellBinding`), and `Kenshou.Core.Resource` adds the provider
+  contract. The consumer-produced goldens and the tests that read them live in
+  `kenshou-evidence/test/fixtures/consumer-records/` and the `consumer compatibility` group of
+  `kenshou-evidence/test/Main.hs`; the kernel's `ResourceSpec` uses synthetic documents under
+  `kenshou-core/test/golden/resources/` whose resources are named `broker` and
+  `object-store`. `renderResourceInputs` is exported so both groups test the shim directly.
+  The legacy worker-init golden is constructed in the shape the import revision's codec
+  writes, because the consumer commits no worker-init document.
+  Rationale: `Kenshou.Core.Context` needs `ProvisionedResource` and the provider needs
+  `RunContext`, so one module would form an import cycle. Consumer values may appear only
+  in the consumer-records area and `fixtures/consumer-baseline/` (EP-2's rule), which the
+  plan's `kenshou-core/test/golden/compat/` location would break.
+  Date: 2026-10-28
 
 ## Outcomes & Retrospective
 

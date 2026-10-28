@@ -5,11 +5,15 @@ module Kenshou.Core.Compat
     comparisonKey,
     seriesKey,
     compatibleExcept,
+    renderResourceInputs,
   )
 where
 
 import Data.Aeson (ToJSON (..), Value, object, (.=))
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.Types (Pair)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -20,6 +24,7 @@ import Kenshou.Core.Env (MigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Env.Postgres (PgSettingsSnapshot)
 import Kenshou.Core.Knob (KnobName)
 import Kenshou.Core.Knob qualified as Knob
+import Kenshou.Core.Resource.Types (ResourceName, legacyKafkaName, renderResourceName)
 import Kenshou.Core.RunSpec (EffectiveRunSpec (..), EnvironmentSpec (..))
 import Kenshou.Core.Version (suiteVersion)
 
@@ -33,6 +38,7 @@ data CompatField
   | CfPostgresProfile
   | CfSchemas
   | CfCohort
+  | CfResource ResourceName
   deriving stock (Eq, Show)
 
 data CompatInputs = CompatInputs
@@ -77,8 +83,18 @@ compatibilityValue includeCohort inputs =
       "postgresProfile" .= inputs.postgres,
       "schemas" .= fmap renderMigrationSetName inputs.schemas
     ]
-      <> maybe [] (pure . ("kafka" .=)) inputs.spec.environment.kafka
+      <> renderResourceInputs inputs.spec.environment.resources
       <> ["cohortPlanHash" .= inputs.cohortPlanHash | includeCohort]
+
+-- | compat-key/v1 shim: keeps Kafka comparison keys stable for recorded baselines.
+-- The resource that documents once carried as a top-level field renders there; every
+-- other resource renders under @resources@, which is omitted when empty.
+renderResourceInputs :: Map ResourceName Value -> [Pair]
+renderResourceInputs resources =
+  maybe [] (pure . (Key.fromText (renderResourceName legacyKafkaName) .=)) (Map.lookup legacyKafkaName resources)
+    <> ["resources" .= others | not (Map.null others)]
+  where
+    others = Map.delete legacyKafkaName resources
 
 differences :: CompatInputs -> CompatInputs -> [CompatField]
 differences left right =
@@ -94,7 +110,9 @@ differences left right =
     <> [CfDimension DimPgDurability | left.spec.dimensions.pgDurability /= right.spec.dimensions.pgDurability]
     <> [CfDimension DimPgVersion | left.spec.dimensions.pgVersion /= right.spec.dimensions.pgVersion]
     <> [CfKnob name | name <- Set.toAscList knobNames, Map.lookup name leftKnobs /= Map.lookup name rightKnobs]
+    <> [CfResource name | name <- Set.toAscList resourceNames, Map.lookup name left.spec.environment.resources /= Map.lookup name right.spec.environment.resources]
   where
+    resourceNames = Map.keysSet left.spec.environment.resources <> Map.keysSet right.spec.environment.resources
     leftKnobs = Knob.resolvedKnobsMap left.spec.knobs
     rightKnobs = Knob.resolvedKnobsMap right.spec.knobs
     knobNames = Map.keysSet leftKnobs <> Map.keysSet rightKnobs

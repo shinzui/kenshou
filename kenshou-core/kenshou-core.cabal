@@ -54,6 +54,7 @@ library
     Kenshou.Core.Manifest
     Kenshou.Core.Outcome
     Kenshou.Core.Phase
+    Kenshou.Core.Resource.Types
     Kenshou.Core.Role
     Kenshou.Core.Role.Dispatch
     Kenshou.Core.Role.Spawn
@@ -129,6 +130,7 @@ test-suite kenshou-core-test
     Kenshou.PerfResultSpec
     Kenshou.PerfSpec
     Kenshou.PlanSpec
+    Kenshou.ResourceSpec
 
   build-depends:
     aeson >=2.2 && <2.3,

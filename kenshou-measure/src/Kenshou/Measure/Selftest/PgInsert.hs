@@ -135,7 +135,7 @@ telemetryOff =
     NotApplicable
 
 pgRequirements :: EnvRequirements
-pgRequirements = EnvRequirements (Just (PostgresRequirement [] [("shared_preload_libraries", "'pg_stat_statements'")] False)) [] False
+pgRequirements = EnvRequirements (Just (PostgresRequirement [] [("shared_preload_libraries", "'pg_stat_statements'")] False)) [] []
 
 name :: Text -> KnobName
 name = either (error . show) id . mkKnobName

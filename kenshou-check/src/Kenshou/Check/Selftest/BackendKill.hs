@@ -34,7 +34,7 @@ backendKillScenario =
       knobs = [],
       dimensions = postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) telemetryOff,
       phases = zeroPhases,
-      requires = EnvRequirements (Just (PostgresRequirement [] [] True)) [] False,
+      requires = EnvRequirements (Just (PostgresRequirement [] [] True)) [] [],
       knownDefect = Nothing,
       run = runBackendKill
     }

@@ -262,7 +262,7 @@ stallKnobs :: [KnobSpec]
 stallKnobs = [intKnob "stall.deadline-s" "Seconds without progress before capture" 5 2 60]
 
 postgresRequirement :: EnvRequirements
-postgresRequirement = EnvRequirements (Just (PostgresRequirement [] [("shared_preload_libraries", "'pg_stat_statements'")] False)) [] False
+postgresRequirement = EnvRequirements (Just (PostgresRequirement [] [("shared_preload_libraries", "'pg_stat_statements'")] False)) [] []
 
 telemetryOff :: DimensionSupport
 telemetryOff =

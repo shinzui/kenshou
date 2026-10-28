@@ -14,6 +14,8 @@ where
 import Data.Aeson
 import Data.Aeson.Types (Pair, Parser)
 import Data.Int (Int64)
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime)
@@ -22,6 +24,8 @@ import Kenshou.Core.Id (RunId, ScenarioId, Seed)
 import Kenshou.Core.Knob (ResolvedKnobs)
 import Kenshou.Core.Log (Logger)
 import Kenshou.Core.Phase (PhaseName (..), renderPhaseName)
+import Kenshou.Core.Resource.Types (ResourceName)
+import Kenshou.Core.RunSpec (withLegacyResource)
 
 newtype RoleName = RoleName Text deriving stock (Eq, Ord, Show)
 
@@ -42,7 +46,7 @@ data WorkerInit = WorkerInit
     knobs :: ResolvedKnobs,
     dimensions :: Dimensions,
     postgres :: Maybe PostgresConnInfo,
-    kafka :: Maybe Value,
+    resources :: Map ResourceName Value,
     telemetry :: Maybe Value,
     outDir :: FilePath,
     args :: Value
@@ -77,13 +81,14 @@ instance ToJSON PostgresConnInfo where toJSON value = object ["connectionString"
 instance FromJSON PostgresConnInfo where parseJSON = withObject "PostgresConnInfo" \value -> PostgresConnInfo <$> value .: "connectionString" <*> value .: "adminConnectionString"
 
 instance ToJSON WorkerInit where
-  toJSON value = object ["schema" .= ("kenshou.worker-init/v1" :: Text), "runId" .= value.runId, "scenario" .= value.scenario, "role" .= value.role, "instance" .= value.instanceName, "seed" .= value.seed, "knobs" .= value.knobs, "dimensions" .= value.dimensions, "postgres" .= value.postgres, "kafka" .= value.kafka, "telemetry" .= value.telemetry, "outDir" .= value.outDir, "args" .= value.args]
+  toJSON value = object ["schema" .= ("kenshou.worker-init/v1" :: Text), "runId" .= value.runId, "scenario" .= value.scenario, "role" .= value.role, "instance" .= value.instanceName, "seed" .= value.seed, "knobs" .= value.knobs, "dimensions" .= value.dimensions, "postgres" .= value.postgres, "resources" .= value.resources, "telemetry" .= value.telemetry, "outDir" .= value.outDir, "args" .= value.args]
 
 instance FromJSON WorkerInit where
   parseJSON = withObject "WorkerInit" \value -> do
     schema <- value .: "schema"
     if schema /= ("kenshou.worker-init/v1" :: Text) then fail "unsupported worker-init schema" else pure ()
-    WorkerInit <$> value .: "runId" <*> value .: "scenario" <*> value .: "role" <*> value .: "instance" <*> value .: "seed" <*> value .: "knobs" <*> value .: "dimensions" <*> value .:? "postgres" <*> value .:? "kafka" <*> value .:? "telemetry" <*> value .: "outDir" <*> value .: "args"
+    resources <- (value .:? "resources" .!= Map.empty) >>= withLegacyResource "worker-init" value
+    WorkerInit <$> value .: "runId" <*> value .: "scenario" <*> value .: "role" <*> value .: "instance" <*> value .: "seed" <*> value .: "knobs" <*> value .: "dimensions" <*> value .:? "postgres" <*> pure resources <*> value .:? "telemetry" <*> value .: "outDir" <*> value .: "args"
 
 instance ToJSON ControlMessage where
   toJSON (CtlInit value) = tagged "init" ["init" .= value]

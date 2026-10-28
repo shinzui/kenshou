@@ -230,7 +230,7 @@ placementMatches RunOnCell PlaceEither = True
 placementMatches _ _ = False
 
 defaultEnvironment :: SpecPlacement -> EnvironmentSpec
-defaultEnvironment placement = EnvironmentSpec placement Nothing Nothing Map.empty Nothing Nothing
+defaultEnvironment placement = EnvironmentSpec placement Nothing Nothing Map.empty Map.empty Nothing
 
 instance ToJSON RunPlan where
   toJSON plan =
