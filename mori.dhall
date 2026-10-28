@@ -105,16 +105,4 @@ in  Schema.Project::{
       , Schema.MoriRef::{ namespace = "iand675", name = "hs-opentelemetry" }
       , Schema.MoriRef::{ namespace = "shinzui", name = "okf" }
       ]
-    , docs =
-      [ Schema.DocRef::{
-        , key = "masterplan"
-        , kind = Schema.DocKind.Spec
-        , audience = Schema.DocAudience.Module
-        , description = Some
-            "Initiative plan for extracting the package-agnostic verification harness"
-        , location =
-            Schema.DocLocation.LocalFile
-              "./docs/masterplans/1-extract-a-package-agnostic-verification-harness-into-kenshou.md"
-        }
-      ]
     }
