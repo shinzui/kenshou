@@ -75,9 +75,14 @@ handoff during a milestone, add a short prose note stating the remaining outcome
   ADR-20 harness cohort and confined consumer data, which EP-1 to EP-4 asked this plan to
   record; strict validation reports `OK: 20 concepts`. All five are Accepted because their
   interfaces are merged.)
-- [ ] M3: `docs/terminology/`, `docs/improvement-requests/`, and `docs/friction-log/` exist
+- [x] M3: `docs/terminology/`, `docs/improvement-requests/`, and `docs/friction-log/` exist
   with pinned descriptors, the terminology carries the generalized vocabulary, and all three
   validate strictly.
+  (2026-10-28; the terminology carries the consumer's thirty terms as TERM-1 to TERM-30,
+  generalized where they named one runtime, plus TERM-31 layer identifier, TERM-32 layer
+  bundle, and TERM-33 named resource; the improvement-requests bundle is empty; the friction
+  log moved from okf-profiles v0.23.0 to v0.25.0. Strict validation reports `OK: 33
+  concepts`, `OK: 0 concepts`, and `OK: 1 concepts`.)
 - [ ] M4: `docs/guides/adopting-kenshou-in-a-project.md` validates strictly, every bundle is
   declared in `mori.dhall` and registered, `README.md` points at the bundles and the guide,
   and `just verify` runs every bundle validation and the index drift check.
