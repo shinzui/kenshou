@@ -316,8 +316,13 @@ the last pre-adoption baseline.
 Phase A is complete (EP-1, 2026-10-28): the seven generic packages and the generic
 `kenshou-cli` library build and test here with no consumer layer package in Cabal's plan,
 the `kenshou` executable in `kenshou-synthetic` runs the self-test scenarios, and
-`just verify` passes locally. The CI run on a pushed commit is not yet observed. Phase B
-(EP-2) and the terminology and carried-over ADR part of EP-6 are now unblocked.
+`just verify` passes locally. The CI run on a pushed commit is not yet observed.
+
+Phase B is in progress. EP-2 M1 to M3 are accepted (open `LayerId`, suite-supplied
+migration sets with no migration library in the plan, and `Program` carrying rules, the
+component graph, and `PerfContracts`). EP-2 M4 is blocked on a scope decision about the
+perf goldens (see Surprises & Discoveries). EP-3 waits on EP-2; the terminology and
+carried-over ADR part of EP-6 is unblocked.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published
@@ -354,6 +359,22 @@ exec-plan skill's FRICTION.md).
   plan` command resolves `cohortTemplate` and `policies/performance/catalog.v1.json`
   relative to the working directory, which EP-2 M3's `PerfContracts` work should take into
   account.
+
+- The coupling grep of EP-2 M4 cannot be empty before EP-3: the Kafka environment fields in
+  `kenshou-core/src` (`Env.hs`, `RunSpec.hs`, `Role.hs`, `Role/Spawn.hs`, `Compat.hs`) belong
+  to EP-3. Those exact lines go in `scripts/coupling-allowlist.txt` until EP-3 deletes them,
+  and EP-3's acceptance should include removing them from the allow-list.
+
+- Consumer-compatibility proofs (the seven layer strings and a recorded comparison key) live
+  in `kenshou-evidence/test/fixtures/consumer-records/` and the `consumer compatibility`
+  group of `kenshou-evidence/test/Main.hs`, the only place EP-5's guard lets consumer
+  values appear. EP-4 adds its verbatim consumer records to the same directory.
+
+- The perf goldens (`kenshou-core/test/golden/perf-prepared.fixture.json` and its siblings)
+  are captured output of a real `kenshou perf prepare` run and are shared by tests in
+  `kenshou-core`, `kenshou-remote`, and `kenshou-cli`. They cannot be regenerated from
+  synthetic inputs in this repository, which blocks EP-2 M4 as written and affects EP-5's
+  plan to delete `fixtures/consumer-baseline/`.
 
 
 ## Decision Log
