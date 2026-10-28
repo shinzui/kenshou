@@ -11,10 +11,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (getCurrentTime)
 import Kenshou.Core.Bundle (LayerBundle (..), lookupScenario, mkBundle, mkRegistry)
+import Kenshou.Core.Bundle qualified as Bundle
 import Kenshou.Core.Dimension (PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
 import Kenshou.Core.Id (Kind (..), mkSeed, newRunId, parseScenarioId, renderKind, selftestLayer)
 import Kenshou.Core.Knob (RawKnob (..), mkKnobName)
+import Kenshou.Core.Resource (CellBinding (..), ProvisionedResource (..), ResourceProvider (..), mkResourceName)
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), minimalRunSpec)
 import Kenshou.Core.RunSpec qualified as RunSpec
 import Kenshou.Core.Scenario (Scenario (..))
@@ -106,6 +108,26 @@ spec = describe "cell run slicing" do
         preparedRun.spec.environment.postgres `shouldBe` Nothing
         preparedRun.reset.postgres `shouldBe` Just (PgReset descriptor.postgresMajor [] Map.empty)
       _ -> expectationFailure "expected one worker run"
+
+  it "rejects a resource the cell cannot bind or does not report" do
+    (plan, descriptor, payload) <- preparationFixture
+    now <- getCurrentTime
+    let originalRegistry = either (error . show) id (mkRegistry [Selftest.bundle])
+        scenarioId = case plan.runs of
+          [PlannedRun _ _ _ _ _ runSpec] -> runSpec.scenario
+          _ -> error "expected one planned run"
+        original = maybe (error "missing selftest") id (lookupScenario originalRegistry scenarioId)
+        objectStore = either (error . Text.unpack) id (mkResourceName "object-store")
+        needsStore = Scenario original.id original.revision original.summary original.tier original.placement original.knobs original.dimensions original.phases (EnvRequirements original.requires.postgres original.requires.extraPostgres [objectStore]) original.knownDefect original.run
+        provider binding = ResourceProvider objectStore "Object store" (Right . maybe Null id) (\_ value action -> action (ProvisionedResource value Null)) binding
+        registryWith binding = either (error . show) id (mkRegistry [(mkBundle selftestLayer [needsStore] []) {migrations = [selftestMigrationSet], Bundle.resources = [provider binding]}])
+        payloads = Map.singleton "default" payload
+        options = PrepareOptions True False [] Cold
+        binding = Just (CellBinding "object-store" Nothing)
+        reporting = CellCapabilities descriptor.name (descriptorDigest descriptor) plan.planId now (Map.singleton "object-store" (Bool True))
+    fmap snd (prepareForCell (registryWith Nothing) descriptor Nothing [] payloads options plan).rejected `shouldBe` [ResourceUnavailable objectStore]
+    fmap snd (prepareForCell (registryWith binding) descriptor Nothing [] payloads options plan).rejected `shouldBe` [ResourceUnavailable objectStore]
+    length (prepareForCell (registryWith binding) descriptor (Just reporting) [] payloads options plan).accepted `shouldBe` 1
 
   it "keeps server-control work off the cell server unless the driver is explicitly selected" do
     (plan, descriptor, payload) <- preparationFixture
@@ -394,10 +416,10 @@ isLeft (Left _) = True
 isLeft _ = False
 
 cold :: ResetBlock
-cold = ResetBlock Cold Nothing Nothing
+cold = ResetBlock Cold Nothing Nothing Map.empty
 
 warm :: ResetBlock
-warm = ResetBlock Warm Nothing Nothing
+warm = ResetBlock Warm Nothing Nothing Map.empty
 
 preparationFixture :: IO (RunPlan, CellDescriptor, PayloadDescriptor)
 preparationFixture = do

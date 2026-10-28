@@ -34,14 +34,14 @@ cellEnvironment :: Scenario
 cellEnvironment =
   Scenario
     { id = either (error . show) id (parseScenarioId "selftest/remote/correctness/cell-environment"),
-      revision = 1,
+      revision = 2,
       summary = "Checks the environment supplied to a local or cell run.",
       tier = TierSmoke,
       placement = PlaceEither,
       knobs =
         [ KnobSpec expectPlacement "Expected execution placement" KnobText (VText "any") (OneOf (VText "any" :| [VText "local", VText "cell"])) [],
           KnobSpec otlpEndpoint "Optional OTLP HTTP endpoint to check" KnobText (VText "") AnyValue [],
-          KnobSpec kafkaBootstrap "Optional Kafka bootstrap address to check" KnobText (VText "") AnyValue []
+          KnobSpec tcpEndpoint "Optional host:port to check for TCP reachability" KnobText (VText "") AnyValue []
         ],
       dimensions = postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) noDimensions,
       phases = zeroPhases,
@@ -63,7 +63,7 @@ runCellEnvironment context = do
       durabilityOk = Map.lookup "fsync" postgres.snapshot.settings == Just (if context.dimensions.pgDurability == Just PgDurable then "on" else "off")
   fresh <- (== Right "0") <$> psql postgres.connectionString "SELECT count(*) FROM kenshou_selftest.roundtrip"
   otlp <- reachableOtlp (knobText context.knobs otlpEndpoint)
-  kafka <- reachableKafka (knobText context.knobs kafkaBootstrap)
+  tcp <- reachableTcp (knobText context.knobs tcpEndpoint)
   let checks =
         [ ("placement-as-expected", placementOk),
           ("postgres-mode-as-expected", modeOk),
@@ -71,7 +71,7 @@ runCellEnvironment context = do
           ("pg-durability-honoured", durabilityOk),
           ("database-is-fresh", fresh),
           ("otlp-reachable", otlp),
-          ("kafka-reachable", kafka)
+          ("tcp-endpoint-reachable", tcp)
         ]
       failures = [label | (label, False) <- checks]
   putSummary context Verdicts "cell-environment" (object ["checks" .= Map.fromList checks])
@@ -103,11 +103,13 @@ reachableOtlp endpoint
         pure (statusCode (responseStatus response) `elem` [200, 202, 204])
       recovered result
 
-reachableKafka :: Text -> IO Bool
-reachableKafka bootstrap
-  | Text.null bootstrap = pure True
+-- | Whether the first of a comma-separated list of host:port addresses accepts a
+-- TCP connection within two seconds; an empty list is trivially reachable.
+reachableTcp :: Text -> IO Bool
+reachableTcp endpoints
+  | Text.null endpoints = pure True
   | otherwise = do
-      let firstAddress = Text.takeWhile (/= ',') bootstrap
+      let firstAddress = Text.takeWhile (/= ',') endpoints
           (host, colonPort) = Text.breakOnEnd ":" firstAddress
       if Text.null host || Text.null colonPort
         then pure False
@@ -125,10 +127,10 @@ recovered (Left failure)
   | Just asynchronous <- fromException failure :: Maybe SomeAsyncException = throwIO asynchronous
   | otherwise = pure False
 
-expectPlacement, otlpEndpoint, kafkaBootstrap :: KnobName
+expectPlacement, otlpEndpoint, tcpEndpoint :: KnobName
 expectPlacement = knobName "remote.expect-placement"
 otlpEndpoint = knobName "remote.otlp-endpoint"
-kafkaBootstrap = knobName "remote.kafka-bootstrap"
+tcpEndpoint = knobName "remote.tcp-endpoint"
 
 knobName :: Text -> KnobName
 knobName = either (error . show) id . mkKnobName

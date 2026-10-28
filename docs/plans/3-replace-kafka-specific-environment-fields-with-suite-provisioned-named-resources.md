@@ -69,10 +69,14 @@ the resource named `kafka`.
   `run-spec.json`, and `fingerprint.resources.stub` in `run-result.json`; all suites,
   schemas, and self-tests pass. `resolveRunSpec` now does the validation the CLI's interim
   `validateKafkaEnvironment` did, which is deleted.)
-- [ ] M3: the cell environment and submission documents carry a `resources` block beside the
+- [x] M3: the cell environment and submission documents carry a `resources` block beside the
   legacy `broker` fields, `Kenshou.Remote.Cell.Legacy` adapts a cell broker to the `kafka`
   resource, the Kafka probe is gone from `Kenshou.Remote.Selftest`, and
   `cabal test kenshou-remote` passes with the cell goldens unchanged byte for byte.
+  (2026-10-28; 157 remote examples pass, including the new `ResourceUnavailable` and
+  resources round-trip cases; `just schemas-check` validates the unchanged cell examples
+  against the extended schema copies; `selftest/remote/correctness/cell-environment` is at
+  revision 2 with the `remote.tcp-endpoint` knob.)
 - [ ] M4: the coupling grep in this plan (EP-5 wraps it into the `coupling-check` recipe)
   reports only allow-listed lines, and `just verify` passes.
 
@@ -136,6 +140,18 @@ the resource named `kafka`.
   `withLocal` is a rank-N field, which `HasField` cannot select, so the runner binds it
   with a record pattern.
   Rationale: Existing consumer run results and their attestations stay byte-comparable.
+  Date: 2026-10-28
+
+- Decision: `legacyBrokerReset` moves a reset of the legacy-named resource out of
+  `reset.resources` and into `reset.broker = {"wipe": true}`, rather than adding the broker
+  wipe beside a `reset.resources` entry; a Kafka submission therefore keeps exactly the
+  shape it had. A required resource is available on a cell when its provider has a cell
+  binding and the capability cache reports the binding's capability as present; for the
+  legacy-named resource a broker image in the descriptor also counts unless the cache says
+  the capability is absent.
+  Rationale: The cell agent decodes `cell.submission/v1` with `additionalProperties: false`,
+  so any `reset.resources` member would make every in-service cell reject Kafka runs until
+  load-testing-infra adopts the extension.
   Date: 2026-10-28
 
 ## Outcomes & Retrospective

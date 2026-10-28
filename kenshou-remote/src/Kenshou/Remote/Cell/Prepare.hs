@@ -28,18 +28,20 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Bundle (Registry, lookupScenario)
+import Kenshou.Core.Bundle (Registry, lookupResource, lookupScenario)
 import Kenshou.Core.Canonical (sha256Hex)
 import Kenshou.Core.Cohort (CohortIdentity (..), PlanHash (..))
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..), resolveDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
 import Kenshou.Core.Id (Kind (..), RunId, ScenarioId (..), renderRunId)
+import Kenshou.Core.Resource (CellBinding (..), ResourceName, ResourceProvider (..))
 import Kenshou.Core.Resource.Types (legacyKafkaName)
 import Kenshou.Core.RunSpec (CohortExpectation (..), ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..))
 import Kenshou.Core.Scenario (Placement (..), Scenario (..))
 import Kenshou.Plan.RunPlan (PlannedRun (..), RunPlan (..), TrialInfo (..))
 import Kenshou.Remote.Cell.Docs (BrokerReset (..), CachePolicy (..), CellDescriptor (..), CellImages (..), CollectOptions (..), Limits (..), PgReset (..), Requirements (..), ResetBlock (..), Submission (..), WorkObject (..))
 import Kenshou.Remote.Cell.Lease (CellRef (..))
+import Kenshou.Remote.Cell.Legacy (legacyBrokerAvailable, legacyBrokerReset)
 import Kenshou.Remote.Cell.RouteRules (CellCapabilities (..), RoutingRule (..), capabilityKnown, descriptorDigest, matchingRules)
 import Kenshou.Remote.Payload (Bundle (..), CellPayload (..), PayloadDescriptor (..))
 import Kenshou.Remote.Store (Bucket (..))
@@ -57,7 +59,7 @@ data RejectReason
   | PgVersionMismatch Int Int
   | DurabilityNotDurable
   | NeedsServerControl Text
-  | NeedsBrokerButCellHasNone
+  | ResourceUnavailable ResourceName
   | PayloadLabelUnknown Text
   | ConflictingPostgresSetting Text
   | CollidingExtraPostgresName Text
@@ -159,7 +161,7 @@ prepareWithPayload registry descriptor cachedCapabilities routingRules payloads 
       case controlled of
         Just name | not driverLocal -> Left (NeedsServerControl name)
         _ -> pure ()
-      if legacyKafkaName `elem` requirements.resources && Text.null descriptor.images.broker then Left NeedsBrokerButCellHasNone else pure ()
+      bindings <- traverse cellBinding requirements.resources
       let rules = matchingRules routingRules entry.spec
           denied = find (\rule -> maybe False (\cache -> capabilityKnown cache rule.requires == Just False) activeCapabilities) rules
       case denied of
@@ -200,13 +202,21 @@ prepareWithPayload registry descriptor cachedCapabilities routingRules payloads 
           spec = RunSpec (Just entry.runId) originalSpec.scenario originalSpec.scenarioRevision originalSpec.knobs dimensions originalSpec.seed originalSpec.phases originalSpec.timeoutSeconds env expectation originalSpec.comparison labels
           -- The released cell agent currently requires a PostgreSQL role reset
           -- even when the scenario itself has no database requirement.
-          reset = ResetBlock options.cachePolicy (Just (PgReset descriptor.postgresMajor [] settings)) (if legacyKafkaName `elem` requirements.resources then Just (BrokerReset True) else Nothing)
+          reset = legacyBrokerReset (ResetBlock options.cachePolicy (Just (PgReset descriptor.postgresMajor [] settings)) Nothing (Map.fromList [(name, value) | (name, binding) <- bindings, Just value <- [binding.reset]]))
           timeout = fromMaybe (max 60 (entry.estimateMinutes * 60)) originalSpec.timeoutSeconds
           notices =
             ["coerced pg.durability=durable for " <> renderRunId entry.runId | dimensions /= originalSpec.dimensions]
               <> ["capability " <> rule.requires <> " is unprobed for " <> renderRunId entry.runId <> "; run kenshou cell probe" | rule <- rules, maybe True (\cache -> capabilityKnown cache rule.requires == Nothing) activeCapabilities]
               <> ["payload not selected for " <> renderRunId entry.runId <> "; cohort expectation will be set at submission" | isNothing payloads]
       if timeout <= 0 then Left InvalidTimeout else Right (PreparedRun entry.ordinal entry.runId spec label reset timeout, notices)
+    -- A required resource is available on the cell when its provider can bind it
+    -- there and the cell reports the binding's capability; a cell broker image
+    -- still counts for the resource the legacy broker fields describe.
+    cellBinding name = do
+      binding <- maybe (Left (ResourceUnavailable name)) Right (lookupResource registry name >>= (.cell))
+      let reported = maybe Nothing (\cache -> capabilityKnown cache binding.capability) activeCapabilities
+          available = reported == Just True || (name == legacyKafkaName && reported /= Just False && legacyBrokerAvailable descriptor)
+      if available then Right (name, binding) else Left (ResourceUnavailable name)
 
     combinedSettings scenario spec = foldl add (Right Map.empty) sources
       where

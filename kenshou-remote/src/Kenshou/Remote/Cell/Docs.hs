@@ -44,6 +44,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime)
 import Kenshou.Core.Id (RunId)
+import Kenshou.Core.Resource.Types (ResourceName)
 import Kenshou.Remote.Payload (CellPayload)
 import Text.Read (readMaybe)
 
@@ -135,7 +136,10 @@ data CellEnvironment = CellEnvironment
     victoriaMetricsUrl :: !Text,
     drivers :: ![CellDriver],
     clockSkewBoundMicros :: !(Maybe Int),
-    faultHook :: !(Maybe Text)
+    faultHook :: !(Maybe Text),
+    -- | Bound values of named resources, keyed by resource name. A kenshou extension
+    -- of @cell.environment/v1@, written only when non-empty.
+    resources :: !(Map ResourceName Value)
   }
   deriving stock (Eq, Show)
 
@@ -169,7 +173,10 @@ data CachePolicy = Cold | Warm
 data ResetBlock = ResetBlock
   { cachePolicy :: !CachePolicy,
     postgres :: !(Maybe PgReset),
-    broker :: !(Maybe BrokerReset)
+    broker :: !(Maybe BrokerReset),
+    -- | Per-resource reset requests, keyed by resource name. A kenshou extension of
+    -- @cell.submission/v1@, written only when non-empty.
+    resources :: !(Map ResourceName Value)
   }
   deriving stock (Eq, Show)
 
@@ -421,6 +428,7 @@ instance ToJSON CellEnvironment where
           [ ("clock" .=) . object . pure . ("skewBoundMicros" .=) <$> environment.clockSkewBoundMicros,
             ("faultHook" .=) <$> environment.faultHook
           ]
+        <> ["resources" .= environment.resources | not (Map.null environment.resources)]
 
 instance FromJSON CellEnvironment where
   parseJSON = withObject "cell environment" \value -> do
@@ -429,7 +437,7 @@ instance FromJSON CellEnvironment where
     clock <- value .:? "clock"
     url <- metrics .: "victoriaMetricsUrl"
     skew <- traverse (.: "skewBoundMicros") clock
-    environment <- CellEnvironment <$> value .: "cell" <*> value .: "runId" <*> value .: "leaseId" <*> value .: "postgres" <*> value .: "broker" <*> value .: "otlp" <*> pure url <*> value .: "drivers" <*> pure skew <*> value .:? "faultHook"
+    environment <- CellEnvironment <$> value .: "cell" <*> value .: "runId" <*> value .: "leaseId" <*> value .: "postgres" <*> value .: "broker" <*> value .: "otlp" <*> pure url <*> value .: "drivers" <*> pure skew <*> value .:? "faultHook" <*> value .:? "resources" .!= Map.empty
     unless (validName environment.cell && validUri environment.victoriaMetricsUrl && not (null environment.drivers) && maybe True (>= 0) environment.clockSkewBoundMicros && maybe True (not . Text.null) environment.faultHook) (fail "invalid cell environment")
     pure environment
 
@@ -484,9 +492,10 @@ instance ToJSON ResetBlock where
           [ ("postgres" .=) <$> reset.postgres,
             ("broker" .=) <$> reset.broker
           ]
+        <> ["resources" .= reset.resources | not (Map.null reset.resources)]
 
 instance FromJSON ResetBlock where
-  parseJSON = withObject "cell reset" \value -> ResetBlock <$> value .: "cachePolicy" <*> value .:? "postgres" <*> value .:? "broker"
+  parseJSON = withObject "cell reset" \value -> ResetBlock <$> value .: "cachePolicy" <*> value .:? "postgres" <*> value .:? "broker" <*> value .:? "resources" .!= Map.empty
 
 instance ToJSON Limits where
   toJSON limits = object ["wallClockSeconds" .= limits.wallClockSeconds, "memoryMaxBytes" .= limits.memoryMaxBytes, "outputMaxBytes" .= limits.outputMaxBytes]

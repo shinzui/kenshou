@@ -9,3 +9,11 @@ Execution-window schema and example extension:
   Project-relative paths (artifact-level URIs pending):
     schemas/cell/cell.execution-window.v1.schema.json
     schemas/cell/examples/cell.execution-window.v1.json
+
+Kenshou extension (not in the upstream commit above):
+  cell.environment.v1.schema.json and cell.submission.v1.schema.json carry an optional
+  `resources` object (top level of the environment; inside `reset` of the submission),
+  added by docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md.
+  It is pending adoption in mori://shinzui/load-testing-infra. Until then the client never
+  sends `reset.resources` for the resource the legacy broker fields describe (see
+  Kenshou.Remote.Cell.Legacy), and the example documents are unchanged.

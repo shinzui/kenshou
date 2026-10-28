@@ -25,6 +25,7 @@
       "required": ["cachePolicy"],
       "properties": {
         "cachePolicy": {"enum": ["cold", "warm"]},
+        "resources": {"type": "object", "description": "kenshou extension pending upstream adoption: per-resource reset requests, keyed by resource name"},
         "postgres": {
           "type": "object", "additionalProperties": false,
           "required": ["major", "databases", "settings"],

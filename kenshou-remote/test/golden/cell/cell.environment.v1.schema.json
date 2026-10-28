@@ -59,7 +59,8 @@
       "required": ["skewBoundMicros"],
       "properties": {"skewBoundMicros": {"type": "integer", "minimum": 0}}
     },
-    "faultHook": {"type": "string", "minLength": 1}
+    "faultHook": {"type": "string", "minLength": 1},
+    "resources": {"type": "object", "description": "kenshou extension pending upstream adoption: bound values of named resources, keyed by resource name"}
   },
   "$defs": {
     "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,62}$"},

@@ -58,7 +58,7 @@ execSpec = describe "cell-side run-plan resolution" do
     resolveOnCell registry environment NullSink plan `shouldSatisfy` isLeft
     let pg = environment.postgres
         pg17 = CellPostgres 17 pg.host pg.port pg.database pg.user pg.connectionString
-        cell17 = CellEnvironment environment.cell environment.runId environment.leaseId pg17 environment.broker environment.otlp environment.victoriaMetricsUrl environment.drivers environment.clockSkewBoundMicros environment.faultHook
+        cell17 = CellEnvironment environment.cell environment.runId environment.leaseId pg17 environment.broker environment.otlp environment.victoriaMetricsUrl environment.drivers environment.clockSkewBoundMicros environment.faultHook environment.resources
         durable = withDimensions [("pg.durability", "durable"), ("pg.version", "18")] plan
     resolveOnCell registry cell17 NullSink durable `shouldSatisfy` isLeft
 
@@ -98,7 +98,7 @@ execSpec = describe "cell-side run-plan resolution" do
         [run] -> do
           lookup (name "remote.expect-placement") run.spec.knobs `shouldBe` Nothing
           lookup (name "remote.otlp-endpoint") run.spec.knobs `shouldBe` Just (RawText "http://10.0.0.4:5318")
-          lookup (name "remote.kafka-bootstrap") run.spec.knobs `shouldBe` Just (RawText "10.0.0.5:9092")
+          lookup (name "remote.tcp-endpoint") run.spec.knobs `shouldBe` Nothing
         _ -> expectationFailure "expected one remote probe run"
 
   it "leaves a secondary driver idle without requiring the work or environment" $
@@ -172,7 +172,7 @@ tracingRegistry = either (error . show) id (mkRegistry [(mkBundle selftestLayer 
 
 withEndpoints :: CellEnvironment -> Maybe CellBroker -> Maybe OtlpSinks -> CellEnvironment
 withEndpoints environment broker otlp =
-  CellEnvironment environment.cell environment.runId environment.leaseId environment.postgres broker otlp environment.victoriaMetricsUrl environment.drivers environment.clockSkewBoundMicros environment.faultHook
+  CellEnvironment environment.cell environment.runId environment.leaseId environment.postgres broker otlp environment.victoriaMetricsUrl environment.drivers environment.clockSkewBoundMicros environment.faultHook environment.resources
 
 withDimensions :: [(Text, Text)] -> RunPlan -> RunPlan
 withDimensions dimensions plan =

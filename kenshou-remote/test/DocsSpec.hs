@@ -55,6 +55,27 @@ spec = describe "cell owner documents" do
           Right environment -> toJSON environment `shouldBe` extended
       _ -> expectationFailure "invalid environment fixture"
 
+  it "round-trips the generic resources block of a cell environment" do
+    bytes <- LazyByteString.readFile "test/golden/cell/cell.environment.v1.json"
+    case eitherDecode bytes :: Either String Value of
+      Right (Object fields) -> do
+        let extended = Object (KeyMap.insert "resources" (object ["object-store" .= object ["endpoint" .= ("http://10.0.0.6:9000" :: String)]]) fields)
+        case eitherDecode (encode extended) :: Either String CellEnvironment of
+          Left failure -> expectationFailure failure
+          Right environment -> toJSON environment `shouldBe` extended
+      _ -> expectationFailure "invalid environment fixture"
+
+  it "keeps a submission's resource resets beside the legacy broker reset" do
+    bytes <- LazyByteString.readFile "test/golden/cell/cell.submission.v1.json"
+    case eitherDecode bytes :: Either String Value of
+      Right (Object fields) | Just (Object reset) <- KeyMap.lookup "reset" fields -> do
+        let resets = KeyMap.insert "resources" (object ["object-store" .= object ["empty" .= True]]) (KeyMap.insert "broker" (object ["wipe" .= True]) reset)
+            extended = Object (KeyMap.insert "reset" (Object resets) fields)
+        case eitherDecode (encode extended) :: Either String Submission of
+          Left failure -> expectationFailure failure
+          Right submission -> toJSON submission `shouldBe` extended
+      _ -> expectationFailure "invalid submission fixture"
+
   it "rejects an artifact path that escapes the fetched tree" do
     let escaped = "{\"path\":\"../outside\",\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"bytes\":1,\"mediaType\":\"application/json\"}"
     (eitherDecode escaped :: Either String Artifact) `shouldSatisfy` isLeft

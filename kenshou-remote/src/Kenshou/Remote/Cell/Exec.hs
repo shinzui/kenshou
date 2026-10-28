@@ -25,6 +25,7 @@ import Kenshou.Plan.RunPlan (PlannedRun (..), RunPlan (..))
 import Kenshou.Plan.Summary (summaryExitCode)
 import Kenshou.Remote.Cell.Docs (CellBroker (..), CellEnvironment (..), CellPostgres (..), OtlpEndpoint (..), OtlpSinks (..))
 import Kenshou.Remote.Cell.Health (withCellHealthFile)
+import Kenshou.Remote.Cell.Legacy (brokerAsResource)
 import Kenshou.Remote.Cell.Prepare (OtlpSink (..))
 import System.Directory (Permissions (..), createDirectoryIfMissing, doesFileExist, getPermissions)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -130,15 +131,12 @@ resolveSpec registry environment sink spec = do
           Just local@(PostgresEphemeral _) -> pure (name, local)
           Just (PostgresExternal _) -> Left ("driver-local PostgreSQL requires every extra server to be ephemeral: " <> name)
 
-    bindResource scenario name
-      | name == legacyKafkaName = case environment.broker of
-          Nothing -> Left ("cell has no Kafka broker for " <> renderScenarioId scenario.id)
-          Just broker ->
-            let addresses = filter (not . Text.null) (fmap Text.strip (Text.splitOn "," broker.bootstrapServers))
-             in if null addresses
-                  then Left "cell broker has no bootstrap servers"
-                  else pure (name, object ["backend" .= ("external" :: Text), "brokers" .= addresses, "lanes" .= (0 :: Int)])
-      | otherwise = Left ("cell has no resource " <> renderResourceName name <> " for " <> renderScenarioId scenario.id)
+    -- The cell environment binds a resource by name; the legacy broker fields still
+    -- bind the resource they always described.
+    bindResource scenario name = case (Map.lookup name environment.resources, environment.broker) of
+      (Just value, _) -> pure (name, value)
+      (Nothing, Just broker) | name == legacyKafkaName -> (name,) <$> brokerAsResource broker
+      _ -> Left ("cell has no resource " <> renderResourceName name <> " for " <> renderScenarioId scenario.id)
 
     bindOtlp scenario dimensions
       | dimensions.tracing /= Just TracingSdkOtlp = pure spec.knobs
@@ -157,13 +155,10 @@ resolveSpec registry environment sink spec = do
       | renderScenarioId spec.scenario /= "selftest/remote/correctness/cell-environment" = pure knobs
       | otherwise = do
           otlpName <- mkKnobName "remote.otlp-endpoint"
-          kafkaName <- mkKnobName "remote.kafka-bootstrap"
           let selectedOtlp = case environment.otlp of
                 Nothing -> ""
                 Just sinks -> case sink of NullSink -> sinks.nullEndpoint.http; FileSink -> sinks.fileEndpoint.http
-              selectedKafka = maybe "" (.bootstrapServers) environment.broker
-              withOtlp = assignWhenBlank otlpName selectedOtlp knobs
-          pure (assignWhenBlank kafkaName selectedKafka withOtlp)
+          pure (assignWhenBlank otlpName selectedOtlp knobs)
 
     assignWhenBlank name value knobs
       | Text.null value || maybe False (not . blank) (lookup name knobs) = knobs
