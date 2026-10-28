@@ -24,6 +24,41 @@ common warnings
     -Wredundant-constraints
 
   default-language: GHC2024
+  default-extensions:
+    BlockArguments
+    DuplicateRecordFields
+    ImportQualifiedPost
+    LambdaCase
+    NoFieldSelectors
+    OverloadedLabels
+    OverloadedRecordDot
+    OverloadedStrings
+
+library
+  import: warnings
+  hs-source-dirs: src
+  exposed-modules:
+    Kenshou.Suite.Synthetic
+    Kenshou.Suite.Synthetic.Correctness
+    Kenshou.Suite.Synthetic.Knobs
+    Kenshou.Suite.Synthetic.Oracle
+    Kenshou.Suite.Synthetic.Roles
+    Kenshou.Suite.Synthetic.Schema
+    Kenshou.Suite.Synthetic.Table
+
+  build-depends:
+    aeson >=2.2 && <2.3,
+    base >=4.21 && <4.22,
+    containers >=0.7 && <0.8,
+    hasql >=1.10 && <1.11,
+    kenshou-check,
+    kenshou-cli,
+    kenshou-core,
+    pg-migrate,
+    scientific,
+    stm,
+    text >=2.1 && <2.2,
+    time,
 
 executable kenshou
   import: warnings
@@ -38,3 +73,4 @@ executable kenshou
   build-depends:
     base >=4.21 && <4.22,
     kenshou-cli,
+    kenshou-synthetic,

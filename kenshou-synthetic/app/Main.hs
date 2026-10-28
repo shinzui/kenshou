@@ -1,6 +1,7 @@
 module Main (main) where
 
-import Kenshou.Cli (mainWith, selfTestAssembly)
+import Kenshou.Cli (mainWith)
+import Kenshou.Suite.Synthetic (syntheticProgram)
 
 main :: IO ()
-main = mainWith selfTestAssembly
+main = mainWith syntheticProgram

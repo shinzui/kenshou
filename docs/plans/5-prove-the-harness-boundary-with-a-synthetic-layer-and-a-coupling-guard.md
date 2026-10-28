@@ -54,10 +54,14 @@ is written to be read, not only to pass.
 
 ## Progress
 
-- [ ] M1: `kenshou-synthetic` registers the `synthetic` layer with its migration set, worker
+- [x] M1: `kenshou-synthetic` registers the `synthetic` layer with its migration set, worker
   roles, and the correctness scenario; `kenshou list --layer synthetic` shows it, and
   `kenshou run synthetic/table/correctness/append-survives-kill-restart` exits 0 with the
   no-loss, per-key-order, duplicates-within-windows, and ledger-versus-oracle verdicts held.
+  (2026-10-28; the run exits 0 in about 4 s with `no-loss`, `per-key-order`,
+  `duplicates-within-windows`, `eventual-quiescence`, and `ledger-versus-oracle` held over
+  8 keys of 500 items and two kills; the reader's facts are recorded in their own ledger
+  scope, `synthetic-reader/0`; see Decision Log.)
 - [ ] M2: the concurrency, benchmark, soak, and resource round-trip scenarios exist and each
   exits 0; the `echo` resource is provisioned by the suite and the suite oracle, lock labels,
   and evidence subject are registered on the bundle.
@@ -91,6 +95,16 @@ is written to be read, not only to pass.
   every exemption visible in review and goes stale loudly when the line changes.
   Date: 2026-10-28
 
+
+- Decision: The correctness scenario records the reader's observations through a second
+  ledger writer with the process identity `synthetic-reader/0`, and the consumer-side
+  checkers (`noLoss`, `perKeyOrder`, `duplicatesWithin`) name that scope. The reader reads
+  the whole table each poll and reports unseen rows, rather than paging by offset.
+  Rationale: `perKeyOrder` judges arrival order over every fact in one scope, so writer and
+  reader facts in the harness scope looked like one inversion per key; a consumer process
+  writes its own ledger in real suites. Offsets over `(key, seq)` order skip rows when
+  writes for different keys interleave.
+  Date: 2026-10-28
 
 ## Outcomes & Retrospective
 
