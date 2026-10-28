@@ -8,10 +8,10 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (getCurrentTime)
-import Kenshou.Core.Bundle (LayerBundle (..), Registry, lookupScenario, mkRegistry)
+import Kenshou.Core.Bundle (LayerBundle (..), Registry, lookupScenario, mkBundle, mkRegistry)
 import Kenshou.Core.Dimension (allTelemetryArms)
 import Kenshou.Core.Env (EnvRequirements (..))
-import Kenshou.Core.Id (Layer (..), mkSeed, newRunId, parseScenarioId, renderRunId)
+import Kenshou.Core.Id (mkSeed, newRunId, parseScenarioId, renderRunId, selftestLayer)
 import Kenshou.Core.Knob (Allowed (..), KnobSpec (..), KnobType (..), KnobValue (..), RawKnob (..), mkKnobName)
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), SpecPlacement (..), minimalRunSpec)
 import Kenshou.Core.Scenario (Scenario (..))
@@ -156,7 +156,7 @@ remoteRegistry :: Registry
 remoteRegistry = either (error . show) id (mkRegistry [Selftest.bundle, RemoteSelftest.bundle])
 
 tracingRegistry :: Registry
-tracingRegistry = either (error . show) id (mkRegistry [LayerBundle Selftest [enhanced] []])
+tracingRegistry = either (error . show) id (mkRegistry [mkBundle selftestLayer [enhanced] []])
   where
     scenarioId = either (error . Text.unpack) id (parseScenarioId "selftest/kernel/correctness/postgres-roundtrip")
     original = maybe (error "missing PostgreSQL selftest") id (lookupScenario registry scenarioId)

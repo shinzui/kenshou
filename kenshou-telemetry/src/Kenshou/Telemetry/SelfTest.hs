@@ -1,7 +1,7 @@
 module Kenshou.Telemetry.SelfTest (selfTestBundle) where
 
-import Kenshou.Core.Bundle (LayerBundle (..))
-import Kenshou.Core.Id (Layer (Selftest))
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
+import Kenshou.Core.Id (selftestLayer)
 import Kenshou.Core.Role (WorkerRole (..), mkRoleName)
 import Kenshou.Telemetry.Scrape (runScraperRole)
 import Kenshou.Telemetry.SelfTest.Arms (armsScenario)
@@ -9,7 +9,7 @@ import Kenshou.Telemetry.SelfTest.Problems (slowExporterScenario, traceContinuit
 import Kenshou.Telemetry.Sink (runSinkRole)
 
 selfTestBundle :: LayerBundle
-selfTestBundle = LayerBundle Selftest [armsScenario, traceContinuityScenario, slowExporterScenario] [sinkRole, scraperRole]
+selfTestBundle = mkBundle selftestLayer [armsScenario, traceContinuityScenario, slowExporterScenario] [sinkRole, scraperRole]
 
 sinkRole :: WorkerRole
 sinkRole =

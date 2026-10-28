@@ -10,10 +10,10 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (getCurrentTime)
-import Kenshou.Core.Bundle (LayerBundle (..), lookupScenario, mkRegistry)
+import Kenshou.Core.Bundle (LayerBundle (..), lookupScenario, mkBundle, mkRegistry)
 import Kenshou.Core.Dimension (PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..))
-import Kenshou.Core.Id (Kind (..), Layer (..), mkSeed, newRunId, parseScenarioId, renderKind)
+import Kenshou.Core.Id (Kind (..), mkSeed, newRunId, parseScenarioId, renderKind, selftestLayer)
 import Kenshou.Core.Knob (RawKnob (..), mkKnobName)
 import Kenshou.Core.RunSpec (ConnectionSource (..), EnvironmentSpec (..), PostgresSpec (..), RunSpec (..), minimalRunSpec)
 import Kenshou.Core.RunSpec qualified as RunSpec
@@ -81,7 +81,7 @@ spec = describe "cell run slicing" do
         requirement = maybe (error "missing PostgreSQL requirement") id original.requires.postgres
         required = PostgresRequirement requirement.schemas [("shared_preload_libraries", "'pg_stat_statements'")] requirement.needsServerControl
         withPreload = Scenario original.id original.revision original.summary original.tier original.placement original.knobs original.dimensions original.phases (EnvRequirements (Just required) original.requires.extraPostgres original.requires.kafka) original.knownDefect original.run
-        registry = either (error . show) id (mkRegistry [LayerBundle Selftest [withPreload] []])
+        registry = either (error . show) id (mkRegistry [mkBundle selftestLayer [withPreload] []])
         prepared = prepareForCell registry descriptor Nothing [] (Map.singleton "default" payload) (PrepareOptions True False [] Cold) plan
     case prepared.accepted of
       [run] -> case run.reset.postgres of
@@ -115,7 +115,7 @@ spec = describe "cell run slicing" do
         original = maybe (error "missing selftest") id (lookupScenario originalRegistry scenarioId)
         requirement = maybe (error "missing PostgreSQL requirement") id original.requires.postgres
         controlled = Scenario original.id original.revision original.summary original.tier original.placement original.knobs original.dimensions original.phases (EnvRequirements (Just (requirement {needsServerControl = True})) original.requires.extraPostgres original.requires.kafka) original.knownDefect original.run
-        registry = either (error . show) id (mkRegistry [LayerBundle Selftest [controlled] []])
+        registry = either (error . show) id (mkRegistry [mkBundle selftestLayer [controlled] []])
         payloads = Map.singleton "default" payload
         options = PrepareOptions False False [] Cold
     fmap snd (prepareForCell registry descriptor Nothing [] payloads options plan).rejected `shouldBe` [NeedsServerControl "primary"]
@@ -142,7 +142,7 @@ spec = describe "cell run slicing" do
         baseRegistry = either (error . show) id (mkRegistry [Selftest.bundle])
         scenario = maybe (error "missing selftest") id (lookupScenario baseRegistry firstSpec.scenario)
         bothMajors = Scenario scenario.id scenario.revision scenario.summary scenario.tier scenario.placement scenario.knobs (postgresDimensions (PgFsyncOff :| [PgDurable]) (Pg18 :| [Pg17]) noDimensions) scenario.phases (EnvRequirements (Just (PostgresRequirement [] [] False)) [] False) scenario.knownDefect scenario.run
-        registry = either (error . show) id (mkRegistry [LayerBundle Selftest [bothMajors] []])
+        registry = either (error . show) id (mkRegistry [mkBundle selftestLayer [bothMajors] []])
         routed = routePlan registry ((descriptor17, Nothing) :| [(descriptor18, Nothing)]) [] (Map.singleton "default" payload) (PrepareOptions True False [] Cold) twoRunPlan
         runIds selected = fmap (\(PlannedRun _ identifier _ _ _ _) -> identifier) selected.runs
     fmap runIds (Map.lookup "alpha" routed.perCell) `shouldBe` Just [case plan.runs of [PlannedRun _ identifier _ _ _ _] -> identifier; _ -> error "expected one planned run"]

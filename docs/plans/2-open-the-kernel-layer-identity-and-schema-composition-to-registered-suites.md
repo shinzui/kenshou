@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-28T12:02:04Z
+  revisions:
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-10-28T13:48:01Z
+      mode: "implement"
+      note: "Implemented open layer identity, suite-supplied migration sets, program contracts, and kernel decoupling"
 ---
 
 # Open the kernel layer identity and schema composition to registered suites
@@ -46,9 +52,11 @@ render and parse byte for byte, so nothing that was sealed becomes unreadable.
 
 ## Progress
 
-- [ ] M1: `Kenshou.Core.Id.Layer` is an open, validated `LayerId`; the golden test over the
+- [x] M1: `Kenshou.Core.Id.Layer` is an open, validated `LayerId`; the golden test over the
   seven consumer layer strings passes; `cabal build all` and `cabal test all` are green with
   only minimal adaptations in `kenshou-evidence`, `kenshou-remote`, and `kenshou-cli`.
+  (2026-10-28; `layer identifiers` group passes; `just haskell-test` green, 120 kernel
+  examples. The invalid-layer message is now `invalid layer "X": invalid segment "X"`.)
 - [ ] M2: Bundles supply migration sets; `Kenshou.Core.Env.Migration` composes them into one
   `pg-migrate` ledger; `kenshou-core.cabal` no longer depends on `keiro-migrations`,
   `kiroku-store-migrations`, or `pgmq-migration` and the `keiro-schema` flag is gone;

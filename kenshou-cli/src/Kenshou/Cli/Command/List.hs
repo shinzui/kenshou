@@ -18,7 +18,7 @@ import System.IO (stderr)
 
 data ListOptions = ListOptions
   { selectors :: [Text],
-    layers :: [Layer],
+    layers :: [LayerId],
     kinds :: [Kind],
     maxTier :: Maybe Tier,
     placements :: [Placement],
@@ -67,7 +67,7 @@ renderScenario scenario =
   where
     known = maybe "" (const " [known defect]") scenario.knownDefect
 
-readLayer :: String -> Either String Layer
+readLayer :: String -> Either String LayerId
 readLayer = first Text.unpack . parseLayer . Text.pack
 
 readKind :: String -> Either String Kind

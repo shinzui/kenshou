@@ -6,12 +6,12 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Bundle (LayerBundle (..))
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
 import Kenshou.Core.Context (RunContext (..), SummarySection (..), putSummary, requirePostgres)
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..), SchemaComponent (..), noEnvironment)
 import Kenshou.Core.Env.Postgres (PgSettingsSnapshot (..), PostgresEnv (..))
-import Kenshou.Core.Id (Layer (..), parseScenarioId)
+import Kenshou.Core.Id (parseScenarioId, selftestLayer)
 import Kenshou.Core.Knob
 import Kenshou.Core.Outcome (parseOutcome)
 import Kenshou.Core.Phase (zeroPhases)
@@ -22,7 +22,7 @@ import System.Exit (ExitCode (..))
 import System.Process (readProcessWithExitCode)
 
 bundle :: LayerBundle
-bundle = LayerBundle Selftest [alwaysFail, alwaysPass, errors, outcomeScenario, knownDefectScenario, postgresRoundtripScenario, workerEchoScenario] [echoRole]
+bundle = mkBundle selftestLayer [alwaysFail, alwaysPass, errors, outcomeScenario, knownDefectScenario, postgresRoundtripScenario, workerEchoScenario] [echoRole]
 
 alwaysPass, alwaysFail, errors :: Scenario
 alwaysPass = scenario "selftest/kernel/correctness/always-pass" "Always reports passed." (const (pure passed))

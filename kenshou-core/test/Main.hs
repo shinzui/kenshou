@@ -61,6 +61,7 @@ main = hspec do
   mismatchSpec
   activeCohortSpec
   identifierSpec
+  layerIdentifierSpec
   selectorSpec
   registrySpec
   knownDefectGroupSpec
@@ -75,6 +76,22 @@ main = hspec do
   Kenshou.PlanSpec.spec
   Kenshou.PerfPreparedSpec.spec
   Kenshou.PerfSpec.spec
+
+-- Sealed evidence records already carry these layer strings, so they must keep
+-- rendering and parsing byte for byte under the open layer identifier.
+layerIdentifierSpec :: Spec
+layerIdentifierSpec = describe "layer identifiers" do
+  let consumerLayers = ["selftest", "pgmq", "kiroku", "shibuya", "kafka", "keiro", "runtime"] :: [Text]
+  it "renders and parses the seven consumer layer strings byte for byte" do
+    fmap renderLayer <$> traverse parseLayer consumerLayers `shouldBe` Right consumerLayers
+    renderLayer selftestLayer `shouldBe` "selftest"
+  it "renders one scenario identifier per layer" do
+    let identifiers = [layer <> "/component/correctness/name" | layer <- consumerLayers]
+    fmap renderScenarioId <$> traverse parseScenarioId identifiers `shouldBe` Right identifiers
+  it "accepts any valid segment and rejects invalid ones" do
+    renderLayer <$> parseLayer "acme" `shouldBe` Right "acme"
+    isLeft (parseLayer "Acme") `shouldBe` True
+    isLeft (parseLayer "") `shouldBe` True
 
 descriptorSpec :: Spec
 descriptorSpec = describe "cohort identity" do
@@ -143,8 +160,8 @@ identifierSpec = describe "scenario identifiers" do
     fmap renderScenarioId (parseScenarioId rendered) `shouldBe` Right rendered
 
   it "rejects malformed identifiers" do
-    parseScenarioId "kiroku/append/correctness" `shouldBe` Left "scenario identifier must have four segments: \"kiroku/append/correctness\""
-    parseScenarioId "KIROKU/append/correctness/example" `shouldBe` Left "unknown layer \"KIROKU\""
+    parseScenarioId "acme/append/correctness" `shouldBe` Left "scenario identifier must have four segments: \"acme/append/correctness\""
+    parseScenarioId "ACME/append/correctness/example" `shouldBe` Left "invalid layer \"ACME\": invalid segment \"ACME\""
 
   it "generates canonical UUIDv7 run ids" do
     generated <- newRunId

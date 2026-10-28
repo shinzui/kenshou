@@ -17,12 +17,12 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Parser)
 import Data.List (nub, sortOn)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime, defaultTimeLocale, formatTime, getCurrentTime)
 import Kenshou.Core.Cohort (CohortIdentity (..), CohortName (..), PackageSource (..), PlanHash (..), ResolvedComponent (..), ResolvedPackage (..))
-import Kenshou.Core.Id (Kind (..), Layer (..), RunId, ScenarioId (..), renderRunId, renderScenarioId)
+import Kenshou.Core.Id (Kind (..), LayerId, RunId, ScenarioId (..), renderLayer, renderRunId, renderScenarioId)
 import Kenshou.Core.Outcome (Outcome (..), renderOutcome)
 import Kenshou.Core.RunSpec (EnvironmentSpec (..), RunSpec (..), SpecPlacement (..))
 import Kenshou.Evidence.Bundle (BundleWriteError, BundleWriteResult (..), writeComparisonRecord, writeRunRecord)
@@ -403,14 +403,19 @@ decoded label value = case fromJSON value of
 utcText :: UTCTime -> Text
 utcText = Text.pack . formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%QZ"
 
-defaultSubject :: Layer -> Text
-defaultSubject Selftest = "mori://shinzui/keiro-runtime-kenshou"
-defaultSubject Pgmq = "mori://shinzui/pgmq-hs"
-defaultSubject Kiroku = "mori://shinzui/kiroku"
-defaultSubject Shibuya = "mori://shinzui/shibuya"
-defaultSubject Kafka = "mori://shinzui/kafka-effectful"
-defaultSubject Keiro = "mori://shinzui/keiro"
-defaultSubject Runtime = "mori://shinzui/keiro-runtime-kenshou"
+-- The subjects the first consumer's records already carry, keyed by layer text.
+-- docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md
+-- replaces this lookup with the subject a registered bundle declares.
+defaultSubject :: LayerId -> Text
+defaultSubject layer = fromMaybe "mori://shinzui/keiro-runtime-kenshou" (lookup (renderLayer layer) subjects)
+  where
+    subjects =
+      [ ("pgmq", "mori://shinzui/pgmq-hs"),
+        ("kiroku", "mori://shinzui/kiroku"),
+        ("shibuya", "mori://shinzui/shibuya"),
+        ("kafka", "mori://shinzui/kafka-effectful"),
+        ("keiro", "mori://shinzui/keiro")
+      ]
 
 hasMeasurementSummary :: Maybe Value -> Bool
 hasMeasurementSummary (Just (Object summaries)) = case KeyMap.lookup "measurements" summaries of

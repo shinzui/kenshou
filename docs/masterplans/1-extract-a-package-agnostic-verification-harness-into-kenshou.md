@@ -145,7 +145,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 1 | Import the harness packages from keiro-runtime-kenshou and build them standalone | docs/plans/1-import-the-harness-packages-from-keiro-runtime-kenshou-and-build-them-standalone.md | None | None | Complete |
-| 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | Not Started |
+| 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | In Progress |
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Not Started |
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Not Started |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Not Started |

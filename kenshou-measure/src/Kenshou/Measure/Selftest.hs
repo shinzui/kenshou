@@ -1,10 +1,10 @@
 module Kenshou.Measure.Selftest (bundle) where
 
-import Kenshou.Core.Bundle (LayerBundle (..))
-import Kenshou.Core.Id (Layer (Selftest))
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
+import Kenshou.Core.Id (selftestLayer)
 import Kenshou.Measure.Selftest.PgInsert (pgInsertScenario)
 import Kenshou.Measure.Selftest.RegressionInjected (regressionInjectedScenario)
 import Kenshou.Measure.Selftest.SleepService (sleepServiceScenario)
 
 bundle :: LayerBundle
-bundle = LayerBundle Selftest [sleepServiceScenario, pgInsertScenario, regressionInjectedScenario] []
+bundle = mkBundle selftestLayer [sleepServiceScenario, pgInsertScenario, regressionInjectedScenario] []

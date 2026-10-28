@@ -20,7 +20,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Id (Layer (Selftest), ScenarioId (..), renderScenarioId)
+import Kenshou.Core.Id (ScenarioId (..), renderScenarioId, selftestLayer)
 import Kenshou.Plan.Catalog (ScenarioInfo (..))
 import Kenshou.Plan.Components
 import Kenshou.Plan.Selector (Selector, matches, renderSelector)
@@ -99,7 +99,7 @@ lintAgainstCatalog graph catalog = orphaned <> dead
     orphaned =
       [ OrphanScenario scenario.id
       | scenario <- catalog,
-        scenario.id.layer /= Selftest,
+        scenario.id.layer /= selftestLayer,
         not (any ((`matches` scenario.id) . snd) selectorPairs)
       ]
     dead =

@@ -6,13 +6,13 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Kenshou.Core.Bundle (LayerBundle (..))
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
 import Kenshou.Core.Context (RunContext (..), SummarySection (..), putSummary, requirePostgres)
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..), noDimensions, postgresDimensions)
 import Kenshou.Core.Env (PostgresRequirement (..), SchemaComponent (..), noEnvironment)
 import Kenshou.Core.Env qualified as Env
 import Kenshou.Core.Env.Postgres (PgSettingsSnapshot (..), PostgresEnv (..), PostgresMode (..))
-import Kenshou.Core.Id (Layer (..), parseScenarioId)
+import Kenshou.Core.Id (parseScenarioId, selftestLayer)
 import Kenshou.Core.Knob (Allowed (..), KnobName, KnobSpec (..), KnobType (..), KnobValue (..), knobText, mkKnobName)
 import Kenshou.Core.Phase (zeroPhases)
 import Kenshou.Core.RunSpec (EnvironmentSpec (..), SpecPlacement (..))
@@ -27,7 +27,7 @@ import System.Process (readProcessWithExitCode)
 import System.Timeout (timeout)
 
 bundle :: LayerBundle
-bundle = LayerBundle Selftest [cellEnvironment] []
+bundle = mkBundle selftestLayer [cellEnvironment] []
 
 cellEnvironment :: Scenario
 cellEnvironment =

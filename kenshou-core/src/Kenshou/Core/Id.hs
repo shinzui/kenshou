@@ -1,10 +1,12 @@
 module Kenshou.Core.Id
-  ( Layer (..),
+  ( LayerId,
     Kind (..),
     Segment,
     ScenarioId (..),
     RunId,
     Seed,
+    mkLayerId,
+    selftestLayer,
     renderLayer,
     parseLayer,
     renderKind,
@@ -35,8 +37,10 @@ import Data.UUID.V7 qualified as UUID.V7
 import Data.Word (Word64)
 import System.Random.SplitMix (SMGen, mkSMGen)
 
-data Layer = Selftest | Pgmq | Kiroku | Shibuya | Kafka | Keiro | Runtime
-  deriving stock (Eq, Ord, Show, Enum, Bounded)
+-- | The first segment of a scenario identifier: the name of what a registered layer
+-- bundle verifies. Any valid segment is a layer; suites choose their own.
+newtype LayerId = LayerId Segment
+  deriving stock (Eq, Ord, Show)
 
 data Kind = Correctness | Concurrency | Soak | Benchmark
   deriving stock (Eq, Ord, Show, Enum, Bounded)
@@ -45,7 +49,7 @@ newtype Segment = Segment Text
   deriving stock (Eq, Ord, Show)
 
 data ScenarioId = ScenarioId
-  { layer :: Layer,
+  { layer :: LayerId,
     component :: Segment,
     kind :: Kind,
     name :: Segment
@@ -58,19 +62,18 @@ newtype RunId = RunId UUID
 newtype Seed = Seed Word64
   deriving stock (Eq, Ord, Show)
 
-renderLayer :: Layer -> Text
-renderLayer Selftest = "selftest"
-renderLayer Pgmq = "pgmq"
-renderLayer Kiroku = "kiroku"
-renderLayer Shibuya = "shibuya"
-renderLayer Kafka = "kafka"
-renderLayer Keiro = "keiro"
-renderLayer Runtime = "runtime"
+mkLayerId :: Text -> Either Text LayerId
+mkLayerId value = either (\problem -> Left ("invalid layer \"" <> value <> "\": " <> problem)) (Right . LayerId) (mkSegment value)
 
-parseLayer :: Text -> Either Text Layer
-parseLayer value = maybe (Left ("unknown layer \"" <> value <> "\"")) Right (lookup value pairs)
-  where
-    pairs = [(renderLayer item, item) | item <- [minBound .. maxBound]]
+-- | The layer of the kernel's and toolkits' own self-test scenarios.
+selftestLayer :: LayerId
+selftestLayer = LayerId (Segment "selftest")
+
+renderLayer :: LayerId -> Text
+renderLayer (LayerId segment) = unSegment segment
+
+parseLayer :: Text -> Either Text LayerId
+parseLayer = mkLayerId
 
 renderKind :: Kind -> Text
 renderKind Correctness = "correctness"
@@ -146,9 +149,9 @@ fnv1a64 = ByteString.foldl' step 14695981039346656037
   where
     step hash byte = (hash `xor` fromIntegral byte) * 1099511628211
 
-instance ToJSON Layer where toJSON = toJSON . renderLayer
+instance ToJSON LayerId where toJSON = toJSON . renderLayer
 
-instance FromJSON Layer where parseJSON = withText "Layer" (either (fail . Text.unpack) pure . parseLayer)
+instance FromJSON LayerId where parseJSON = withText "LayerId" (either (fail . Text.unpack) pure . parseLayer)
 
 instance ToJSON Kind where toJSON = toJSON . renderKind
 

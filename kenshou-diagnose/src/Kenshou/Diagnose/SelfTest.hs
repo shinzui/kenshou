@@ -1,14 +1,14 @@
 module Kenshou.Diagnose.SelfTest (bundle) where
 
-import Kenshou.Core.Bundle (LayerBundle (..))
-import Kenshou.Core.Id (Layer (Selftest))
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
+import Kenshou.Core.Id (selftestLayer)
 import Kenshou.Diagnose.SelfTest.Leak (leakingWorkerScenario, stableWorkerScenario)
 import Kenshou.Diagnose.SelfTest.Stall
 
 bundle :: LayerBundle
 bundle =
-  LayerBundle
-    Selftest
+  mkBundle
+    selftestLayer
     [ leakingWorkerScenario,
       stableWorkerScenario,
       deadlockedWorkersScenario,

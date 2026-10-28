@@ -1,5 +1,6 @@
 module Kenshou.Core.Bundle
   ( LayerBundle (..),
+    mkBundle,
     Registry,
     RegistryError (..),
     ListFilter (..),
@@ -24,18 +25,23 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), Support (..), Supported (..))
 import Kenshou.Core.Env (EnvRequirements (..), PostgresRequirement (..), SchemaComponent (..))
-import Kenshou.Core.Id (Kind (..), Layer, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
+import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
 import Kenshou.Core.Knob (KnobSpec (..), renderKnobName)
 import Kenshou.Core.Role (RoleName, WorkerRole (..), renderRoleName)
 import Kenshou.Core.Scenario (KnownDefect (..), Placement, Scenario (..), Tier, individualKnownDefects, renderPlacement, renderTier)
 import Kenshou.Core.Selector (ScenarioSelector, matchesSelector)
 import Kenshou.Core.Version (suiteVersion)
 
+-- | What a suite registers with the kernel. Build one with 'mkBundle' and set the
+-- optional contributions with record update, so new fields never break a suite.
 data LayerBundle = LayerBundle
-  { layer :: Layer,
+  { layer :: LayerId,
     scenarios :: [Scenario],
     roles :: [WorkerRole]
   }
+
+mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles}
 
 newtype Registry = Registry [LayerBundle]
 
@@ -44,7 +50,7 @@ newtype RegistryError = RegistryError Text
 
 data ListFilter = ListFilter
   { selectors :: [ScenarioSelector],
-    layers :: [Layer],
+    layers :: [LayerId],
     kinds :: [Kind],
     maxTier :: Maybe Tier,
     placements :: [Placement]

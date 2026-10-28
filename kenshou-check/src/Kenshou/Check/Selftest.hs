@@ -22,17 +22,17 @@ import Kenshou.Check.Selftest.ModelReplay
 import Kenshou.Check.Selftest.ProxyPartition
 import Kenshou.Check.Verdict
 import Kenshou.Check.Window
-import Kenshou.Core.Bundle (LayerBundle (..))
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
 import Kenshou.Core.Context (RunContext (..))
 import Kenshou.Core.Dimension
 import Kenshou.Core.Env (noEnvironment)
-import Kenshou.Core.Id (Layer (Selftest), parseScenarioId)
+import Kenshou.Core.Id (parseScenarioId, selftestLayer)
 import Kenshou.Core.Knob
 import Kenshou.Core.Phase (zeroPhases)
 import Kenshou.Core.Scenario
 
 bundle :: LayerBundle
-bundle = LayerBundle Selftest [ledgerScenario, killRestartScenario, backendKillScenario, proxyPartitionScenario, modelReplayScenario] [consumerRole]
+bundle = mkBundle selftestLayer [ledgerScenario, killRestartScenario, backendKillScenario, proxyPartitionScenario, modelReplayScenario] [consumerRole]
 
 ledgerScenario :: Scenario
 ledgerScenario =
