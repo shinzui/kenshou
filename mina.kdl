@@ -1,0 +1,8 @@
+rei {
+  create {
+    default-parent intention_01m6165ywkevaayscg2v99y0nt
+    title-prefix 検証
+    default-context 私的
+    default-category "個人/施策"
+  }
+}
