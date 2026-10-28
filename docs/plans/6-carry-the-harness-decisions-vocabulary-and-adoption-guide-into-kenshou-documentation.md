@@ -66,10 +66,15 @@ handoff during a milestone, add a short prose note stating the remaining outcome
   9, 10, 11, 14, 18, 19, 20, and 21 are ADR-1 to ADR-15 here, each restated for a harness
   that verifies no particular runtime and ending with an Origin paragraph; strict validation
   reports `OK: 15 concepts`.)
-- [ ] M2: The three initiative ADRs (layer-bundle registration contract, one ledger per
+- [x] M2: The three initiative ADRs (layer-bundle registration contract, one ledger per
   database with suite-supplied migration sets, unchanged package and module names) are
   recorded, the one-ledger ADR names the consumer decision it supersedes, and strict
   validation still exits 0.
+  (2026-10-28; ADR-16 registration contract, ADR-17 one ledger (citing the superseded
+  consumer ADR-4 in its body), ADR-18 unchanged names, plus ADR-19 named resources and
+  ADR-20 harness cohort and confined consumer data, which EP-1 to EP-4 asked this plan to
+  record; strict validation reports `OK: 20 concepts`. All five are Accepted because their
+  interfaces are merged.)
 - [ ] M3: `docs/terminology/`, `docs/improvement-requests/`, and `docs/friction-log/` exist
   with pinned descriptors, the terminology carries the generalized vocabulary, and all three
   validate strictly.
