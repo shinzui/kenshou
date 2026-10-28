@@ -21,13 +21,17 @@ import Kenshou.Core.Dimension
 import Kenshou.Core.Env (PostgresRequirement (..), noEnvironment)
 import Kenshou.Core.Env qualified as Env
 import Kenshou.Core.Env.Postgres (PostgresEnv (..))
-import Kenshou.Core.Id (Kind (..), parseScenarioId)
+import Kenshou.Core.Id (Kind (..), ScenarioId (..), parseScenarioId)
+import Kenshou.Core.Knob (knobInt)
 import Kenshou.Core.Phase qualified as Core
 import Kenshou.Core.Scenario
+import Kenshou.Diagnose.Leak.MajorGcProbe (withMajorGcProbe)
 import Kenshou.Measure.Knobs
 import Kenshou.Measure.Load
 import Kenshou.Measure.Recorder
+import Kenshou.Measure.Sampler.Postgres (PgSamplerConfig (..))
 import Kenshou.Measure.Session
+import Kenshou.Suite.Synthetic.Knobs (intKnob, knob)
 import Kenshou.Suite.Synthetic.Schema (syntheticSchema)
 import Kenshou.Suite.Synthetic.Table (appendItem, countItems)
 
@@ -39,9 +43,11 @@ appendThroughput =
 
 steadyAppend :: Scenario
 steadyAppend =
-  (appendScenario "synthetic/table/soak/steady-append" "Appends at a steady rate long enough for a leak diagnosis." Soak (Core.PhasePlan 5 30 0))
-    { tier = TierSoak
-    }
+  let soak = appendScenario "synthetic/table/soak/steady-append" "Appends at a steady rate long enough for a leak diagnosis." Soak (Core.PhasePlan 5 30 0)
+   in soak
+        { tier = TierSoak,
+          knobs = soak.knobs <> [intKnob "diagnose.major-gc-interval-ms" "Forced major-GC interval, or zero to disable" 1000 0 60000]
+        }
 
 appendScenario :: Text -> Text -> Kind -> Core.PhasePlan -> Scenario
 appendScenario identifier summary kind phases =
@@ -65,8 +71,12 @@ runAppendLoad :: RunContext -> IO ScenarioReport
 runAppendLoad context = case (loadModelFromKnobs context.knobs, measureConfigFromKnobs context (phasePlanFromCore context.phases)) of
   (Left message, _) -> pure (failedWith ["invalid-load-config"] message)
   (_, Left message) -> pure (failedWith ["invalid-measure-config"] message)
-  (Right loadModel, Right config) -> do
+  (Right loadModel, Right baseConfig) -> do
     let environment = requirePostgres context
+        config = watchItems baseConfig
+        -- A soak forces major collections so the heap has points to judge; a
+        -- benchmark must not perturb its own measurements that way.
+        majorGcMs = if context.scenario.kind == Soak then fromIntegral (knobInt context.knobs (knob "diagnose.major-gc-interval-ms")) else 0
         workers = case loadModel of ClosedLoop closed -> closed.workers; OpenLoop open -> open.executors
         settings = Settings.connectionString environment.connectionString <> Settings.applicationName "synthetic-append"
     bracket (traverse (const (Connection.acquire settings)) [1 .. max 1 workers]) (mapM_ Connection.release . concatMap (either (const []) pure)) \acquired ->
@@ -75,7 +85,7 @@ runAppendLoad context = case (loadModelFromKnobs context.knobs, measureConfigFro
         Right [] -> pure (infrastructureFailureBecause "no PostgreSQL connection")
         Right connections@(first : _) -> do
           let operation = Operation (OpName "append") (appendOne connections)
-          (_, report) <- withMeasurement context config (\measurement -> runLoad measurement loadModel operation)
+          (_, report) <- withMajorGcProbe context majorGcMs (withMeasurement context config (\measurement -> runLoad measurement loadModel operation))
           counted <- Connection.use first (Session.statement () countItems)
           let successful = case report.recorder.operations of
                 recorded : _ -> sum [successes | (successes, _, _) <- Map.elems recorded.phaseCounts]
@@ -94,6 +104,11 @@ appendOne connections worker sequenceNumber = do
   pure case result of
     Right True -> OpOk 1
     _ -> OpFailed (ErrorCause "postgres")
+
+-- | Sample the items table's size and dead tuples alongside the database series.
+watchItems :: MeasureConfig -> MeasureConfig
+watchItems (MeasureConfig phases histogram rawSamples sampleInterval intervalSeconds postgres extraSamplers healthConfig) =
+  MeasureConfig phases histogram rawSamples sampleInterval intervalSeconds (fmap (\pg -> pg {relations = ["synthetic.items"]}) postgres) extraSamplers healthConfig
 
 telemetryOff :: DimensionSupport
 telemetryOff =

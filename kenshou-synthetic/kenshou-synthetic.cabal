@@ -60,6 +60,7 @@ library
     kenshou-check,
     kenshou-cli,
     kenshou-core,
+    kenshou-diagnose,
     kenshou-measure,
     network,
     pg-migrate,

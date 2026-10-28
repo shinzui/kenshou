@@ -69,16 +69,40 @@ is written to be read, not only to pass.
   `requirePgVersionsFor` rule, a pool methodology, an example routing rule, and its own
   component graph (`kenshou-synthetic/data/components.json`, brought forward from M3 so the
   graph check stays green); `just verify` exits 0.)
-- [ ] M3: `kenshou plan --changed synthetic-table` selects only the table scenarios,
+- [x] M3: `kenshou plan --changed synthetic-table` selects only the table scenarios,
   `kenshou diagnose leak` on a soak run exits 0, `kenshou compare` over interleaved benchmark
   pairs writes a comparison document with a pass verdict, and `kenshou record` writes a sealed
   run record into a scratch evidence bundle with subject `mori://shinzui/kenshou`.
+  (2026-10-28; the plan for `--changed synthetic-table --kind correctness --kind
+  concurrency` schedules exactly the two table scenarios and `execute` passes both;
+  `diagnose leak --policy policies/synthetic-leak.json` on a soak run exits 0 with verdict
+  `stable`; five interleaved pairs at 200 and 220 operations per second compare to
+  `inconclusive` (exit 3, p99 latency noisy on the development machine), which the plan
+  accepts as evidence the comparison ran; `record` writes
+  `runs/synthetic/2026/10/<id>.md` with subject `mori://shinzui/kenshou`, a second call
+  reports `already recorded`, and `okf validate --strict` passes on the scratch bundle.)
 - [ ] M4: `scripts/coupling-guard.sh` and `scripts/plan-check.sh` exist, run from
   `just verify` and CI, and pass; a deliberately injected layer name in a generic package makes
   the guard fail, and `kenshou-synthetic`'s cabal file depends only on generic packages.
 
 
 ## Surprises & Discoveries
+
+- `policies/leak-default.json` needs 20 minutes of data after a 5-minute warm-up cut and
+  judges probes per envelope window, so a short soak is always `insufficient-data` under
+  it. The heap probe also needs forced major collections. The suite adds
+  `policies/synthetic-leak.json` (25 s minimum, 5 s cut, 1 s windows, 10 points) and the
+  soak forces a major GC every second through `withMajorGcProbe`, as the diagnose
+  self-tests do.
+
+- The default leak policy probes `pg.dead-tuples`, but the PostgreSQL relations sampler
+  writes no `dead_tuples` column, so that probe is always `insufficient-data`
+  (`MissingColumn ... "dead_tuples"`). This mismatch was imported with the toolkits; it does
+  not change the overall verdict.
+
+- On the development machine the harness's own `selftest/measure/benchmark/pg-insert`
+  exits 4 because its closed-loop load driver exceeds the CPU health threshold; the
+  synthetic benchmark uses a fixed open-loop rate for that reason.
 
 (None yet.)
 
@@ -120,6 +144,13 @@ is written to be read, not only to pass.
   checker orders by wall clock within a key and takes the owner from the fact's scope, so
   recording per contender in arrival order is what makes the check meaningful. A backend
   termination would exercise retry logic in the contender, not a harness extension point.
+  Date: 2026-10-28
+
+- Decision: The `record` rehearsal uses a scratch bundle copied from the bridged consumer
+  bundle with `synthetic` added to its closed `layer` vocabulary, because
+  `docs/plans/6-…` has not created this repository's verification bundle yet.
+  Rationale: The consumer's profile closes `layer` to its seven layers; the shared profile
+  is otherwise what this repository's bundle will use.
   Date: 2026-10-28
 
 ## Outcomes & Retrospective
