@@ -1,16 +1,18 @@
 module Kenshou.Measure.Methodology
-  ( recommendedKirokuPoolSize,
-    kirokuPoolRange,
+  ( PoolMethodology (..),
+    poolMethodologyFor,
     minimumTrials,
     defaultTrials,
   )
 where
 
-recommendedKirokuPoolSize :: Int
-recommendedKirokuPoolSize = 12
+import Kenshou.Core.Bundle (LayerBundle (..), Registry, lookupBundle)
+import Kenshou.Core.Contribution (PoolMethodology (..))
+import Kenshou.Core.Id (LayerId)
 
-kirokuPoolRange :: (Int, Int)
-kirokuPoolRange = (10, 13)
+-- | The connection-pool methodology a layer's registered bundle contributes.
+poolMethodologyFor :: Registry -> LayerId -> Maybe PoolMethodology
+poolMethodologyFor registry layer = lookupBundle registry layer >>= (.methodology)
 
 minimumTrials, defaultTrials :: Int
 minimumTrials = 3

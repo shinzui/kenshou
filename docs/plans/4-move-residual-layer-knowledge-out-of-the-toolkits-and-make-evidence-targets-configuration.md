@@ -59,11 +59,14 @@ schema instead of `kiroku.events`.
 
 ## Progress
 
-- [ ] M1: Oracle SQL, advisory-lock labels, and pool methodology are bundle contributions.
+- [x] M1: Oracle SQL, advisory-lock labels, and pool methodology are bundle contributions.
   `kenshou-check`, `kenshou-measure`, and `kenshou-diagnose` build and pass their test
   suites with the three oracle modules deleted, the five layer lock-label constructors
   deleted, and the Kiroku pool constants replaced by a `PoolMethodology` record; the grep
   described in Validation returns nothing for those three packages.
+  (2026-10-28; `Kenshou.Core.Contribution` holds the types; the three suites pass with new
+  `registered oracles`, `pool methodology`, and advisory-lock cases; the grep returns nothing
+  for the three packages, and `just coupling-check` now audits them for every layer name.)
 - [ ] M2: Evidence subject and history bundle URI are configuration. `kenshou record`
   resolves the subject from the registry or `evidence.default-subject`, `kenshou history`
   prints the `evidence.bundle-uri` value, and the new consumer-record fixtures (two verbatim

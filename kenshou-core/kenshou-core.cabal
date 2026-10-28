@@ -43,6 +43,7 @@ library
     Kenshou.Core.Cohort
     Kenshou.Core.Compat
     Kenshou.Core.Context
+    Kenshou.Core.Contribution
     Kenshou.Core.Dimension
     Kenshou.Core.Env
     Kenshou.Core.Env.Migration

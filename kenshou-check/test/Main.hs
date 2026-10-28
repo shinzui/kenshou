@@ -16,13 +16,15 @@ import Kenshou.Check.Ledger
 import Kenshou.Check.Ledger.Read
 import Kenshou.Check.Ledger.Sort
 import Kenshou.Check.Model.Linearizability
+import Kenshou.Check.Oracle (OracleQuery (..), OracleSpec (..), fromSpec, registeredOracle)
 import Kenshou.Check.Process
 import Kenshou.Check.Scenario
 import Kenshou.Check.Verdict
 import Kenshou.Check.Verdict qualified as Verdict
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle, mkRegistry)
 import Kenshou.Core.Context
 import Kenshou.Core.Dimension (emptyDimensions)
-import Kenshou.Core.Id (mkSeed, newRunId, parseScenarioId)
+import Kenshou.Core.Id (mkSeed, newRunId, parseScenarioId, selftestLayer)
 import Kenshou.Core.Knob (resolveKnobs)
 import Kenshou.Core.Log (nullLogger)
 import Kenshou.Core.Phase (zeroPhases)
@@ -36,6 +38,17 @@ import Test.Hspec
 
 main :: IO ()
 main = hspec do
+  describe "registered oracles" do
+    let spec = OracleSpec "queued-rows" "select count(*) from kenshou_selftest.roundtrip"
+        bundle = (mkBundle selftestLayer [] []) {oracles = [spec]}
+    it "finds an oracle a bundle registers and builds its query" do
+      registry <- either (fail . show) pure (mkRegistry [bundle])
+      registeredOracle registry selftestLayer "queued-rows" `shouldBe` Just spec
+      registeredOracle registry selftestLayer "missing" `shouldBe` Nothing
+      let query = fromSpec spec Right
+      (query.name, query.sql) `shouldBe` (spec.name, spec.sql)
+    it "rejects two oracles with one name in a bundle" do
+      either (const True) (const False) (mkRegistry [bundle {oracles = [spec, spec]}]) `shouldBe` True
   describe "verdict protocol" do
     it "rejects missing assertion counters before writing a document" $ withSystemTempDirectory "kenshou-verdict-protocol" \directory -> do
       runId <- newRunId

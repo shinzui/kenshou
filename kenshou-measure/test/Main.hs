@@ -4,6 +4,7 @@ import Kenshou.Measure.ClockSpec qualified
 import Kenshou.Measure.CompareSpec qualified
 import Kenshou.Measure.HistogramSpec qualified
 import Kenshou.Measure.LoadSpec qualified
+import Kenshou.Measure.MethodologySpec qualified
 import Kenshou.Measure.PerfSpec qualified
 import Kenshou.Measure.RecorderSpec qualified
 import Kenshou.Measure.SamplerSpec qualified
@@ -17,6 +18,7 @@ main = hspec do
   Kenshou.Measure.PerfSpec.spec
   Kenshou.Measure.HistogramSpec.spec
   Kenshou.Measure.LoadSpec.spec
+  Kenshou.Measure.MethodologySpec.spec
   Kenshou.Measure.SamplesSpec.spec
   Kenshou.Measure.RecorderSpec.spec
   Kenshou.Measure.SamplerSpec.spec

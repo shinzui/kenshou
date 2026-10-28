@@ -16,11 +16,12 @@ import Hasql.Decoders qualified as Decoders
 import Hasql.Encoders qualified as Encoders
 import Hasql.Session qualified as Session
 import Hasql.Statement qualified as Statement
+import Kenshou.Core.Bundle (LayerBundle (..), mkBundle)
 import Kenshou.Core.Context (RunContext (..), newRunState)
 import Kenshou.Core.Dimension (Dimensions (..), PgDurability (..), PgVersion (..))
 import Kenshou.Core.Env (PostgresRequirement (..))
 import Kenshou.Core.Env.Postgres (PostgresEnv (..), withPostgresEnv)
-import Kenshou.Core.Id (parseRunId, parseScenarioId)
+import Kenshou.Core.Id (parseRunId, parseScenarioId, selftestLayer)
 import Kenshou.Core.Log (nullLogger)
 import Kenshou.Core.RunSpec (PostgresSpec (..))
 import Kenshou.Diagnose.LockGraph (GraphEdge (..), LockGraph (..), buildGraph)
@@ -36,6 +37,10 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kenshou.Diagnose.Stall" do
+  it "names a bundle's advisory locks and the migration ledger lock" do
+    let label = AdvisoryLabel "queue creation" (HashText "synthetic.queue_jobs")
+        config = Stall.watchdogConfigFor (mkBundle selftestLayer [] []) {advisoryLabels = [label]}
+    config.advisoryLabels `shouldBe` [label, pgMigrateLedgerLock]
   mapM_
     fixtureCase
     [ ("deadlock", Deadlock),

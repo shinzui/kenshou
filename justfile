@@ -22,12 +22,13 @@ plan-check:
     ! jq -r '.["install-plan"][]["pkg-name"]' dist-newstyle/cache/plan.json | grep -qE '^kenshou-(pgmq|kiroku|shibuya|kafka|keiro|runtime)$'
 
 # Fails when an audited generic path names a consumer layer outside the
-# exact lines in scripts/coupling-allowlist.txt. The kernel and the telemetry
-# toolkit are audited for every layer name; every generic package and the JSON
-# schemas are audited for the Kafka layer. Verbatim consumer records are excluded.
+# exact lines in scripts/coupling-allowlist.txt. The kernel and the check,
+# measure, diagnose, and telemetry toolkits are audited for every layer name;
+# every generic package and the JSON schemas are audited for the Kafka layer.
+# Verbatim consumer records are excluded.
 [group('verification')]
 coupling-check:
-    ! grep -riE 'keiro|kiroku|pgmq|shibuya|kafka' kenshou-core/src kenshou-core/test kenshou-core/kenshou-core.cabal kenshou-core/data kenshou-telemetry | grep -vxFf scripts/coupling-allowlist.txt
+    ! grep -riE 'keiro|kiroku|pgmq|shibuya|kafka' kenshou-core/src kenshou-core/test kenshou-core/kenshou-core.cabal kenshou-core/data kenshou-check kenshou-measure kenshou-diagnose kenshou-telemetry | grep -vxFf scripts/coupling-allowlist.txt
     ! grep -riE 'kafka' kenshou-core kenshou-check kenshou-measure kenshou-diagnose kenshou-telemetry kenshou-evidence kenshou-remote kenshou-cli kenshou-synthetic schemas --include='*.hs' --include='*.cabal' --include='*.json' --include='*.md' | grep -v '/test/fixtures/consumer-records/' | grep -vxFf scripts/coupling-allowlist.txt
 
 [group('verification')]

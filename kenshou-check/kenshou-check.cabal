@@ -58,9 +58,6 @@ library
     Kenshou.Check.Model
     Kenshou.Check.Model.Linearizability
     Kenshou.Check.Oracle
-    Kenshou.Check.Oracle.Keiro
-    Kenshou.Check.Oracle.Kiroku
-    Kenshou.Check.Oracle.Pgmq
     Kenshou.Check.Process
     Kenshou.Check.Scenario
     Kenshou.Check.Selftest

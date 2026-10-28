@@ -1,6 +1,7 @@
 module Kenshou.Diagnose.Stall
   ( WatchdogConfig (..),
     defaultWatchdogConfig,
+    watchdogConfigFor,
     Watchdog,
     StallDetected (..),
     withWatchdog,
@@ -28,6 +29,7 @@ import Data.Text qualified as Text
 import Data.Time (diffUTCTime, getCurrentTime)
 import Hasql.Connection qualified as Connection
 import Hasql.Connection.Settings qualified as Settings
+import Kenshou.Core.Bundle qualified as Bundle
 import Kenshou.Core.Context qualified as Core
 import Kenshou.Diagnose.Context qualified as Context
 import Kenshou.Diagnose.Document
@@ -57,6 +59,10 @@ data WatchdogConfig = WatchdogConfig
 
 defaultWatchdogConfig :: WatchdogConfig
 defaultWatchdogConfig = WatchdogConfig 60 1 3 CaptureAndAbort Nothing [] True 2
+
+-- | The default watchdog naming a bundle's advisory locks and the migration ledger lock.
+watchdogConfigFor :: Bundle.LayerBundle -> WatchdogConfig
+watchdogConfigFor bundle = defaultWatchdogConfig {advisoryLabels = bundle.advisoryLabels <> [pgMigrateLedgerLock]}
 
 data Watchdog = Watchdog
   { context :: !Core.RunContext,

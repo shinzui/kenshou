@@ -7,6 +7,9 @@ module Kenshou.Check.Oracle
     sampleOracle,
     reconcile,
     awaitQuiescence,
+    OracleSpec (..),
+    fromSpec,
+    registeredOracle,
   )
 where
 
@@ -23,7 +26,10 @@ import Kenshou.Check.Invariant
 import Kenshou.Check.Ledger
 import Kenshou.Check.Ledger.Sort (SortOrder (ByKeySeq))
 import Kenshou.Check.Verdict
+import Kenshou.Core.Bundle (LayerBundle (..), Registry, lookupBundle)
+import Kenshou.Core.Contribution (OracleSpec (..))
 import Kenshou.Core.Env.Postgres (PostgresEnv (..))
+import Kenshou.Core.Id (LayerId)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
@@ -47,6 +53,18 @@ data ItemRef = ItemRef {key :: !Text, seq :: !Int64, id :: !Text}
 
 data QuiescenceResult = Quiescent | QuiescenceTimedOut Int64
   deriving stock (Eq, Show)
+
+-- | A query from a suite-registered oracle, with the decoder for its rows.
+fromSpec :: OracleSpec -> (Text -> Either Text value) -> OracleQuery value
+fromSpec spec decoder = OracleQuery spec.name spec.sql decoder
+
+-- | The oracle a layer's registered bundle contributes under a name.
+registeredOracle :: Registry -> LayerId -> Text -> Maybe OracleSpec
+registeredOracle registry layer wanted = do
+  bundle <- lookupBundle registry layer
+  case filter ((== wanted) . (.name)) bundle.oracles of
+    spec : _ -> Just spec
+    [] -> Nothing
 
 runOracle :: (ToJSON value) => FilePath -> PostgresEnv -> OracleQuery value -> IO (Either Text (OracleResult value))
 runOracle verdictDirectory postgres query = do

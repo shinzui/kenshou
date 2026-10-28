@@ -1,6 +1,7 @@
 module Kenshou.Core.Bundle
   ( LayerBundle (..),
     mkBundle,
+    lookupBundle,
     lookupResource,
     ScenarioRule (..),
     requirePgVersionsFor,
@@ -28,6 +29,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Kenshou.Core.Contribution (AdvisoryLabel, OracleSpec (..), PoolMethodology)
 import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), PgVersion (..), Support (..), Supported (..))
 import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName, PostgresRequirement (..), mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
@@ -52,11 +54,17 @@ data LayerBundle = LayerBundle
     rules :: [ScenarioRule],
     -- | Providers for named resources. Any scenario in the registry may require a
     -- resource a bundle provides.
-    resources :: [ResourceProvider]
+    resources :: [ResourceProvider],
+    -- | SQL oracles the suite's scenarios reconcile, by name.
+    oracles :: [OracleSpec],
+    -- | Advisory-lock labels a stall capture of the suite's scenarios names.
+    advisoryLabels :: [AdvisoryLabel],
+    -- | The connection-pool size the suite recommends, when it has one.
+    methodology :: Maybe PoolMethodology
   }
 
 mkBundle :: LayerId -> [Scenario] -> [WorkerRole] -> LayerBundle
-mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = []}
+mkBundle layer scenarios roles = LayerBundle {layer, scenarios, roles, migrations = [], rules = [], resources = [], oracles = [], advisoryLabels = [], methodology = Nothing}
 
 -- | A named registry check. Each message 'check' returns becomes a 'RegistryError'
 -- prefixed with the scenario identifier.
@@ -115,6 +123,7 @@ mkRegistry bundles = case errors of
         <> concatMap validateScenario scenarios
         <> migrationErrors bundles
         <> resourceErrors bundles
+        <> concat [duplicateErrors ("oracle in " <> renderLayer bundle.layer) (fmap (.name) bundle.oracles) | bundle <- bundles]
         <> [RegistryError (renderScenarioId scenario.id <> ": " <> message) | rule <- concatMap (.rules) bundles, scenario <- scenarios, message <- rule.check scenario]
 
 -- Every set and required name is a valid pg-migrate component name, no two bundles
@@ -151,6 +160,13 @@ resourceErrors bundles =
        ]
   where
     providers = concatMap (.resources) bundles
+
+-- | The first registered bundle of a layer. Several bundles may share a layer;
+-- suite contributions are read from the first.
+lookupBundle :: Registry -> LayerId -> Maybe LayerBundle
+lookupBundle (Registry bundles) wanted = case filter ((== wanted) . (.layer)) bundles of
+  bundle : _ -> Just bundle
+  [] -> Nothing
 
 lookupResource :: Registry -> ResourceName -> Maybe ResourceProvider
 lookupResource (Registry bundles) wanted = case [provider | bundle <- bundles, provider <- bundle.resources, provider.name == wanted] of

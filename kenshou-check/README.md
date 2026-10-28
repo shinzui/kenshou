@@ -34,8 +34,9 @@ input is `not-evaluated` unless a checker explicitly permits it.
 - `linearizability`: completed histories admit a legal sequential execution;
   bounded-search exhaustion is inconclusive.
 
-The SQL oracle catalogue reconciles ledger evidence with durable Kiroku, Keiro,
-and PGMQ tables without linking those runtime libraries.
+Suites register their SQL oracles on their layer bundle; the toolkit runs them,
+records their rows, and reconciles them with ledger evidence without linking any
+runtime library.
 
 ## Failure controls
 

@@ -11,11 +11,6 @@ module Kenshou.Diagnose.Postgres
     captureSettings,
     capturePostgres,
     reconstructAdvisoryKey,
-    keiroWorkflowStepLock,
-    keiroWorkflowLifecycleLock,
-    kirokuConsumerGroupGuard,
-    pgmqQueueLock,
-    pgmqFifoKeyLock,
     pgMigrateLedgerLock,
   )
 where
@@ -33,6 +28,7 @@ import Hasql.Decoders qualified as Decoders
 import Hasql.Encoders qualified as Encoders
 import Hasql.Session qualified as Session
 import Hasql.Statement qualified as Statement
+import Kenshou.Core.Contribution (AdvisoryKeySpec (..), AdvisoryLabel (..))
 
 data ActivityRow = ActivityRow
   { pid :: !Int,
@@ -72,12 +68,6 @@ data PostgresSnapshot = PostgresSnapshot
     statementRate :: !(Maybe StatementRate),
     settings :: !Value
   }
-  deriving stock (Eq, Show)
-
-data AdvisoryKeySpec = HashTextExtended !Text | HashText !Text | LiteralKey !Int64
-  deriving stock (Eq, Show)
-
-data AdvisoryLabel = AdvisoryLabel {label :: !Text, key :: !AdvisoryKeySpec}
   deriving stock (Eq, Show)
 
 captureActivity :: Connection.Connection -> IO (Either Text [ActivityRow])
@@ -154,21 +144,6 @@ databaseCounterSql = "SELECT (xact_commit+xact_rollback)::text FROM pg_stat_data
 
 reconstructAdvisoryKey :: Word32 -> Word32 -> Int64
 reconstructAdvisoryKey high low = fromIntegral (((fromIntegral high :: Word64) `shiftL` 32) .|. fromIntegral low)
-
-keiroWorkflowStepLock :: Text -> Text -> Int -> Text -> AdvisoryLabel
-keiroWorkflowStepLock workflowId workflowName generation step = AdvisoryLabel ("keiro workflow step " <> step) (HashTextExtended (Text.intercalate "/" [workflowId, workflowName, Text.pack (show generation), step]))
-
-keiroWorkflowLifecycleLock :: Text -> Text -> Int -> AdvisoryLabel
-keiroWorkflowLifecycleLock workflowId workflowName generation = keiroWorkflowStepLock workflowId workflowName generation "__keiro_lifecycle__"
-
-kirokuConsumerGroupGuard :: Text -> Int32 -> AdvisoryLabel
-kirokuConsumerGroupGuard subscription member = AdvisoryLabel "kiroku consumer-group guard" (HashTextExtended (subscription <> ":" <> Text.pack (show member)))
-
-pgmqQueueLock :: Text -> AdvisoryLabel
-pgmqQueueLock queue = AdvisoryLabel "pgmq queue creation" (HashText ("pgmq.queue_" <> queue))
-
-pgmqFifoKeyLock :: Text -> AdvisoryLabel
-pgmqFifoKeyLock key = AdvisoryLabel "pgmq fifo key" (HashTextExtended key)
 
 pgMigrateLedgerLock :: AdvisoryLabel
 pgMigrateLedgerLock = AdvisoryLabel "pg-migrate ledger" (LiteralKey 0x70675F6D69677261)
