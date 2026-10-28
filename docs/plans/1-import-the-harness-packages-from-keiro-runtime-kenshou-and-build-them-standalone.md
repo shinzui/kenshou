@@ -69,9 +69,14 @@ handoff during a milestone, add a short prose note stating the remaining outcome
   `b9eebd8`; `kenshou list` prints 26 identifiers, all `selftest/…`; `--version` prints
   `kenshou v0.1.0.0 (60fc55f)`; the run writes `run-spec.json`, `run-result.json`,
   `manifest.json`, and `logs/`. Required the harness cohort, see Decision Log.)
-- [ ] M4: `just verify` passes: unit tests, formatting, schema checks, the self-test
+- [x] M4: `just verify` passes: unit tests, formatting, schema checks, the self-test
   recipe, and the plan check that proves no layer package is in the build plan; the CI
-  workflow runs the same gate on push.
+  workflow runs the same gate on push. (2026-10-28, commits `c743087` and `f621ac3`; local
+  `nix develop --command just verify` exits 0 with the suites at 117/35/42/34/20/23/154/44
+  examples and 0 failures, 2 pending in kenshou-cli; `just plan-check` prints the nine
+  package names; `nix build .#kenshou-synthetic` succeeds and the built `kenshou list`
+  works; `nix flake check` passes. The CI run on a pushed commit has not been observed:
+  nothing was pushed from this session.)
 
 ## Surprises & Discoveries
 
@@ -185,7 +190,29 @@ this plan by handle with their triage outcome. Before marking the plan complete,
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+EP-1 delivered what its purpose stated: the seven generic packages and the generic part of
+`kenshou-cli` build and test in this repository with no `kenshou-{pgmq,kiroku,shibuya,kafka,
+keiro,runtime}` package in Cabal's plan, and the standalone `kenshou` executable lists and
+runs only self-test scenarios through the `CliAssembly` hand-off. The `just verify` gate and
+the CI workflow exist and pass locally.
+
+Two things grew beyond the plan's text, both recorded in the Decision Log. The repository
+needed a cohort of its own (`cohort/harness.*`), because cohort identity on every run is
+generic behavior. And the imported tests were less generic than the plan assumed: they
+read the consumer's cohort descriptors, performance catalog, cell routing policy, and
+verification bundle from its checkout layout. Those reads now go to the bridge directory
+`fixtures/consumer-baseline/`, and two perf session tests are pending until
+`docs/plans/2-…` M4 regenerates the perf fixtures. The remaining gap against acceptance is
+the CI run on a pushed commit, which needs a push from the maintainer.
+
+Friction: FRIC-1 in `docs/friction-log/` (the shared Haskell package set cannot build the
+cohort's pinned dependencies) was accepted; the cohort overlay in `flake.module.nix` is the
+intended home for such pins.
+
+No `docs/adr/` bundle exists yet (`docs/plans/6-…` creates it). The decisions worth an ADR
+there are that this repository verifies against its own `harness` cohort, and that
+consumer data used by tests lives only in the `fixtures/consumer-baseline/` bridge until
+it is replaced by synthetic fixtures.
 
 
 ## Context and Orientation

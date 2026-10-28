@@ -6,13 +6,18 @@ generated:
   by: "claude-code/claude-opus-5-5"
   at: "2026-10-28T13:25:37Z"
 frictionId: FRIC-1
-status: logged
+status: "accepted"
 impact: detour
 kind: tooling
 origin: "mori://shinzui/kenshou"
 affects: "mori://shinzui/haskell-nix"
 plan: "docs/plans/1-import-the-harness-packages-from-keiro-runtime-kenshou-and-build-them-standalone.md"
 workaround: "Composed a cohort overlay in flake.module.nix that builds the exact pinned Hackage releases with callHackageDirect, jailbroken and without tests"
+resolution: "The harness keeps a cohort overlay in flake.module.nix while its cohort pins below the shared package set; the list shrinks when docs/plans/2-… removes the three migration libraries."
+amended:
+  - by: "claude-code/claude-opus-5-5"
+    at: "2026-10-28T13:38:06Z"
+    change: "Accepted: a project-local overlay is the intended place for cohort pins below the shared set"
 ---
 # Shared Haskell package set cannot build the harness cohort's pinned dependencies
 

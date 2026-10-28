@@ -144,7 +144,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Import the harness packages from keiro-runtime-kenshou and build them standalone | docs/plans/1-import-the-harness-packages-from-keiro-runtime-kenshou-and-build-them-standalone.md | None | None | In Progress |
+| 1 | Import the harness packages from keiro-runtime-kenshou and build them standalone | docs/plans/1-import-the-harness-packages-from-keiro-runtime-kenshou-and-build-them-standalone.md | None | None | Complete |
 | 2 | Open the kernel layer identity and schema composition to registered suites | docs/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites.md | EP-1 | None | Not Started |
 | 3 | Replace Kafka-specific environment fields with suite-provisioned named resources | docs/plans/3-replace-kafka-specific-environment-fields-with-suite-provisioned-named-resources.md | EP-2 | None | Not Started |
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Not Started |
@@ -313,9 +313,11 @@ the last pre-adoption baseline.
 
 ## Progress
 
-Phase A has not started. The repository holds the Nix tooling from the `nix-haskell-flake`
-seihou module, the Mori and Rei registrations, this MasterPlan, and the seven child plans.
-No cabal package exists yet.
+Phase A is complete (EP-1, 2026-10-28): the seven generic packages and the generic
+`kenshou-cli` library build and test here with no consumer layer package in Cabal's plan,
+the `kenshou` executable in `kenshou-synthetic` runs the self-test scenarios, and
+`just verify` passes locally. The CI run on a pushed commit is not yet observed. Phase B
+(EP-2) and the terminology and carried-over ADR part of EP-6 are now unblocked.
 
 - [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
   `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published
@@ -329,7 +331,29 @@ interactions between child plans. Provide concise evidence. Friction recurring a
 plans belongs here by FRIC-N handle; single occurrences stay in the friction log (see the
 exec-plan skill's FRICTION.md).
 
-(None yet.)
+- This repository has its own cohort. Cohort identity is resolved on every run from
+  `cohort/active.project`, `cohort/<name>.json`, and `plan.json`, so EP-1 created the
+  `harness` cohort (`cohort/harness.{project,json}`); `cabal.project` imports
+  `cohort/active.project`, and the index state and exact pins live in
+  `cohort/harness.project`. Every later plan that edits constraints edits that file, not
+  `cabal.project`: EP-2 removes the three migration pins there and from the cohort overlay
+  in `flake.module.nix`. EP-2's "synthetic cohort descriptor" for the perf tests can be
+  modeled on `cohort/harness.json`. EP-6 should record the harness cohort as an ADR.
+
+- The imported tests read consumer files, now vendored in one bridge directory,
+  `fixtures/consumer-baseline/` (verbatim at the pinned commit; see its README). The
+  consumers of the bridge map onto later plans: EP-2 M4 replaces the cohort descriptors and
+  performance catalog reads in `kenshou-core` and `kenshou-measure`, regenerates
+  `perf-prepared.fixture.json`, and un-pends the two `kenshou-cli` file-backed perf session
+  tests (`kenshou-cli/test/PerfSessionSpec.hs`), which need the prepared fixture's scenarios
+  to be registered; EP-4 replaces the `policies/cell-routing.json` read in
+  `kenshou-remote/test/PrepareSpec.hs`, the `cohort/released.json` reads in
+  `kenshou-remote/test/PayloadSpec.hs`, and the verification bundle copied by the
+  `kenshou-evidence` attestation tests and read by the `kenshou-cli` history test; EP-5
+  deletes the directory and its coupling guard must fail if it reappears. The `kenshou perf
+  plan` command resolves `cohortTemplate` and `policies/performance/catalog.v1.json`
+  relative to the working directory, which EP-2 M3's `PerfContracts` work should take into
+  account.
 
 
 ## Decision Log
