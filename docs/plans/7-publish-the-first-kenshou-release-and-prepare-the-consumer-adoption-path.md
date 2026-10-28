@@ -49,7 +49,7 @@ Hackage and compile it.
 
 ## Progress
 
-- [ ] M1: Release readiness. Every package passes `cabal check` with no warnings about missing
+- [x] M1: Release readiness. Every package passes `cabal check` with no warnings about missing
   license or changelog files, every package has a `CHANGELOG.md` with a `0.1.0.0` entry,
   `cabal sdist all` produces nine tarballs, the divergence audit against the consumer at commit
   `a1648293443ad88ff1695ed800ff44c99993574e` has been run and any generic-package change found
@@ -63,11 +63,16 @@ Hackage and compile it.
   - PVP upper bounds on every dependency that `cabal check` named.
 
   `cabal check` reports no errors or warnings in all nine packages, and `cabal sdist all`
-  writes nine tarballs. The tag is deferred to the moment publication is confirmed; see the
-  Decision Log.
+  writes nine tarballs. `just verify` passes. The user confirmed candidate uploads, so
+  `v0.1.0.0` is an annotated tag on `78f1f7a`. It is local and not pushed.
 - [ ] M2: Publication. The nine packages are published on Hackage (not candidates) with
   documentation uploaded, in dependency order, and a fresh cabal project outside this checkout
   builds against `kenshou-core ==0.1.0.0` at a recorded `index-state`.
+  Progress (2026-10-28): all nine packages are uploaded as Hackage candidates, in dependency
+  order, from tarballs built at `v0.1.0.0`. They are at
+  `https://hackage.haskell.org/package/<name>-0.1.0.0/candidate`. Next, the user reviews the
+  candidate pages and confirms publication. Then come `just publish`, the documentation
+  uploads, the recorded `index-state`, and the resolvability proof.
 - [ ] M3: Registration. `mori.dhall` keeps lifecycle `Experimental`, records the release and
   the nine packages,
   `mori validate` and `mori register` succeed, and an improvement request for a `kenshou` family
