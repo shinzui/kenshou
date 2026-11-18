@@ -10,6 +10,18 @@ provenance:
     model: "claude-fable-5-2"
     harness: "claude-code"
     at: 2026-11-17T19:05:20Z
+  reviews:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:45:55Z
+      verdict: "changes-requested"
+      note: "Same model as author. Checked against IR-5 and source; the shared plan-option parser cannot live in kenshou-cli, scope overrides have no defined effect, and matching planned runs to observations ignores retried attempts."
+  revisions:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:55:31Z
+      mode: "update"
+      note: "Addressed the 2026-11-18 review: round command in kenshou-cli, round evaluate, effective scope overrides, attempt-aware coverage, version step."
 ---
 
 # Run verification rounds against frozen baseline evidence
@@ -35,13 +47,14 @@ history query returns today, the comparison silently changes as new runs are pub
 each consumer writes its own report, coverage that was skipped for budget or placement reasons
 tends to disappear from it.
 
-After this plan, a consumer's executable has a `round` command with three subcommands. `round
+After this plan, a consumer's executable has a `round` command with four subcommands. `round
 open` writes a round definition that freezes the exact baseline runs with their trust, the
 baseline and candidate cohort identities, the owner snapshot, the catalog, and the selection
 inputs; it can also adopt an input set that was captured by hand earlier. `round plan` emits an
 ordinary run plan for one arm of the round, covering every scenario that reproduces an owner's
 defect plus the scenarios affected by the packages that changed, and states every omission with
-its reason. `round report` compares frozen baseline and candidate observations through the
+its reason. `round evaluate` freezes the candidate observations under an identifier the caller
+chooses. `round report` compares the frozen baseline with a frozen evaluation through the
 disposition derivation of plan 10 and prints what is fixed, what remains, what is new, and what
 is missing, each traced to exact runs. Replaying a report later gives the same answer. Nothing
 here writes to owner records or sealed evidence.
@@ -71,9 +84,9 @@ one run with incomplete evidence, and exits 1 because of the new failure.
   document listing owner reproductions, change-selected scenarios, and every omission; release
   mode and change mode differ as specified; the synthetic end-to-end test executes an emitted
   plan.
-- [ ] M3: `round report` freezes an evaluation, derives baseline and candidate dispositions with
-  plan 10's function, and prints text, `kenshou.round-report/v1` JSON, and an optional dated
-  Markdown report; the fixture replay has the expected counts and is unchanged by newer
+- [ ] M3: `round evaluate` freezes an evaluation; `round report` derives baseline and candidate
+  dispositions from it with plan 10's function and prints text, `kenshou.round-report/v1` JSON,
+  and an optional dated Markdown report; the fixture replay has the expected counts and is unchanged by newer
   observations; a synthetic consumer runs open, plan, execute, and report through public
   command contributions; `just verify` passes.
 
@@ -111,10 +124,15 @@ one run with incomplete evidence, and exits 1 because of the new failure.
 - Decision: A report is always derived from a frozen evaluation: a create-only document under
   the round's `evaluations/<id>/` directory holding the candidate observations and the
   disposition inputs. A second evaluation with a different identifier is the only way to take
-  newer evidence into account.
+  newer evidence into account. Only `round evaluate` creates an evaluation; `round report` reads
+  one and fails with exit code 4 when it does not exist.
   Rationale: IR-5 requires that replaying a frozen round must not substitute newer history,
   catalog definitions, or owner claims without recording a separately identified evaluation.
-  Date: 2026-11-17
+  The first draft let `round report` create the evaluation when it was missing. Because an
+  evaluation can never be rewritten, a mistyped identifier or a forgotten source option would
+  then have frozen an empty evaluation for good; a separate command makes creating one a
+  deliberate act.
+  Date: 2026-11-17 (creation moved to `round evaluate` on 2026-11-18)
 
 - Decision: `round report` exits 1 when the candidate arm has a regression, a defect that still
   reproduces on a version the owner calls fixed, or a new failure; 3 when there is none of
@@ -129,6 +147,42 @@ one run with incomplete evidence, and exits 1 because of the new failure.
   Rationale: IR-5 and ADR-5 keep functional and owner conclusions separate from performance
   verdicts, which require paired, interleaved, calibrated benchmark evidence.
   Date: 2026-11-17
+
+- Decision: The round logic (definition, opening, planning, evaluation, report) is a library in
+  `kenshou-evidence` with no command-line parsing. The `round` command lives in `kenshou-cli`,
+  in `Kenshou.Cli.Command.Round`, beside the `plan` command.
+  Rationale: `round plan` must accept the same policy options as `plan` and turn them into a
+  `PlanPolicy` the same way. That parser and `makePolicy` are in
+  `Kenshou.Cli.Command.Plan` in `kenshou-cli`, and `kenshou-cli` depends on `kenshou-evidence`,
+  so a command defined in `kenshou-evidence` could not share them. Placing the command in
+  `kenshou-cli` needs no code to move between packages.
+  Date: 2026-11-18
+
+- Decision: A scope override replaces, for this round's derivation only, the scope of one
+  declaration, identified by scenario and reference. It cannot change labels. Every conclusion
+  that rests on an overridden declaration says so.
+  Rationale: IR-5 requires reports to trace explicit scope overrides. The first draft recorded
+  overrides but gave them no effect, while also promising to list the conclusions they affect.
+  An override exists for the interval between a consumer learning that a declared scope is
+  wrong and its source being corrected; applying it to the catalog handed to the derivation,
+  visibly, is what makes the round usable in that interval. ADR-11 forbids widening labels, so
+  an override may carry only a scope.
+  Date: 2026-11-18
+
+- Decision: A planned run counts as covered when any attempt recorded for it in the execution's
+  `plan-summary.json` has a candidate observation.
+  Rationale: `Kenshou.Plan.Execute` gives a retried run a fresh run identifier, so matching the
+  planned identifier alone would report a run that succeeded on its second attempt as missing.
+  The summary is the executor's own record of which attempts belong to which planned run.
+  Date: 2026-11-18
+
+- Decision: This plan is a major version step under the Haskell Package Versioning Policy for
+  `kenshou-core` (to 0.2.0.0) and a minor step for `kenshou-evidence` and `kenshou-cli`. It does
+  not tag or publish.
+  Rationale: `ChangeSource` is exported with its constructors, so adding `OwnerReproduction`
+  breaks any exhaustive match on it. All eight other packages bound `kenshou-core` with
+  `^>=0.1.0.0`, which excludes 0.2.0.0, so every one of them needs its bound raised.
+  Date: 2026-11-18
 
 
 ## Outcomes & Retrospective
@@ -226,8 +280,11 @@ A constraint from IR-1: a package's tests may read only files inside that packag
 ### Milestone 1: opening a round
 
 Create `kenshou-evidence/src/Kenshou/Evidence/Round.hs` (the definition, its codec, and the
-opening logic) and `kenshou-evidence/src/Kenshou/Evidence/Round/Cli.hs` (the `round` command).
-Add `roundCommand` to `standardCommands` and export `roundCommandWith` for consumers.
+opening logic), a library module with no command-line parsing, and
+`kenshou-cli/src/Kenshou/Cli/Command/Round.hs` (the `round` command, which only parses options
+and calls the library). Add `roundCommand` to `standardCommands` and export `roundCommandWith`
+and `RoundConfig` from `Kenshou.Cli` for consumers. The command is in `kenshou-cli` because it
+shares option parsing with the `plan` command there (see Milestone 2 and the Decision Log).
 
 A round directory has this layout:
 
@@ -243,6 +300,7 @@ A round directory has this layout:
     candidate-identity.json       kenshou.cohort-identity/v1
     baseline-observations.json    the frozen baseline observations
     coverage.json                 optional coverage policy
+    scope-overrides.json          optional, kenshou.round-scope-overrides/v1
   plans/                          written by round plan
   evaluations/<id>/               written by round report
 ```
@@ -253,16 +311,40 @@ also records the cohort name and plan hash. For the baseline it records the obse
 for each baseline run, the run identifier, its source (the evidence concept reference or the
 sealed run path), its scenario, and its trust at the time of opening. It records by reference
 (path or URI plus digest) any plan, run spec, suite, and policy documents the caller names with
-`--reference KIND=PATH`, and a list of scope overrides. A scope override is a consumer's
-explicit statement, given in a file passed with `--scope-overrides`, that for this round a
-named scenario's declared known-defect scope is to be read differently, with a reason; the
-round only records and reports overrides, and they change no source.
+`--reference KIND=PATH`. A scope override is a consumer's explicit statement, given in a file
+passed with `--scope-overrides` and frozen as `inputs/scope-overrides.json`, that for this round
+one declaration's scope is to be read differently:
+
+```json
+{
+  "schema": "kenshou.round-scope-overrides/v1",
+  "overrides": [
+    {
+      "scenario": "consumer/table/correctness/lease-release",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "appliesTo": {
+        "kind": "only-when",
+        "conditions": [{"kind": "version-below", "package": "fixture-store", "version": "1.3.0"}]
+      },
+      "reason": "The owner released the fix in 1.3.0; the source still says 1.4.0."
+    }
+  ]
+}
+```
+
+`appliesTo` uses plan 9's scope encoding. An override names one individual defect by scenario
+and reference and carries only a scope and a non-empty reason; it has no field for labels.
+`round open` refuses, with exit code 4, a file in which an override names a scenario or
+reference that the frozen catalog does not declare, or in which two overrides name the same
+declaration. Overrides change no source file: they are applied only to the copy of the catalog
+that Milestone 3 hands to the derivation.
 
 `round open` has two ways to obtain inputs. With `--from-inputs DIR`, it copies an already
 captured directory that has the layout of `inputs/` above, verifies that the owner snapshot
 passes its own digest check, that both identities decode, that every baseline observation's
-run identifier is unique, and that every referenced artifact exists with the stated digest, and
-it performs no history query and no owner resolution. Without it, the caller passes `--owners
+run identifier is unique, that any scope overrides are valid against the catalog, and that
+every referenced artifact exists with the stated digest, and it performs no history query and
+no owner resolution. Without it, the caller passes `--owners
 DIR` (an existing snapshot; opening does not take one implicitly, so that the capture time of
 owner claims is always a deliberate act), `--package-map FILE`, `--baseline-identity FILE`,
 `--candidate-identity FILE`, `--baseline-runs FILE` (a JSON array of run identifiers or
@@ -286,9 +368,15 @@ digest, a missing baseline run, and an existing round directory are each refused
 `plans/NAME.run-plan.json` (an ordinary `kenshou.run-plan/v1`) and `plans/NAME.coverage.json`
 (`kenshou.round-coverage/v1`). It accepts the planner's policy options that the `plan` command
 has (`--max-tier`, `--kind`, `--placement`, `--dimension-policy`, `--knob-policy`, `--trials`,
-`--budget-minutes`, `--seed`, `--set`, `--dim`, `--select`, `--exclude`); move the parsing of
-those options out of `Kenshou.Cli.Command.Plan` into a shared module so both commands use one
-parser. It refuses to overwrite an existing plan name.
+`--budget-minutes`, `--seed`, `--set`, `--dim`, `--select`, `--exclude`). Move the parsing of
+those options, together with `makeSeed` and `makePolicy`, out of
+`Kenshou.Cli.Command.Plan` into a new `kenshou-cli/src/Kenshou/Cli/PlanOptions.hs`, so that both
+commands use one parser and build a `PlanPolicy` one way (selectors are applied with the
+existing `Kenshou.Plan.Change.applySelectors`); `kenshou plan --help` and the help
+golden files must be unchanged by the move. In the `plan` command `--select` keeps only matching
+scenarios and `--exclude` removes them, and `round plan` gives them the same meaning: they are
+applied after the selection below, and a reproduction scenario they remove is an omission with
+the reason `excluded`. The command refuses to overwrite an existing plan name.
 
 Selection is the union of two sets. The first is owner-reproduction coverage: every scenario in
 the frozen catalog whose declaration cites an owner record in the frozen snapshot, whatever the
@@ -316,32 +404,51 @@ the plan, and gives the estimate. A reproduction scenario that is omitted is nev
 dropped: it is in the coverage document and later in the report.
 
 Tests in `kenshou-core/test/Kenshou/PlanSpec.hs` cover the new change source. Tests in
-`kenshou-evidence/test/Main.hs` use a synthetic catalog, graph, and identities to show: release
+`kenshou-evidence/test/Main.hs` call the library's `planRound` with a `PlanPolicy` and a
+synthetic catalog, graph, and identities to show: release
 mode selects everything; change mode selects only reproductions and affected scenarios; a
 package change that no component owns appears as `unmapped-change`; a `--placement` that a
 reproduction scenario does not support yields a placement omission; a small `--budget-minutes`
-yields over-budget omissions; and the candidate plan's cohort expectation equals the candidate
-identity's plan hash while the baseline plan's equals the baseline's.
+yields over-budget omissions; a `--select` that leaves out a reproduction scenario yields an
+`excluded` omission; and the candidate plan's cohort expectation equals the candidate
+identity's plan hash while the baseline plan's equals the baseline's. A test in
+`kenshou-cli/test/Main.hs` runs `plan` and `round plan` with the same policy options and asserts
+that the two emitted plans carry equal policies.
 
 ### Milestone 3: reporting
 
-`round report --round DIR --evaluation ID` works in two steps. If
-`evaluations/ID/evaluation.json` does not exist, the command creates it: it loads the candidate
-observations from the locations given (`--candidate-runs FILE`, a JSON array of run identifiers
-or concept references resolved with plan 10's loader; and `--runs DIR`, repeatable, for sealed
-local run directories such as the output of `kenshou execute`), records the plan and coverage
-documents named with `--plan NAME`, records any comparison artifacts named with `--comparison
-PATH` by path and digest, and writes the evaluation with a digest of `round.json`. If the
-evaluation exists, the command reads it and ignores every other source option; passing source
-options together with an existing evaluation is a usage error. The report is then derived only
-from `round.json`, `inputs/`, and the evaluation.
+Reporting is two commands. `round evaluate --round DIR --id ID` creates
+`evaluations/ID/evaluation.json` and refuses, with exit code 2, an identifier that already
+exists. It loads the candidate observations from the locations given (`--candidate-runs FILE`, a
+JSON array of run identifiers or concept references resolved with plan 10's loader; and `--runs
+DIR`, repeatable, for sealed local run directories such as the output of `kenshou execute`),
+records the plan and coverage documents named with `--plan NAME`, copies the `plan-summary.json`
+of every `--runs` directory that has one (it lists, for each planned run, the run identifiers of
+its attempts), records any comparison artifacts named with `--comparison PATH` by path and
+digest, and writes the evaluation with a digest of `round.json`. It requires at least one of
+`--candidate-runs` and `--runs`, so that an evaluation is never frozen empty by accident; to
+record deliberately that nothing was run, pass `--allow-empty`. It prints the number of
+observations it froze, by trust, to standard error.
+
+`round report --round DIR --evaluation ID` reads an existing evaluation and accepts no source
+option. It fails with exit code 4 when the evaluation does not exist, naming `round evaluate`.
+The report is derived only from `round.json`, `inputs/`, and the evaluation.
+
+Observations loaded from `--runs` have the trust `local-sealed`, which is not confirmed, so an
+evaluation built only from an execution's output can show a defect as `not-reproduced` but never
+as `verified-fixed`. To reach `verified-fixed`, the consumer publishes the runs with `kenshou
+record`, has them attested, and creates a second evaluation from them with `--candidate-runs`.
+The guide section this milestone adds must say so.
 
 Create `kenshou-evidence/src/Kenshou/Evidence/Round/Report.hs` with a pure function from the
 round definition, its inputs, and an evaluation to a report. It calls `deriveDispositions`
 twice, once with the baseline observations and once with the baseline and candidate
 observations together, so that a candidate reproduction after a baseline confirmed pass can be
 recognised as a regression; both calls use the frozen owner status, catalog, package map, and
-coverage. The report has these parts.
+coverage. Before either call, each scope override is applied to the frozen catalog in memory: the
+named declaration's `appliesTo` is replaced by the override's, and nothing else changes. Both
+calls see the overridden catalog, so baseline and candidate are judged by the same scopes. The
+report has these parts.
 
 Owner conclusions: for each owner, the baseline conclusion per baseline cohort and the
 candidate conclusion for the candidate cohort (the one whose plan hash equals the candidate
@@ -355,15 +462,21 @@ failed candidate observation whose labels are unavailable is listed under incomp
 not here.
 
 Missing coverage: every scenario the coverage document marks as omitted, with its reason, and
-every planned run that has no candidate observation.
+every planned run that is not covered. A planned run is covered when the candidate observations
+include the run identifier of any of its attempts, as listed for its ordinal in the frozen
+`plan-summary.json`; when the evaluation has no summary for the plan, only the planned run
+identifier itself is looked for. A run that failed once and passed on a retry is therefore
+covered, and both attempts are listed.
 
 Infrastructure failures and inconclusive runs: candidate observations with those outcomes.
 
 Incompatible controls: scenarios whose baseline and candidate observations have different
 scenario revisions, or whose baseline observation is incompatible with the frozen catalog.
 
-Scope overrides: each override recorded in the round, with its reason and the scenarios whose
-conclusions it affects.
+Scope overrides: each override recorded in the round, with its reason, the declared scope, the
+overriding scope, and the owner conclusions that rest on that declaration. Each of those
+conclusions also carries the reason `scope-override`, so a reader of the owner section alone
+cannot mistake an overridden reading for the declared one.
 
 Linked comparisons: the comparison artifacts recorded in the evaluation, by path and digest,
 under a heading that states they are separate performance evidence.
@@ -385,8 +498,12 @@ evaluation `e1`, using made-up owners and packages, containing: a fixed defect w
 candidate pass and a baseline reproduction; an unrelated runtime failure with a label no
 declaration covers; an expected defect on an affected candidate package that exited 0; a
 planned scenario with no candidate observation; a candidate infrastructure failure; and a
-failed candidate run whose run data is absent. Tests assert the counts, the conclusion and
-transition for each owner, the run identifiers, and the exit code 1; they assert that the JSON
+failed candidate run whose run data is absent. It also contains one scope override, and a
+planned run whose first attempt was an infrastructure failure and whose retry passed. Tests
+assert the counts, the conclusion and transition for each owner, the run identifiers, the
+`scope-override` reason on the affected conclusion (and that removing the override from a copy of
+the round changes that conclusion), that the retried run is not listed as missing, and the exit
+code 1; they assert that the JSON
 report is byte-identical when produced twice, and unchanged after files are added beside the
 round (a newer evidence record and a changed owner file) since the report reads neither.
 
@@ -396,16 +513,18 @@ owner record and that fails with the declared label, a second scenario that pass
 graph, and a `Program` built from `selfTestAssembly` with `withCommand (roundCommandWith
 config)` and plan 8's `ownersCommandWith`. Entirely through `runWithArgsWith`, the test takes an
 owner snapshot, captures the cohort identity with `cohort show --json` for both arms, opens a
-round, plans the candidate arm, runs `execute` on the emitted plan, and reports with `--runs`
-pointing at the execution's output. It asserts that the report shows the defect as
-`reproduces-as-expected`, that a second `round open` and a second `round plan` with the same
-names are refused, and that every owner file and every sealed run directory has the same
+round, plans the candidate arm, runs `execute` on the emitted plan, creates an evaluation with
+`round evaluate --runs` pointing at the execution's output, and reports on it. It asserts that
+the report shows the defect as `reproduces-as-expected`, that `round report` on an evaluation
+identifier that was never created exits 4 and creates nothing, that a second `round open`, a
+second `round plan`, and a second `round evaluate` with the same names are refused, and that every owner file and every sealed run directory has the same
 digests afterwards. Using the same identity for both arms is acceptable here: the test proves
 the protocol runs end to end without a second cohort build, and the change-mode differences are
 covered by Milestone 2's tests.
 
 Add schema files `schemas/kenshou.round.v1.schema.json`,
-`schemas/kenshou.round-coverage.v1.schema.json`, and
+`schemas/kenshou.round-coverage.v1.schema.json`,
+`schemas/kenshou.round-scope-overrides.v1.schema.json`, and
 `schemas/kenshou.round-report.v1.schema.json` with `check-jsonschema` lines in the
 `schemas-check` recipe of `justfile`. Add a help topic `kenshou-cli/help/rounds.md`, terminology
 concepts for "round" and "round evaluation" under `docs/terminology/`, a section in
@@ -414,7 +533,14 @@ ADR (allocate with `okf id next docs/adr --profile docs/adr/profile.dhall ADR`) 
 a round freezes its baseline and inputs, that plans are bound to an arm's identity, and that
 reports derive from frozen evaluations. Regenerate indexes with `okf index docs/<bundle>
 --write`, add CHANGELOG entries for `kenshou-core`, `kenshou-evidence`, and `kenshou-cli`, and
-note the implementation in IR-5 and its bundle log within what the profile allows.
+note the implementation in IR-5 and its bundle log within what the profile allows. Set
+`kenshou-core`'s `version` to 0.2.0.0, naming the new `ChangeSource` constructor as the breaking
+change in its CHANGELOG, and raise the bound on it to `^>=0.2.0.0` in all eight packages that
+depend on it (`kenshou-check`, `kenshou-cli`, `kenshou-diagnose`, `kenshou-evidence`,
+`kenshou-measure`, `kenshou-remote`, `kenshou-synthetic`, and `kenshou-telemetry`); `just
+plan-check` and `cabal build all` confirm that none was missed. Give `kenshou-evidence` and
+`kenshou-cli` a minor step each. The `kenshou-cli` entry states that `standardCommands` now
+includes a command named `round`. Do not tag or publish.
 
 
 ## Concrete Steps
@@ -483,14 +609,17 @@ printf '[]\n' > "$tmp/baseline.json"
 "$K" round plan --round "$tmp/demo" --arm candidate --out smoke --max-tier smoke --placement local \
   --select 'selftest/kernel/correctness/*'
 "$K" execute --plan "$tmp/demo/plans/smoke.run-plan.json" --out "$tmp/exec"
-"$K" round report --round "$tmp/demo" --evaluation first --plan smoke --runs "$tmp/exec"; echo "exit=$?"
+"$K" round report --round "$tmp/demo" --evaluation first; echo "exit=$?"
+"$K" round evaluate --round "$tmp/demo" --id first --plan smoke --runs "$tmp/exec"
+"$K" round report --round "$tmp/demo" --evaluation first; echo "exit=$?"
 "$K" round open --id demo --out "$tmp/demo" --mode release --owners "$tmp/owners" \
   --package-map "$tmp/map.json" --baseline-identity "$tmp/identity.json" \
   --candidate-identity "$tmp/identity.json" --baseline-runs "$tmp/baseline.json"; echo "exit=$?"
 ```
 
-The last command must print a refusal and `exit=2`. The self-test suite contains scenarios that
-fail on purpose, so the first report's exit code is expected to be 1; what to check is that
+The first `round report` runs before the evaluation exists and must print `exit=4`. The last
+command must print a refusal and `exit=2`. The self-test suite contains scenarios that fail on
+purpose, so the second report's exit code is expected to be 1; what to check is that
 each of those failures appears under new failures with its run identifier and that the
 self-test known-defect scenario's reference appears as an owner that is not a record.
 
@@ -524,12 +653,14 @@ budget each appear as explicit omissions.
 
 For AC-3, the fixture replay test passes with the expected counts for the confirmed fix, the
 unrelated runtime failure, the expected defect that exited 0, the missing run, the
-infrastructure failure, and the incomplete evidence; every entry names its run and trust; and
-the JSON is identical on replay after newer observations appear.
+infrastructure failure, and the incomplete evidence; every entry names its run and trust; the
+scope override is applied, listed, and marked on the conclusion it affects; a retried run is not
+reported as missing; and the JSON is identical on replay after newer observations appear.
 
 For AC-4, the synthetic end-to-end test passes using only public command contributions; `just
 coupling-check` prints `coupling-guard: clean`; owner files and sealed runs keep their digests;
-and repeated `round open` and `round plan` commands are refused rather than overwriting.
+repeated `round open`, `round plan`, and `round evaluate` commands are refused rather than
+overwriting; and `round report` never creates an evaluation.
 
 `just verify` exits 0.
 
@@ -540,8 +671,8 @@ Every write in this plan is create-only: a round directory, a plan name within i
 evaluation identifier within it, and a Markdown report path are each written once and refused
 thereafter. Each is assembled in a temporary location and renamed into place, so an interrupted
 command leaves nothing under the final name. To redo a step, use a new identifier or name, or
-delete the abandoned directory by hand; nothing else depends on it. `round report` on an
-existing evaluation is a pure replay and can be repeated freely. No command modifies owner
+delete the abandoned directory by hand; nothing else depends on it. `round report` is a pure
+replay of an existing evaluation, writes nothing inside the round, and can be repeated freely. No command modifies owner
 records, evidence records, sealed run directories, cohort files, or the active cohort.
 `execute` is the existing command and keeps its own resume behavior (`--resume`).
 
@@ -583,6 +714,15 @@ data RoundDefinition = RoundDefinition
     scopeOverrides :: [ScopeOverride]
   }
 
+data ScopeOverride = ScopeOverride
+  { scenario :: ScenarioId,
+    reference :: Text,
+    appliesTo :: CohortScope,
+    reason :: Text
+  }
+
+applyScopeOverrides :: [ScopeOverride] -> [ScenarioInfo] -> Either RoundError [ScenarioInfo]
+
 openRound :: OpenOptions -> IO (Either RoundError RoundDefinition)
 readRound :: FilePath -> IO (Either RoundError (RoundDefinition, RoundInputs))
 planRound :: RoundDefinition -> RoundInputs -> Arm -> PlanPolicy -> (PlanSkeleton, RoundCoverage)
@@ -599,14 +739,23 @@ data Evaluation = Evaluation
     roundDigest :: Text,
     candidate :: [Observation],
     coverage :: Maybe RoundCoverage,
+    summaries :: [PlanSummary],
     comparisons :: [(FilePath, Text)]
   }
 
+createEvaluation :: RoundDefinition -> EvaluationOptions -> IO (Either RoundError Evaluation)
+readEvaluation :: FilePath -> Text -> IO (Either RoundError Evaluation)
 roundReport :: RoundDefinition -> RoundInputs -> Evaluation -> RoundReport
 reportExitCode :: RoundReport -> ExitCode
 ```
 
-`roundReport` is pure. In `kenshou-evidence/src/Kenshou/Evidence/Round/Cli.hs`:
+`roundReport` is pure. `PlanSummary` is the existing `kenshou.plan-summary/v1` type from
+`Kenshou.Plan.Summary`. `createEvaluation` is the only function that writes an evaluation.
+
+In `kenshou-cli/src/Kenshou/Cli/PlanOptions.hs`, the policy option parser, `makeSeed`, and
+`makePolicy`, moved from `Kenshou.Cli.Command.Plan` without change.
+
+In `kenshou-cli/src/Kenshou/Cli/Command/Round.hs`, re-exported from `Kenshou.Cli`:
 
 ```haskell
 data RoundConfig = RoundConfig
@@ -621,5 +770,18 @@ roundCommandWith :: RoundConfig -> CliCommand
 
 The documents this plan introduces are `kenshou.round/v1`, `kenshou.round-coverage/v1`, and
 `kenshou.round-report/v1`; the evaluation document is internal to a round directory and carries
-the schema identifier `kenshou.round-evaluation/v1`. The document it extends is
-`kenshou.run-plan/v1`, with one added change-source text.
+the schema identifier `kenshou.round-evaluation/v1`. The scope override file is
+`kenshou.round-scope-overrides/v1`. The document it extends is `kenshou.run-plan/v1`, with one
+added change-source text.
+
+
+## Revision Notes
+
+2026-11-18: Revised after review, before implementation began. The `round` command moved to
+`kenshou-cli`, because the plan-option parser it must share lives there and `kenshou-evidence`
+cannot import it; the round logic stays a library in `kenshou-evidence`. Evaluations are now
+created only by a new `round evaluate` subcommand, so that `round report` can never freeze an
+empty evaluation by mistake. Scope overrides gained a file format and a defined effect on the
+derivation. Missing coverage is now judged through the execution's attempt list, because a
+retried run gets a new run identifier. The plan also states that sealed local runs cannot yield
+`verified-fixed`, what `--select` means in `round plan`, and its version step.

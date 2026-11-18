@@ -10,6 +10,18 @@ provenance:
     model: "claude-fable-5-2"
     harness: "claude-code"
     at: 2026-11-17T19:05:20Z
+  reviews:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:45:47Z
+      verdict: "changes-requested"
+      note: "Same model as author. Checked against IR-2 and source; git provenance makes goldens and snapshots unstable, and snapshot replay of enrichment links and duplicate-chain targets is unspecified."
+  revisions:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:55:31Z
+      mode: "update"
+      note: "Addressed the 2026-11-18 review: relative provenance, opt-in git state, complete snapshots, version step."
 ---
 
 # Resolve owner records through consumer-supplied sources
@@ -117,6 +129,42 @@ not an owner record.
   Rationale: IR-2 requires that later verification rounds can report from the same bytes. A
   snapshot that can be rewritten in place cannot serve as that evidence.
   Date: 2026-11-17
+
+- Decision: No document this plan writes contains an absolute path. A record's provenance
+  carries a `location` that is relative: to the mapped bundle directory for the mapped
+  resolver, and to the checkout root (or the bare file name outside a checkout) for the Mori
+  resolver. Absolute paths appear only in diagnostics on standard error.
+  Rationale: A snapshot's digest must not depend on the machine that took it, and plans 9 and
+  11 check snapshots in as fixtures. An absolute path would also commit a contributor's home
+  directory.
+  Date: 2026-11-18
+
+- Decision: The library resolvers do not read git state. The checkout's `HEAD` revision and
+  dirty flag are added by a separate decorator, `withGitProvenance`, which the `owners` command
+  applies to live reads unless `--no-git-provenance` is given.
+  Rationale: The fixtures live inside this repository's checkout. If `mappedResolver` recorded
+  git state, the golden status document would change with every commit and would differ again
+  when the tests run from a source distribution, which has no checkout (IR-1). Real consumers
+  still get the revision by default, because for them it is useful provenance.
+  Date: 2026-11-18
+
+- Decision: A snapshot holds everything a replay prints: every reference reached during
+  resolution (including duplicate targets that nothing cites directly) and the enrichment links
+  computed when the snapshot was taken. A replay runs no source, no resolver, and no
+  enrichment.
+  Rationale: IR-2's fourth criterion requires repeatable reports from fixed bytes. An enrichment
+  is an arbitrary consumer action; rerunning it on replay could change the report, and a
+  duplicate target missing from the snapshot would force a live read.
+  Date: 2026-11-18
+
+- Decision: This plan is a minor version step under the Haskell Package Versioning Policy for
+  `kenshou-evidence` and `kenshou-cli` (0.1.0.0 to 0.1.1.0). It bumps the `version` fields and
+  the dependents' bounds on those two packages, and does not tag or publish.
+  Rationale: The plan only adds modules, exports, and one command to the list
+  `standardCommands` returns. The one behavior a consumer can notice is a name collision, which
+  the CHANGELOG entry must state: a program that already contributes a command named `owners`
+  must replace the standard one with `withCommand`. Publishing is a separate, deliberate act.
+  Date: 2026-11-18
 
 
 ## Outcomes & Retrospective
@@ -251,15 +299,21 @@ labels. `findingsFileSource` reads a `kenshou.owner-findings/v1` document:
 ```
 
 A resolver takes a reference and returns either the record's bytes with provenance, or a
-structured failure. Provenance records the resolver's name, the path it read, the SHA-256 of the
-bytes, and, when the path is inside a git checkout, that checkout's `HEAD` revision and whether
-the file differs from it. Provide three resolvers. `mappedResolver` takes pairs of a bundle URI
+structured failure. Provenance records the resolver's name, a relative `location` for the file
+it read, and the SHA-256 of the bytes; it never records an absolute path. The resolvers
+themselves do not look at git. `withGitProvenance` wraps a resolver and, when the file it read
+is inside a git checkout, adds that checkout's `HEAD` revision and whether the file differs from
+it; outside a checkout, or when `git` is not installed, both stay absent. Provide three
+resolvers. `mappedResolver` takes pairs of a bundle URI
 prefix and a local bundle directory; for a reference under a mapped prefix it parses every
 `.md` file in that directory (excluding `index.md` and `log.md`) and selects the one whose
-frontmatter handle equals the reference's handle. It must never match on a file name. It
+frontmatter handle equals the reference's handle. It must never match on a file name. Its
+`location` is the file's path relative to the mapped directory. It
 reports `not-found` when no record carries the handle and `ambiguous-handle` when more than one
 does. `moriResolver` runs `mori path <reference>` and reads the path printed on the second
-line; a non-zero exit is `not-found`, and a missing `mori` executable is `resolver-failed`.
+line; a non-zero exit is `not-found`, and a missing `mori` executable is `resolver-failed`. Its
+`location` is the file's path relative to the root of the checkout that contains it, or the bare
+file name when there is no checkout.
 `snapshotResolver` answers only from a snapshot directory. `chainResolvers` tries resolvers in
 order and returns the first that does not answer `no-mapping`.
 
@@ -288,8 +342,10 @@ earlier one is an alias of it. Citations made through an alias are attributed to
 record and keep the alias they came through. Canonical identity is always the full Mori URI, so
 `BUG-1` of one owner and `BUG-1` of another never merge.
 
-The result is an `OwnerStatus` value with one entry per distinct reference, sorted by reference,
-and a hand-written encoder for `kenshou.owner-status/v1`. An entry looks like this:
+The result is an `OwnerStatus` value with one entry per distinct reference that is cited or was
+reached while following a duplicate chain, sorted by reference, and a hand-written encoder for
+`kenshou.owner-status/v1`. A record that nothing cites directly and that no alias leads
+citations to has an empty `citedBy`; it is listed so that a snapshot is complete. An entry looks like this:
 
 ```json
 {
@@ -312,7 +368,7 @@ and a hand-written encoder for `kenshou.owner-status/v1`. An entry looks like th
     {"scenario": "consumer/table/correctness/lease-release", "labels": ["lease-held"], "via": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-4"},
     {"finding": "F-2", "location": "docs/findings.md#f-2"}
   ],
-  "source": {"resolver": "mapped", "path": "…/BUG-2.md", "sha256": "…", "revision": null, "dirty": null},
+  "source": {"resolver": "mapped", "location": "lease-not-released.md", "sha256": "…", "revision": null, "dirty": null},
   "links": []
 }
 ```
@@ -323,10 +379,15 @@ report was rendered), `snapshot` (the snapshot's digest, or null for a live read
 whatever a consumer's enrichment returns, described in Milestone 3.
 
 A snapshot directory contains `snapshot.json` (schema `kenshou.owner-snapshot/v1`: `observedAt`,
-the citations, and for each reference its resolution outcome and provenance) and `records/`,
-holding each resolved record's bytes in a file named by its SHA-256. Reading a snapshot verifies
-every file against its recorded digest and fails if one differs. The snapshot's own digest is
-the SHA-256 of `snapshot.json`.
+the citations, and for each reference in the status document its resolution outcome, provenance,
+and enrichment links) and `records/`, holding each resolved record's bytes in a file named by its
+SHA-256. Every reference reached during resolution is included, so a duplicate target that
+nothing cites directly has its bytes in the snapshot too. Reading a snapshot verifies every file
+against its recorded digest and fails if one differs; it then rebuilds the status document from
+the stored bytes and the stored links, and consults nothing else. The snapshot's own digest is
+the SHA-256 of `snapshot.json`. Because provenance holds only relative locations, two machines
+that snapshot the same bytes without git provenance produce the same `snapshot.json` apart from
+`observedAt`.
 
 Create the fixtures under `kenshou-evidence/test/fixtures/owners/`: two bundles,
 `owner-a/bug-reports/` and `owner-b/bug-reports/`, and `findings.json`. Name the Markdown files
@@ -341,9 +402,13 @@ one handle that exists in no bundle, and one `https://` URL. Add the fixture glo
 
 Add a `describe "owner records"` block to `kenshou-evidence/test/Main.hs` that resolves the
 fixtures with `mappedResolver` and asserts each case's resolution, reasons, canonical reference,
-aliases, and version states, and that the encoded document for the whole fixture set equals a
-checked-in golden file `kenshou-evidence/test/fixtures/owners/status.golden.json` after
-replacing the absolute fixture root with a placeholder.
+aliases, and version states, and that the encoded document for the whole fixture set, with a
+fixed `observedAt` supplied by the test, equals the checked-in golden file
+`kenshou-evidence/test/fixtures/owners/status.golden.json` byte for byte. No path substitution is
+needed: `mappedResolver` records relative locations and no git state, so the document is the same
+in a checkout, in a source distribution, and on any machine. Add one test that wraps the resolver
+in `withGitProvenance` over a temporary directory that is not a checkout and asserts that
+`revision` and `dirty` stay absent.
 
 ### Milestone 2: the `owners` command
 
@@ -351,19 +416,23 @@ Create `kenshou-evidence/src/Kenshou/Evidence/Owner/Cli.hs` exporting `ownersCom
 `ownersCommandWith`. The command has two subcommands.
 
 `owners status` accepts `--findings FILE` (repeatable), `--map PREFIX=DIR` (repeatable),
-`--snapshot DIR`, and `--json`. Without `--snapshot` it gathers citations from the registry and
-the findings files, resolves them with the mapped resolver (when any `--map` is given) chained
-before the Mori resolver, and prints the report. With `--snapshot` it reads citations and bytes
-only from the snapshot and ignores the live sources; combining `--snapshot` with `--findings`
-or `--map` is a usage error. The text report prints one block per record: the reference, the
+`--snapshot DIR`, `--no-git-provenance`, and `--json`. Without `--snapshot` it gathers citations
+from the registry and the findings files, resolves them with the mapped resolver (when any
+`--map` is given) chained before the Mori resolver, both wrapped in `withGitProvenance` unless
+`--no-git-provenance` is given, and prints the report. With `--snapshot` it reads citations,
+bytes, and links only from the snapshot: it runs no source (including any a consumer configured),
+no resolver, and no enrichment. Combining `--snapshot` with `--findings`, `--map`, or
+`--no-git-provenance` is a usage error. The text report prints one block per record: the reference, the
 resolution with its reasons, the owner's status and version fields exactly as written, the
 canonical reference when it differs, and the citing scenarios and findings. One diagnostic line
 per unresolved, cyclic, or malformed record goes to standard error. The exit code is 0 when the
-report was produced, whatever it contains; 2 for a usage error; 4 when a findings file or a
-snapshot cannot be read or fails its digest check.
+report was produced, whatever it contains; 2 for a usage error; 4 when a source reports an
+error, or a findings file or a snapshot cannot be read or fails its digest check.
 
-`owners snapshot --out DIR` takes the same source options, resolves once, and writes the
-snapshot directory. It refuses an existing `DIR`.
+`owners snapshot --out DIR` takes the same source options, resolves once, runs the configured
+enrichments once, and writes the snapshot directory. It refuses an existing `DIR`. A snapshot
+meant to be checked in as a fixture is taken with `--no-git-provenance`, so that it does not
+change when the surrounding repository gains a commit.
 
 Add `ownersCommand` to the list in `standardCommands` in
 `kenshou-cli/src/Kenshou/Cli/Registry.hs`, and add `withCommand :: CliCommand -> [CliCommand] ->
@@ -392,7 +461,9 @@ optional resolver placed before the built-in chain, extra record kinds, and enri
 enrichment is a named function from a resolved record to a list of labelled links; it exists so
 a consumer can attach its own plan or tracker references (the motivating consumer attaches
 intention identifiers from a personal tracker) without Kenshou depending on any tracker.
-Enrichment results appear under `links` and never affect resolution.
+Enrichment results appear under `links` and never affect resolution. Enrichments run during a
+live `owners status` and during `owners snapshot`; a snapshot stores their results, and a replay
+prints the stored links without running them.
 
 In `kenshou-cli/test/Main.hs`, assemble a synthetic consumer the way a real one would: a
 `LayerBundle` for a made-up layer with two scenarios whose known defects cite fixture owner
@@ -409,7 +480,12 @@ Finish the documentation. Add terminology concepts for "owner record" and "owner
 record the placement and snapshot decisions in a new ADR. Allocate the ADR handle with
 `okf id next docs/adr --profile docs/adr/profile.dhall ADR`, add a log entry with `okf log add`,
 and regenerate the indexes with `okf index docs/<bundle> --write`. Add a CHANGELOG entry to
-`kenshou-evidence/CHANGELOG.md` and `kenshou-cli/CHANGELOG.md`. Update IR-2's frontmatter only
+`kenshou-evidence/CHANGELOG.md` and `kenshou-cli/CHANGELOG.md`, set both packages' `version` to
+0.1.1.0, and raise the bounds on them in the cabal files of the packages that depend on them
+(`kenshou-cli` on `kenshou-evidence`, `kenshou-synthetic` on `kenshou-cli`) to `^>=0.1.1.0`. The
+`kenshou-cli` entry states that `standardCommands` now includes a command named `owners` and
+that a program contributing its own command of that name must use `withCommand`. Do not tag or
+publish. Update IR-2's frontmatter only
 in ways its profile allows (read `docs/improvement-requests/profile.dhall` and the profile it
 imports before changing `status`), and add a line to `docs/improvement-requests/log.md` with
 `okf log add`.
@@ -622,7 +698,7 @@ In `kenshou-evidence/src/Kenshou/Evidence/Owner/Resolver.hs`:
 ```haskell
 data Provenance = Provenance
   { resolver :: Text,
-    path :: Maybe FilePath,
+    location :: Maybe Text,
     sha256 :: Text,
     revision :: Maybe Text,
     dirty :: Maybe Bool
@@ -639,7 +715,11 @@ data OwnerResolver = OwnerResolver {name :: Text, resolve :: Text -> IO ResolveR
 mappedResolver :: [RecordKind] -> [(Text, FilePath)] -> OwnerResolver
 moriResolver :: OwnerResolver
 chainResolvers :: [OwnerResolver] -> OwnerResolver
+withGitProvenance :: OwnerResolver -> OwnerResolver
 ```
+
+`location` is always relative, as described in the Plan of Work. Only `withGitProvenance` fills
+`revision` and `dirty`.
 
 In `kenshou-evidence/src/Kenshou/Evidence/Owner/Snapshot.hs`:
 
@@ -672,3 +752,14 @@ In `kenshou-cli/src/Kenshou/Cli/Registry.hs`, `standardCommands` gains `ownersCo
 
 The documents this plan introduces are `kenshou.owner-findings/v1`, `kenshou.owner-status/v1`,
 and `kenshou.owner-snapshot/v1`, each with a schema file under `schemas/`.
+
+
+## Revision Notes
+
+2026-11-18: Revised after review, before implementation began. Provenance now records a
+relative location instead of an absolute path, and git state is added only by the
+`withGitProvenance` decorator, because the earlier design made the golden file and every
+checked-in snapshot depend on the machine and the current commit. Snapshots now store enrichment
+links and every reference reached through a duplicate chain, so a replay runs nothing live. The
+plan also states its version step and the `owners` command-name collision, which it did not
+before.

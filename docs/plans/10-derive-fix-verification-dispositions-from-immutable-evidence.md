@@ -10,6 +10,18 @@ provenance:
     model: "claude-fable-5-2"
     harness: "claude-code"
     at: 2026-11-17T19:05:20Z
+  reviews:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:45:47Z
+      verdict: "changes-requested"
+      note: "Same model as author. Checked against IR-4 and source; grouped-defect labels misclassify as different-failure, the rule list has a gap when the latest run carries no signal, and the Git-cohort decision contradicts rule 7."
+  revisions:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:55:31Z
+      mode: "update"
+      note: "Addressed the 2026-11-18 review: sibling-defect classification, signal-bearing latest, total rule list, absent labels, version step."
 ---
 
 # Derive fix-verification dispositions from immutable evidence
@@ -107,9 +119,11 @@ run that exited 0 while reproducing an expected defect is `reproduces-as-expecte
 - Decision: A cohort whose mapped package was resolved from Git cannot be `verified-fixed`
   against a released-version claim.
   Rationale: A Git revision's version number does not show whether the revision contains the
-  fix. Such evidence is reported under `not-yet-released` or `not-reproduced` with the reason
-  `git-cohort`, which keeps the observation visible without overstating it.
-  Date: 2026-11-17
+  fix. For a released-version claim such a cohort's side is `unknown` with the reason
+  `git-cohort`, so its passes conclude `unverifiable`, which keeps the observation visible
+  without overstating it. When the owner's fix is `unreleased` the side is `unreleased-fix`
+  whatever the package source, and passes conclude `not-yet-released`.
+  Date: 2026-11-17 (wording corrected 2026-11-18 to agree with the rules in Milestone 2)
 
 - Decision: When several scenarios are required for one owner and their results differ, the
   conclusion is the most severe one, in the order `regressed`, `still-reproduces`,
@@ -124,6 +138,51 @@ run that exited 0 while reproducing an expected defect is `reproduces-as-expecte
   replay and a live run execute the same code, which is what IR-4's deterministic-replay
   criterion needs.
   Date: 2026-11-17
+
+- Decision: A failed run is judged for one owner against that owner's labels, but labels
+  covered by a sibling declaration (another individual defect of the same scenario whose scope
+  applies to the run) are set aside first. A run that failed only with sibling labels is
+  `sibling-defect`: no evidence about this owner in either direction.
+  Rationale: Execution pools the labels of every applicable defect of a scenario
+  (`coveredLabels` in `Kenshou.Core.Run.defectDisposition`). Judging each declaration alone would
+  report owner A as `different-failure` whenever a grouped scenario failed only for owner B's
+  defect, which misattributes B's defect to A. Such a run cannot show that A is fixed either,
+  because the scenario did not pass.
+  Date: 2026-11-18
+
+- Decision: A run that shows at least one of an owner's labels counts as `reproduced` for that
+  owner even when it also carries labels that no declaration covers. The extra labels are
+  recorded and the conclusion carries the reason `other-failures-present`.
+  Rationale: This deliberately differs from execution, which calls a run reproduced only when
+  every label is covered. Execution is answering "is this run blocking"; the derivation is
+  answering "did this owner's defect show". Both are true of such a run: it is blocking, and the
+  defect did reproduce. The uncovered labels are not lost: they are listed on the observation
+  here and reported as new failures by plan 11.
+  Date: 2026-11-18
+
+- Decision: A scenario's "latest" observation is its most recent one that carries a signal
+  (`passed`, `reproduced`, or `different-failure`). A newer run without a signal does not change
+  the conclusion and adds a reason. A newer failed run whose labels cannot be read makes the
+  conclusion `unverifiable`.
+  Rationale: The first draft took the most recent observation of any kind, which left no rule
+  matching when an infrastructure failure followed a confirmed pass. An infrastructure failure
+  says nothing about the defect, so it should not erase the pass. A failure nobody can read is
+  different: it may be the defect returning, so it must not be hidden behind an older pass.
+  Date: 2026-11-18
+
+- Decision: A failed run result that has no `failures` field at all has unavailable labels
+  (reason `labels-absent`). A failed result with an empty `failures` list has verified, empty
+  labels and is a `different-failure`, as it is for execution.
+  Rationale: IR-4 forbids repairing missing labels by inference. Reading an absent field as an
+  empty list would turn every older result without the field into a `different-failure`.
+  Date: 2026-11-18
+
+- Decision: This plan is a major version step under the Haskell Package Versioning Policy for
+  `kenshou-evidence` (to 0.2.0.0) and a minor step for `kenshou-cli`. It does not tag or
+  publish.
+  Rationale: `RunResultView` and plan 8's `OwnerConfig` are exported with their constructors,
+  so adding fields to them breaks any consumer that builds or matches them positionally.
+  Date: 2026-11-18
 
 
 ## Outcomes & Retrospective
@@ -173,8 +232,9 @@ A run produces a sealed run directory containing `run-spec.json`, `run-result.js
 `runId`, `scenario`, `scenarioRevision`, `outcome` (`passed`, `failed`, `inconclusive`,
 `infrastructure-failure`, or `errored`), `failures` (the failure labels), `exitCode`, and
 `cohort` (the resolved cohort identity, with every package's name, version, and source).
-`Kenshou.Core.Run.defectDisposition` sets the exit code to 0 when a run failed only with labels
-covered by an applicable known defect, which is why an exit code cannot be read as a pass.
+`Kenshou.Core.Run.defectDisposition` pools the expected labels of every known defect of the
+scenario whose scope applies to the run, and sets the exit code to 0 when the run failed only
+with labels from that pool, which is why an exit code cannot be read as a pass.
 `Kenshou.Evidence.Source.loadRunSource` reads a sealed run directory and verifies every file
 against the manifest; its `RunResultView` does not yet expose `failures` or `scenarioRevision`.
 
@@ -182,8 +242,9 @@ Publishing a run (`kenshou record`) writes an evidence record: a Markdown file w
 in an OKF bundle (by default `docs/verification`), of type `Verification Run`. Its frontmatter
 (`kenshou-evidence/src/Kenshou/Evidence/Frontmatter.hs`) holds `runId`, `scenario`, `outcome`,
 `startedAt`, `cohort`, `solverPlanHash`, `components` (each with `project`, `package`,
-`version`, `source`, and optional `revision`), `compatibilityKey`, `knownDefects`, and
-`dataLinks`. A data link (`Kenshou.Evidence.Types.DataLink`) names a durable object URI with
+`version`, `source`, and optional `revision`), `compatibilityKey`, an optional `knownDefects`
+list, and the data links under the key `data`. A data link
+(`Kenshou.Evidence.Types.DataLink`) names a durable object URI with
 its kind (one kind is `RunResultData`), SHA-256, media type, and size. The record holds no
 failure labels. Records are never edited; a correction is a new record or an attestation
 ([ADR-12](../adr/0012-keep-verification-records-immutable-and-derive-baselines.md)).
@@ -224,8 +285,9 @@ came from, its scenario and scenario revision, when it started, its outcome, its
 labels, the packages it resolved, its cohort name and plan hash, and its trust.
 
 Create `kenshou-evidence/src/Kenshou/Evidence/Observation.hs`. Extend
-`Kenshou.Evidence.Source.RunResultView` with `resultFailures :: [Text]` (default empty when the
-field is absent) and `resultScenarioRevision :: Maybe Int`. In `Kenshou.Evidence.History`,
+`Kenshou.Evidence.Source.RunResultView` with `resultFailures :: Maybe [Text]` (`Nothing` when
+the field is absent, which is different from an empty list) and `resultScenarioRevision ::
+Maybe Int`. In `Kenshou.Evidence.History`,
 export a function that returns every `Verification Run` entry of a bundle with its trust,
 without a scenario filter, reusing `runEntry` and `attestationIndex` rather than copying them.
 
@@ -234,10 +296,11 @@ Read `components` from the frontmatter and convert each to a `ScopePackage` (`ha
 to `ScopeHackage`, `git` to `ScopeGit revision`). Find the data link of kind `RunResultData`.
 Ask the consumer-supplied run-data locator for that object's bytes; if it returns bytes whose
 SHA-256 equals the link's digest, parse them as a run result and take `failures` and
-`scenarioRevision` from it. If the locator has no bytes, or the digest differs, the observation
-is still produced, with labels marked unavailable and the reason recorded (`run-data-missing`
-or `run-data-digest-mismatch`); it must never fall back to the record's outcome to invent
-labels. A run-data locator is a function from a run identifier and a data link to optional
+`scenarioRevision` from it. If the locator has no bytes, the digest differs, or the result has
+no `failures` field, the observation is still produced, with labels marked unavailable and the
+reason recorded (`run-data-missing`, `run-data-digest-mismatch`, or `labels-absent`); it must
+never fall back to the record's outcome to invent labels. An observation has no exit-code field:
+the loader reads `exitCode` from nothing and passes it to nothing. A run-data locator is a function from a run identifier and a data link to optional
 bytes. Provide `directoryRunData`, which reads `<root>/<runId>/run-result.json`, and
 `objectStoreRunData`, which fetches the link's URI through an existing
 `Kenshou.Evidence.Store.ObjectStore`; a consumer can supply its own.
@@ -251,9 +314,12 @@ Tests in `kenshou-evidence/test/Main.hs` build a small bundle and run directorie
 temporary directory (the existing `recordRunWith` and `loadRunSource` tests show how) and
 assert: a confirmed record with matching run data yields labels and `machine-confirmed`; the
 same record with altered run-data bytes yields unavailable labels with the mismatch reason; a
-record with no run data yields unavailable labels; a refuted attestation yields `unverified`; a
-local sealed run yields `local-sealed`; and a duplicate run identifier resolves to the published
-observation.
+record with no run data yields unavailable labels; a failed result with no `failures` field
+yields unavailable labels with reason `labels-absent`, while one with an empty list yields
+verified empty labels; a refuted attestation yields `unverified`; a local sealed run yields
+`local-sealed`; a duplicate run identifier resolves to the published observation; and two sealed
+runs whose results differ only in `exitCode` (and the run identifier) load to observations that
+are equal apart from the run identifier.
 
 ### Milestone 2: the derivation
 
@@ -282,30 +348,41 @@ not mention the defect is still attributed.
 Step two classifies each observation of a reproduction scenario, for one owner and one
 declaration. It is `incompatible` if its scenario revision differs from the catalog's or is
 unknown; incompatible observations are listed in the report and take no further part. Otherwise
-its result is `reproduced` if the outcome is `failed`, labels are available, and at least one
-label is among the declaration's expected failures; `different-failure` if the outcome is
-`failed`, labels are available, and none is; `labels-unavailable` if the outcome is `failed`
-and labels are unavailable; `passed` if the outcome is `passed`; and `no-signal` for
-`inconclusive`, `infrastructure-failure`, and `errored`. When a run reproduced the defect and
-also carries labels outside the declaration, it is `reproduced` and the extra labels are
-recorded as other failures. Each observation also records the scope evaluation of the
-declaration against its packages.
+a `failed` outcome with available labels is judged by sorting the labels into three sets: those
+among this declaration's expected failures; those covered by a sibling declaration, meaning
+another individual defect of the same scenario whose scope applies to the observation's
+packages; and the rest. The result is `reproduced` if the first set is not empty; if the third
+set is not empty as well, its labels are recorded as other failures and the conclusion carries
+the reason `other-failures-present`. The result is `sibling-defect` if only the second set has
+labels: the scenario failed for another declared defect, which is evidence about that owner and
+none about this one. In every other case, including a failed run with an empty label list, the
+result is `different-failure`. A `failed` outcome with unavailable labels is
+`labels-unavailable`; a `passed` outcome is `passed`; and `inconclusive`,
+`infrastructure-failure`, and `errored` are `no-signal`. The results `passed`, `reproduced`, and
+`different-failure` carry a signal about this owner; `sibling-defect` and `no-signal` do not.
+Each observation also records the scope evaluation of the declaration against its packages.
 
 Step three determines, for each owner and each cohort (plan hash) that has at least one
-compatible observation, which side of the owner's claim the cohort is on. Choose the package as
-plan 9's reconciliation does: the single mapped package, or the one mapped package the scope
+compatible observation, which side of the owner's claim the cohort is on. Choose the package
+with plan 9's `choosePackage`: the single mapped package, or the one mapped package the scope
 names; if that is not possible the side is `unknown` with reason `ambiguous-package-mapping` or
 `unmapped-owner`. Then: if the owner's status is not `fixed`, the side is `open`. If it is
 `fixed` and `fixedVersion` is `ClaimUnreleased`, the side is `unreleased-fix`. If `fixedVersion`
 is absent, unknown, or unparseable, the side is `unknown` with reason `unsupported-claim`. If it
-is a released version V: when the cohort's package is from Git, the side is `unknown` with
-reason `git-cohort`; when the package is missing from the cohort or its version does not parse,
-`unknown`; otherwise `fixed-side` if the cohort's version is at least V and `affected-side` if
-it is below.
+is a released version V: when the chosen package is not in the map entry's `versionsApplyTo`
+(plan 9: the packages whose version numbers the owner's version fields denote), the side is
+`unknown` with reason `owner-version-not-package-version`; when the cohort's package is from
+Git, the side is `unknown` with reason `git-cohort`; when the package is missing from the cohort
+or its version does not parse, `unknown` with reason `package-missing` or
+`unparseable-version`; otherwise `fixed-side` if the cohort's version is at least V and
+`affected-side` if it is below. Versions are parsed with plan 9's `parseScopeVersion`.
 
 Step four concludes, per owner and cohort, by the first rule that matches. "Latest" means the
-most recent compatible observation of a scenario in this cohort, ordered by start time and then
-run identifier. "Confirmed" means trust `human-reviewed` or `machine-confirmed`.
+most recent compatible observation of a scenario in this cohort that carries a signal, ordered
+by start time and then run identifier. A scenario with no such observation has no latest
+observation. "Confirmed" means trust `human-reviewed` or `machine-confirmed`. When a scenario has
+a `sibling-defect` or `no-signal` observation newer than its latest one, the conclusion is
+unchanged and carries the reason `later-run-without-signal`, naming the run.
 
 1. The owner reference is unresolved, not a record, or in a duplicate cycle: `unverifiable`,
    with the snapshot's reason. This conclusion is per owner and has no cohort.
@@ -319,20 +396,26 @@ run identifier. "Confirmed" means trust `human-reviewed` or `machine-confirmed`.
 5. On `unknown`, some scenario's latest observation is `reproduced`: `reproduces-as-expected`
    when the scope applies, otherwise `unverifiable`.
 6. Some scenario's latest observation is `different-failure`: `different-failure`.
-7. Every required scenario's latest observation is `passed`. On `fixed-side`: `verified-fixed`
+7. Some required scenario has a `labels-unavailable` observation that is newer than its latest
+   observation, or has one and no latest observation: `unverifiable` with reason
+   `labels-unavailable`, naming the run. A failure that cannot be read is never hidden behind
+   an older pass.
+8. Every required scenario's latest observation is `passed`. On `fixed-side`: `verified-fixed`
    if every one of them is confirmed, otherwise `not-reproduced` with reason
    `insufficient-trust`. On `unreleased-fix`: `not-yet-released`. On `unknown`: `unverifiable`
-   with the side's reason, except `not-yet-released` is never inferred. On `affected-side` or
-   `open`: `not-reproduced`.
-8. Some required scenario has no compatible observation with a result of `passed`,
-   `reproduced`, or `different-failure` in this cohort (it was never run, or only produced
-   `no-signal`, `labels-unavailable`, or incompatible observations), while others passed: on
-   `unreleased-fix`, `not-yet-released`; otherwise `not-reproduced` with reason
-   `incomplete-coverage` naming the scenarios. This is the rule that stops a partly tested fix
-   from being counted as verified.
-9. No required scenario has any usable observation in this cohort: `unverifiable` when
-   unusable observations exist (reason `labels-unavailable`, `no-signal`, or
-   `incompatible-revision`), and otherwise the cohort is not reported.
+   with the side's reason. On `affected-side` or `open`: `not-reproduced`.
+9. Some required scenario has no latest observation in this cohort (it was never run, or
+   produced only `no-signal`, `sibling-defect`, or incompatible observations), while every
+   other required scenario's latest observation is `passed`: on `unreleased-fix`,
+   `not-yet-released`; otherwise `not-reproduced` with reason `incomplete-coverage` naming the
+   scenarios. This is the rule that stops a partly tested fix from being counted as verified.
+10. No required scenario has a latest observation in this cohort: `unverifiable` when unusable
+    observations exist (reason `no-signal`, `sibling-defect`, or `incompatible-revision`), and
+    otherwise the cohort is not reported.
+
+These rules are total: after rules 2 to 7, every required scenario either has a latest
+observation that is `passed` or has none, and rules 8, 9, and 10 cover all, some, and none of
+them having one.
 
 An owner with no compatible observation in any cohort gets one cohort-less conclusion:
 `not-yet-released` if its side would be `unreleased-fix`, else `not-run`.
@@ -359,7 +442,17 @@ reproduction (`regressed`); a `lastWorkingVersion` claim with no pass evidence (
 an `unreleased` fix with a passing Git cohort (`not-yet-released`); an unparseable
 `fixedVersion`; a scenario citing a duplicate alias, attributed to the canonical owner; and a
 confirmed fixed-version pass whose observation carries no known-defect reference at all,
-attributed through the catalog with the resolved package versions shown.
+attributed through the catalog with the resolved package versions shown. Add the cases the
+ordering rules exist for: a scenario with a group of two defects that fails only with the second
+owner's label (`sibling-defect` for the first owner, `reproduced` for the second, and never
+`different-failure`); a reproduction that also carries an uncovered label (`reproduced` with
+`other-failures-present`); a confirmed pass followed by an infrastructure failure
+(`verified-fixed` with `later-run-without-signal`); a confirmed pass followed by a failed run
+with unavailable labels (`unverifiable`); a released fix with a confirmed pass on a Git cohort
+(`unverifiable`, `git-cohort`); and a released fix whose package is not in `versionsApplyTo`
+(`unverifiable`, `owner-version-not-package-version`). Add a property test over generated
+inputs asserting that every owner and cohort with a compatible observation gets exactly one
+conclusion.
 
 ### Milestone 3: the command and replay
 
@@ -399,7 +492,10 @@ write an ADR (allocate with `okf id next docs/adr --profile docs/adr/profile.dha
 records the nine dispositions, the trust rule, and that conclusions are derived readings and
 never stored in records. Regenerate indexes with `okf index docs/<bundle> --write`, add
 CHANGELOG entries, and note the implementation in IR-4 and its bundle log within what the
-profile allows.
+profile allows. Set `kenshou-evidence`'s `version` to 0.2.0.0, naming the new `RunResultView`
+and `OwnerConfig` fields as the breaking change in its CHANGELOG, raise `kenshou-cli`'s bound on
+it to `^>=0.2.0.0`, and give `kenshou-cli` a minor step with the matching bound change in
+`kenshou-synthetic`. Do not tag or publish.
 
 
 ## Concrete Steps
@@ -465,8 +561,8 @@ Intention: intention_01m7nec997edsr5djrs51nzrzs
 For AC-1, the rule-matrix tests pass for compatible confirmed passes, matching reproductions,
 unrelated failures, an expected defect that exited 0, absent labels, no runs, and unresolved
 records, and each conclusion in the JSON links its observations, scope evaluation, owner claim,
-labels, and trust. A test asserts that changing only an observation's exit code changes
-nothing.
+labels, and trust. The loader test with two results that differ only in `exitCode` shows that
+the exit code cannot influence a conclusion, since it never reaches an observation.
 
 For AC-2, the tests show that local passes, unverified passes, a refuted attestation, a missing
 required scenario, and an incompatible scenario revision each leave `verifiedFixed` at zero for
@@ -477,7 +573,7 @@ yields `verified-fixed` for the right owner and shows the resolved package versi
 
 For AC-4, the replay test passes: two replays are byte-identical, a later reproduction after a
 confirmed pass yields `regressed`, conflicting scenarios aggregate to the more severe
-conclusion, `not-yet-released` and `unverifiable` stay distinct, and every source file's digest
+conclusion, the property test shows one conclusion per owner and cohort, `not-yet-released` and `unverifiable` stay distinct, and every source file's digest
 is unchanged.
 
 `just verify` exits 0, including `just coupling-check`.
@@ -489,7 +585,8 @@ The command reads evidence, owner snapshots, and run directories and writes only
 `--write-input` is given, to a file that must not already exist. Replay reads one file.
 Nothing here modifies an evidence record, a run directory, or an owner record, so every step
 can be repeated. To recapture an input, choose a new file name. The change to `RunResultView`
-adds fields with defaults, so existing sealed runs and consumer records keep loading; if the
+adds fields that are optional when read, so existing sealed runs and consumer records keep
+loading; if the
 `consumer compatibility` tests in `kenshou-evidence/test/Main.hs` fail after that change, the
 defaults are wrong and must be fixed rather than the fixtures.
 
@@ -498,8 +595,9 @@ defaults are wrong and must be fixed rather than the fixtures.
 
 No new library dependency is needed. Prerequisites are plan 8's `OwnerStatus`, `OwnerEntry`,
 `canonicalOwners`, `readSnapshot`, and `OwnerConfig`, and plan 9's `ScopePackage`,
-`evaluateScope`, `scopeApplies`, `cohortScopePackages`, `PackageMap`, `ownerPackages`, and the
-declaration-preserving `decodeCatalog`.
+`evaluateScope`, `scopeApplies`, `cohortScopePackages`, `parseScopeVersion`, `PackageMap`,
+`OwnerPackages`, `ownerPackages`, `choosePackage`, and the declaration-preserving
+`decodeCatalog`.
 
 In `kenshou-evidence/src/Kenshou/Evidence/Observation.hs`:
 
@@ -557,6 +655,21 @@ data DispositionInput = DispositionInput
     observations :: [Observation]
   }
 
+data ObservationResult
+  = ResultPassed
+  | ResultReproduced
+  | ResultDifferentFailure
+  | ResultSiblingDefect
+  | ResultLabelsUnavailable
+  | ResultNoSignal
+
+data ClassifiedObservation = ClassifiedObservation
+  { observation :: Observation,
+    result :: ObservationResult,
+    otherFailures :: [Text],
+    scope :: ScopeEvaluation
+  }
+
 data Conclusion = Conclusion
   { owner :: Text,
     cohort :: Maybe (Text, Text),
@@ -571,7 +684,21 @@ decodeDispositionInput :: ByteString -> Either Text DispositionInput
 ```
 
 `deriveDispositions` is pure. Plan 11 calls it once for a round's baseline observations and
-once for its candidate observations. The disposition texts in JSON are `verified-fixed`,
+once for its baseline and candidate observations together. The disposition texts in JSON are `verified-fixed`,
 `still-reproduces`, `reproduces-as-expected`, `not-reproduced`, `regressed`,
 `different-failure`, `not-yet-released`, `not-run`, and `unverifiable`. The documents this plan
 introduces are `kenshou.disposition-input/v1` and `kenshou.dispositions/v1`.
+
+
+## Revision Notes
+
+2026-11-18: Revised after review, before implementation began. Classification now sets aside
+labels that belong to a sibling defect of the same scenario, because judging each declaration
+alone blamed one owner for another's defect. "Latest" now means the latest observation that
+carries a signal, a newer unreadable failure concludes `unverifiable`, and the rule list is
+renumbered and total; the earlier list matched nothing when an infrastructure failure followed
+a pass. The Git-cohort decision's wording was corrected to agree with the rules. The side
+determination honors plan 9's new `versionsApplyTo`. An absent `failures` field is now
+unavailable labels instead of an empty list, the exit-code test moved to the loader where it can
+be written, the frontmatter key for data links was corrected to `data`, and the version step is
+stated.

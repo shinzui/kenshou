@@ -10,6 +10,18 @@ provenance:
     model: "claude-fable-5-2"
     harness: "claude-code"
     at: 2026-11-17T19:05:20Z
+  reviews:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:45:47Z
+      verdict: "changes-requested"
+      note: "Same model as author. Checked against IR-3 and source; the reconciliation finding table is neither total nor disjoint, and the checked-in snapshot fixture would embed machine paths."
+  revisions:
+    - model: "claude-fable-5-2"
+      harness: "claude-code"
+      at: 2026-11-18T01:55:31Z
+      mode: "update"
+      note: "Addressed the 2026-11-18 review: ordered finding rules, versionsApplyTo in the package map, fixed evaluator home, version step."
 ---
 
 # Reconcile known-defect scopes with owner version claims
@@ -125,6 +137,45 @@ contradictions.
   ambiguity warnings. Exit code 1 is the protocol's "failed" and lets a consumer gate on it;
   ambiguity is a request for consumer input, not a failure.
   Date: 2026-11-17
+
+- Decision: Each declaration gets exactly one primary finding, chosen by the first matching
+  rule of an ordered list. A `fixedVersion` is read as a fix claim only when the owner's status
+  is `fixed`. A `fixed` record whose `fixedVersion` is absent, `unknown`, or unparseable is
+  always `unsupported-claim`, whether or not the scope has a bound.
+  Rationale: The first draft's finding kinds overlapped (a `fixed` record with no `fixedVersion`
+  and a bound was both a contradiction and a warning, which have different exit codes) and left
+  some inputs with no finding at all. An ordered list makes the result total and
+  deterministic. The bug-report profile defines `fixedVersion` only for the `fixed` status, so a
+  value on any other status is not a claim. When the owner says a fix exists but not where, a
+  bound can be neither confirmed nor called speculative, so nothing is proposed.
+  Date: 2026-11-18
+
+- Decision: The package map states, per owner, which packages' version numbers the owner's
+  version fields denote (`versionsApplyTo`). A version bound is proposed or judged only for a
+  package in that list.
+  Rationale: An owner record's `affects` names a project, and its versions are that project's
+  release versions. The packages of one project can carry unrelated version numbers, so
+  comparing an owner's `fixedVersion` with an arbitrary mapped package's bound would be a guess,
+  which IR-3 forbids. Only the consumer knows the correspondence, so it says so explicitly and
+  the field has no default.
+  Date: 2026-11-18
+
+- Decision: The evaluator, its input and result types, and the version parser live in
+  `Kenshou.Core.Scenario`, next to the scope types. `Kenshou.Core.Defect` holds the catalog
+  codec and re-exports the evaluator.
+  Rationale: `Kenshou.Core.Defect` must import the declaration types from
+  `Kenshou.Core.Scenario`, and `cohortScopeApplies` in `Kenshou.Core.Scenario` must call the
+  evaluator, so putting the evaluator in `Kenshou.Core.Defect` would be an import cycle. This is
+  certain, not a possibility to discover during implementation.
+  Date: 2026-11-18
+
+- Decision: This plan is a minor version step under the Haskell Package Versioning Policy for
+  `kenshou-core` (0.1.0.0 to 0.1.1.0) and for `kenshou-evidence` and `kenshou-cli` (one minor
+  step above whatever plan 8 left). It does not tag or publish.
+  Rationale: Everything added is a new module, export, optional JSON field, or subcommand, and
+  `cohortScopeApplies` keeps its type and meaning. `kenshou-evidence` and `kenshou-cli` use the
+  new `kenshou-core` exports, so their lower bounds on it rise to 0.1.1.0.
+  Date: 2026-11-18
 
 
 ## Outcomes & Retrospective
@@ -262,20 +313,24 @@ case the `knownDefect` field's value is what it was before this plan. Regenerate
 
 ### Milestone 2: one evaluator
 
-In `Kenshou.Core.Defect`, define the neutral input and the explained result (see Interfaces
-and Dependencies). `evaluateScope` returns, for each condition, whether it holds, fails because
+In `Kenshou.Core.Scenario`, beside the scope types, define the neutral input and the explained
+result (see Interfaces and Dependencies), and re-export them from `Kenshou.Core.Defect`. `evaluateScope` returns, for each condition, whether it holds, fails because
 a named package is present but does not satisfy it, fails because no package of that name is
 present, or is malformed because a version did not parse (naming which text). `scopeApplies`
 reduces the result to a Boolean with exactly today's meaning: `AllCohorts` applies; `OnlyWhen`
 applies when every condition holds; a missing package or a malformed version does not hold.
 
-Move the condition logic out of `Kenshou.Core.Scenario` so that
+Rewrite the condition logic in place so that
 `cohortScopeApplies cohort scope = scopeApplies (evaluateScope (cohortScopePackages cohort)
 scope)`, and delete the old private `conditionApplies`. Keep `cohortScopeApplies` exported with
-its current type, because consumers and `Kenshou.Core.Run` call it. If importing
-`Kenshou.Core.Defect` from `Kenshou.Core.Scenario` would create an import cycle, keep the
-evaluator in `Kenshou.Core.Scenario` and re-export it from `Kenshou.Core.Defect`; what matters
-is that only one implementation of the condition semantics exists.
+its current type, because consumers and `Kenshou.Core.Run` call it. The evaluator stays in
+`Kenshou.Core.Scenario` because `Kenshou.Core.Defect` imports that module for the declaration
+types; the reverse import would be a cycle. Export the version parser as `parseScopeVersion ::
+Text -> Maybe Version` (today it is the local `parse` inside `conditionApplies`), and change plan
+8's `Kenshou.Evidence.Owner.Record` to classify version claims with it instead of calling
+`Data.Version.parseVersion` itself, so that an owner's version and a scope's bound are always
+parsed by the same function. After this milestone `Kenshou.Core.Scenario` is the only source
+module that runs the version parser (`readP_to_S`).
 
 Add a test that carries a verbatim copy of the pre-change `cohortScopeApplies` and
 `conditionApplies` as a test-local oracle and checks agreement with the new function over a
@@ -302,9 +357,9 @@ so explicitly:
 {
   "schema": "kenshou.owner-package-map/v1",
   "owners": [
-    {"affects": "mori://fixture/owner-a", "packages": ["fixture-store"]},
-    {"affects": "mori://fixture/owner-b", "packages": ["fixture-queue", "fixture-queue-client"]},
-    {"reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3", "packages": ["fixture-queue-client"]}
+    {"affects": "mori://fixture/owner-a", "packages": ["fixture-store"], "versionsApplyTo": ["fixture-store"]},
+    {"affects": "mori://fixture/owner-b", "packages": ["fixture-queue", "fixture-queue-client"], "versionsApplyTo": ["fixture-queue"]},
+    {"reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3", "packages": ["fixture-queue-client"], "versionsApplyTo": []}
   ],
   "sources": [
     {"scenario": "consumer/table/correctness/lease-release", "path": "consumer/src/Lease.hs", "line": 41}
@@ -313,44 +368,60 @@ so explicitly:
 ```
 
 An entry keyed by `reference` overrides the entry keyed by the record's `affects` value.
-`sources` is optional and only lets a proposal point at the line a reviewer must edit.
+`packages` lists the cabal packages the owner's defect lives in. `versionsApplyTo` is required
+and lists those of them whose version numbers are the ones the owner writes in `affectedVersion`
+and `fixedVersion`; it must be a subset of `packages` and may be empty. In the example, owner B
+releases `fixture-queue` under the project's version number while `fixture-queue-client` is
+versioned separately, so a `fixedVersion` of 2.0.0 says nothing about which
+`fixture-queue-client` version has the fix. The decoder rejects an entry without the field
+rather than assuming an answer. `sources` is optional and only lets a proposal point at the line
+a reviewer must edit.
 
 For each individual defect of each scenario, find its canonical owner through
 `canonicalOwners`, find the packages for that owner, and compare. The package the comparison is
 about is chosen as follows: if the map gives exactly one package, that one; if it gives several
 and exactly one of them is named by a condition in the scope, that one; otherwise the finding is
 the warning `ambiguous-package-mapping` and nothing is proposed. A project with several
-packages is never resolved by picking the first. The findings, with their severity, are:
+packages is never resolved by picking the first.
 
-`bound-above-fixed-version` (contradiction): the owner's `fixedVersion` is a released version V
-and the scope has `VersionBelow p B` with B greater than V. Failures on releases from V up to B
-are being excused although the owner says they are fixed. Proposal: change the bound to V.
+In the rules below, "the bound" is the `VersionBelow` condition the scope has for the chosen
+package; when a scope has several for that package, it is the smallest, because all of them must
+hold. "No bound" covers both `AllCohorts` and a scope with no such condition. Each individual
+defect gets exactly one primary finding, from the first rule that matches:
 
-`bound-below-fixed-version` (contradiction): the same with B less than V. Releases the owner
-says are still affected are not covered. Proposal: change the bound to V.
+1. The reference is unresolved, is not an owner record, or is in a duplicate cycle:
+   `no-owner-claim` (warning).
+2. The map has no entry for the owner: `unmapped-owner` (warning).
+3. The package cannot be chosen: `ambiguous-package-mapping` (warning).
+4. The bound's version text does not parse: `unsupported-claim` (warning), showing the raw
+   text.
+5. The owner's status is not `fixed`. Whatever `fixedVersion` holds is ignored, and when it
+   holds something the rationale says so (`fixed-version-without-fixed-status`). With a bound:
+   `speculative-bound` (contradiction), because no owner claim supports it; the proposal removes
+   that condition. With no bound: `consistent`.
+6. The status is `fixed` and `fixedVersion` is absent, `unknown`, or unparseable:
+   `unsupported-claim` (warning), with or without a bound. The owner says a fix exists but not
+   where, so the raw text is shown and nothing is proposed.
+7. The status is `fixed` and `fixedVersion` is `unreleased`. With a bound: `speculative-bound`
+   (contradiction); the proposal removes that condition. With no bound: `fix-unreleased`
+   (warning); nothing can be proposed until a release exists.
+8. The status is `fixed`, `fixedVersion` is a released version V, and the chosen package is not
+   in the map entry's `versionsApplyTo`: `owner-version-not-package-version` (warning). V is a
+   version of something else, so nothing is proposed.
+9. The status is `fixed`, `fixedVersion` is a released version V, and the package is in
+   `versionsApplyTo`. With no bound: `missing-upper-bound` (contradiction); the proposal adds
+   `VersionBelow p V`, keeping every existing condition. With a bound B greater than V:
+   `bound-above-fixed-version` (contradiction); failures on releases from V up to B are being
+   excused although the owner says they are fixed, and the proposal changes the bound to V. With
+   B less than V: `bound-below-fixed-version` (contradiction); releases the owner says are still
+   affected are not covered, and the proposal changes the bound to V. With B equal to V:
+   `consistent`.
 
-`missing-upper-bound` (contradiction): the owner's `fixedVersion` is a released version V and
-the scope is `AllCohorts` or has no `VersionBelow` for the package. Proposal: add `VersionBelow
-p V`, keeping every existing condition.
-
-`speculative-bound` (contradiction): the scope has a `VersionBelow` for the package but the
-owner's `fixedVersion` is absent or `unreleased`. No owner claim supports the bound. Proposal:
-remove that condition.
-
-`fix-unreleased` (warning): the owner's status is `fixed`, `fixedVersion` is `unreleased`, and
-the scope has no version bound. Nothing can be proposed until a release exists.
-
-`unsupported-claim` (warning): the status is `fixed` but `fixedVersion` is absent, `unknown`,
-or unparseable; or a bound in the scope does not parse. The raw text is shown and nothing is
-proposed.
-
-`no-owner-claim` (warning): the reference is unresolved, is not an owner record, or is in a
-duplicate cycle. `unmapped-owner` (warning): the map has no entry. `scope-package-not-mapped`
-(warning): a condition names a package the map does not list for this owner.
-
-`consistent` (no severity): the bound equals V, or the owner has not fixed the defect and the
-scope has no version bound. When a reference is an alias, the finding uses the canonical
-record's claims and reports the alias and the canonical reference together.
+Versions are compared after parsing both with `parseScopeVersion`, never as text. Independently
+of the primary finding, each condition that names a package the map does not list for the owner
+adds a secondary `scope-package-not-mapped` warning for the same declaration. `consistent` has
+no severity. When a reference is an alias, the finding uses the canonical record's claims and
+reports the alias and the canonical reference together.
 
 `ResolvedFromHackage`, `ResolvedFromGit`, and `RevisionIs` conditions are reported in the
 current declaration and carried unchanged into any proposal; reconciliation neither judges nor
@@ -367,13 +438,18 @@ usage errors; 4 when an input cannot be read or fails its digest check. The comm
 inputs read-only and has no output option other than standard output.
 
 Build the fixtures under `kenshou-evidence/test/fixtures/reconcile/`: a snapshot directory
-produced with plan 8's `owners snapshot` from small made-up bundles, `catalog.json` with one
+produced with plan 8's `owners snapshot --no-git-provenance` from small made-up bundles (so that
+it holds no git revision and, as plan 8 guarantees, no absolute path), `catalog.json` with one
 scenario per case, and `package-map.json`. The cases are a released fix with a correct bound, a
-bound above it, a bound below it, no bound, an unreleased fix with and without a bound, no
-fixed version with a speculative bound, a duplicate record whose canonical record supplies the
-claim, a project mapped to two packages with and without a disambiguating condition, an
-unparseable `fixedVersion`, and a scope that mixes a Git revision condition with a version
-bound. Add tests to `kenshou-evidence/test/Main.hs` asserting each case's finding code,
+bound above it, a bound below it, no bound, an unreleased fix with and without a bound, an open
+record with a speculative bound, an open record that carries a stray `fixedVersion`, a `fixed`
+record with no `fixedVersion` both with and without a bound (both `unsupported-claim`), a
+duplicate record whose canonical record supplies the claim, a project mapped to two packages
+with and without a disambiguating condition, a released fix whose chosen package is not in
+`versionsApplyTo`, an unparseable `fixedVersion`, an unparseable bound, two bounds for one
+package, and a scope that mixes a Git revision condition with a version bound. Add a property
+test over generated records and scopes asserting that `reconcileScopes` returns exactly one
+primary finding per individual defect. Add tests to `kenshou-evidence/test/Main.hs` asserting each case's finding code,
 severity, and proposal, and a golden file for the whole JSON report. Add a CLI test in
 `kenshou-cli/test/Main.hs` that runs `owners reconcile` on generated inputs, checks exit code 1
 and then 0 after removing the contradicting case, and asserts by digest that every input file
@@ -388,7 +464,11 @@ and record in an ADR (allocate with `okf id next docs/adr --profile docs/adr/pro
 that scope semantics have a single evaluator and that corrections are proposals. Regenerate
 bundle indexes with `okf index docs/<bundle> --write`, add CHANGELOG entries for
 `kenshou-core`, `kenshou-evidence`, and `kenshou-cli`, and note the implementation in IR-3 and
-its bundle log within what the improvement-request profile allows.
+its bundle log within what the improvement-request profile allows. Set `kenshou-core`'s
+`version` to 0.1.1.0 and raise `kenshou-evidence`'s and `kenshou-cli`'s bounds on it to
+`^>=0.1.1.0`; the other packages' `^>=0.1.0.0` bounds already admit it. Give
+`kenshou-evidence` and `kenshou-cli` one further minor step each, with the matching bound
+changes in their dependents. Do not tag or publish.
 
 
 ## Concrete Steps
@@ -466,11 +546,14 @@ consumer-baseline document is unchanged.
 
 For AC-2, the reconciliation tests pass for the released fix boundary, the unreleased fix, no
 fixed version, the stale speculative bound, the duplicate record, and the project with several
-packages, and no test case yields a proposal whose version or package does not appear in an
-owner record or the package map.
+packages; the property test shows one primary finding per declaration; and no test case yields
+a proposal whose version does not appear in an owner record or whose package is not in the
+owner's `versionsApplyTo`.
 
-For AC-3, the oracle-comparison test passes, and `git grep -n "VersionBelow" -- 'kenshou-*/src'`
-shows the condition semantics implemented in one place only.
+For AC-3, the oracle-comparison test passes. As a supporting check that no second version
+comparison exists, `grep -rln "readP_to_S" kenshou-*/src` prints only
+`kenshou-core/src/Kenshou/Core/Scenario.hs`, as it does today. (Searching for `VersionBelow` proves nothing: the
+constructor legitimately appears in the codec, the evaluator, and the reconciler.)
 
 For AC-4, the CLI test passes: text and JSON are produced, each proposal carries its scenario,
 snapshot digest, current and proposed declaration, rationale, and source location, and every
@@ -501,6 +584,12 @@ In `kenshou-core/src/Kenshou/Core/Defect.hs`:
 ```haskell
 defectValue :: KnownDefect -> Value
 parseDefect :: Value -> Parser KnownDefect
+```
+
+In `kenshou-core/src/Kenshou/Core/Scenario.hs`, re-exported from `Kenshou.Core.Defect`:
+
+```haskell
+parseScopeVersion :: Text -> Maybe Version
 
 data ScopeSource = ScopeHackage | ScopeGit Text | ScopeOther
 
@@ -532,14 +621,20 @@ converts an evidence record's components to `ScopePackage` and calls `evaluateSc
 In `kenshou-evidence/src/Kenshou/Evidence/Owner/Reconcile.hs`:
 
 ```haskell
+data OwnerPackages = OwnerPackages
+  { packages :: [Text],
+    versionsApplyTo :: [Text]
+  }
+
 data PackageMap = PackageMap
-  { byAffects :: Map Text [Text],
-    byReference :: Map Text [Text],
+  { byAffects :: Map Text OwnerPackages,
+    byReference :: Map Text OwnerPackages,
     sources :: Map ScenarioId (FilePath, Maybe Int)
   }
 
 decodePackageMap :: ByteString -> Either Text PackageMap
-ownerPackages :: PackageMap -> OwnerEntry -> Maybe [Text]
+ownerPackages :: PackageMap -> OwnerEntry -> Maybe OwnerPackages
+choosePackage :: OwnerPackages -> CohortScope -> Either Text Text
 
 data Severity = Contradiction | Warning | Consistent
 
@@ -558,6 +653,22 @@ data ScopeFinding = ScopeFinding
 reconcileScopes :: OwnerStatus -> PackageMap -> [ScenarioInfo] -> [ScopeFinding]
 ```
 
-`PackageMap` and `ownerPackages` are reused by plan 10. The documents this plan introduces are
+`choosePackage` implements the package choice described in Milestone 3 and returns the warning
+code on the left when no package can be chosen. `PackageMap`, `ownerPackages`, and
+`choosePackage` are reused by plan 10. `ScopeFinding` is the primary finding; secondary
+`scope-package-not-mapped` warnings are separate `ScopeFinding` values with the same scenario
+and reference. The documents this plan introduces are
 `kenshou.owner-package-map/v1` and `kenshou.scope-reconciliation/v1`; the document it extends is
 `kenshou.scenario-list/v1`.
+
+
+## Revision Notes
+
+2026-11-18: Revised after review, before implementation began. The reconciliation findings are
+now an ordered rule list with one primary finding per declaration, because the earlier kinds
+overlapped and left gaps. The package map gained the required `versionsApplyTo` field so that an
+owner's project version is never compared with an unrelated package version. The evaluator's
+home is fixed as `Kenshou.Core.Scenario` (the alternative was a certain import cycle), the
+version parser is shared with plan 8's record parser, the AC-3 supporting check was replaced by
+one that can fail, the snapshot fixture is taken without git provenance, and the version step is
+stated.
