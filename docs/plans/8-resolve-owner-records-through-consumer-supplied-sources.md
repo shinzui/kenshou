@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-18T01:55:31Z
       mode: "update"
       note: "Addressed the 2026-11-18 review: relative provenance, opt-in git state, complete snapshots, version step."
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-11-18T03:03:33Z
+      mode: "implement"
+      note: "Implemented milestones of plan 8"
 ---
 
 # Resolve owner records through consumer-supplied sources
@@ -72,11 +77,16 @@ not an owner record.
 
 ## Progress
 
-- [ ] M1: the owner-record model, resolvers, duplicate-chain resolution, and the owner status
+- [x] M1: the owner-record model, resolvers, duplicate-chain resolution, and the owner status
   document exist in `kenshou-evidence` as a pure, tested library; the fixture matrix covering
   duplicate chains, cycles, missing records, non-record references, unknown and unparseable
   versions, malformed fields, and two owners sharing a local handle passes in
   `cabal test kenshou-evidence:test:kenshou-evidence-test`.
+  Done 2026-11-18: the 15 examples of `describe "owner records"`
+  (`kenshou-evidence/test/OwnerSpec.hs`) pass, including the byte-for-byte golden
+  `kenshou-evidence/test/fixtures/owners/status.golden.json` and the snapshot round trip. The
+  suite as a whole reports 44 examples, 3 failures; the same 3 fail on the untouched tree (see
+  Surprises & Discoveries).
 - [ ] M2: `owners status` and `owners snapshot` are standard commands; the fixture command
   above prints the expected text and `kenshou.owner-status/v1` JSON, a snapshot replays to a
   semantically identical report after the fixture owner files are changed, and owner files are
@@ -88,7 +98,17 @@ not an owner record.
 
 ## Surprises & Discoveries
 
-(None yet.)
+- Three `kenshou-evidence` tests fail on a clean master (`loadComparisonSource records a
+  comparison only after both arm concepts exist` and two `attest` cases). The vendored bundle
+  `fixtures/consumer-baseline/docs/verification/` has attestations but no `runs/` records,
+  because the top-level `.gitignore` rule `runs/` kept them out of git. This plan does not
+  change that fixture, so `just verify` cannot pass until it is repaired. Recorded as FRIC-2.
+  Evidence: `git stash -u` then the suite reports `29 examples, 3 failures`.
+
+- `mori path` canonicalises the URI it is given: a guide cited by its file slug comes back as
+  `mori://shinzui/kenshou/okf/guides/concepts/DOC-1`. The Mori resolver therefore relies on
+  the record's own handle check. A record kind cited by anything other than its handle is
+  reported as `handle-mismatch`, and nothing is guessed.
 
 
 ## Decision Log
@@ -164,6 +184,42 @@ not an owner record.
   `standardCommands` returns. The one behavior a consumer can notice is a name collision, which
   the CHANGELOG entry must state: a program that already contributes a command named `owners`
   must replace the standard one with `withCommand`. Publishing is a separate, deliberate act.
+  Date: 2026-11-18
+
+- Decision: `VersionClaim` has a sixth state, `ClaimMalformed` (JSON state `malformed`, raw
+  `null`), for a version field of the wrong YAML type. A record with a malformed field stays
+  `resolved` and carries one `malformed-field` reason per field. A malformed text field
+  (`status`, `title`, `affects`, `duplicateOf`) is absent from the record, and its reason names
+  it. A YAML number such as `fixedVersion: 1.3` counts as malformed because its text was not
+  preserved.
+  Rationale: Reporting such a field as `absent` would be a guess. The record's identity and
+  its other claims are still trustworthy, so it is not made `unresolved`.
+  Date: 2026-11-18
+
+- Decision: The library interfaces differ from the plan in four places. (1)
+  `ResolvedBytes` also carries the local file it read (`Maybe FilePath`). `withGitProvenance`
+  needs that path, and no document ever records it. (2) `ResolveResult` has an `Ambiguous
+  [Text]` answer for `ambiguous-handle`. (3) `resolveOwnersObserved` returns the entries
+  together with each resolver answer. `writeSnapshot :: FilePath -> [RecordKind] ->
+  [OwnerCitation] -> [(Text, ResolveResult)] -> OwnerStatus -> IO (Either SnapshotError Text)`
+  stores those answers and returns the snapshot digest. (4) `readSnapshot :: FilePath -> IO
+  (Either Text OwnerStatus)` takes no record kinds, because the snapshot stores the kinds it
+  was resolved with. A replay therefore cannot change when a consumer later adds a kind.
+  `memoryResolver` and `parseConceptReference` are also exported.
+  Rationale: With the planned signatures a snapshot could not reproduce `not-found` or
+  `ambiguous-handle` answers without reverse-engineering them from reasons. The decorator also
+  had no file to inspect.
+  Date: 2026-11-18
+
+- Decision: The mapped resolver finds a concept by the handle field of its own type. For a
+  concept of an unconfigured type, it uses the first configured handle field the concept has.
+  The fixture `triage-guide.md` (`type: Guide`, `bugId: BUG-11`) exercises that path and is
+  reported as `not-a-record` with reason `unconfigured-type`. Reason codes are `not-a-concept`,
+  `unconfigured-type`, `unreadable-record`, `missing-field`, `malformed-field`,
+  `handle-mismatch`, `not-found`, `ambiguous-handle`, `resolver-failed`, `no-mapping`,
+  `duplicate-cycle`, `duplicate-target-unresolved`, and `duplicate-target-absent`.
+  Rationale: A directory bundle has no registry to say which key identifies a non-record
+  concept, and matching on file names is forbidden.
   Date: 2026-11-18
 
 

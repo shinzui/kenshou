@@ -1,0 +1,61 @@
+{
+  "schema": "kenshou.owner-findings/v1",
+  "findings": [
+    {
+      "id": "F-1",
+      "title": "Reader loses the last item after restart",
+      "references": ["mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1"],
+      "location": "docs/findings.md#f-1"
+    },
+    {
+      "id": "F-2",
+      "title": "Leases outlive cancelled and timed-out writes",
+      "references": [
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-8"
+      ],
+      "location": "docs/findings.md#f-2"
+    },
+    {
+      "id": "F-3",
+      "title": "Writer stalls when the queue fills",
+      "references": ["mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1"]
+    },
+    {
+      "id": "F-4",
+      "title": "Checkpoint loses a segment",
+      "references": ["mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5"]
+    },
+    {
+      "id": "F-5",
+      "title": "Reconnect, flush, and scan behaviour",
+      "references": [
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-7",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-10"
+      ]
+    },
+    {
+      "id": "F-6",
+      "title": "Counting and compaction",
+      "references": [
+        "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-2",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-9"
+      ]
+    },
+    {
+      "id": "F-7",
+      "title": "References that are not owner records",
+      "references": [
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-404",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-11",
+        "https://example.org/issues/12"
+      ]
+    },
+    {
+      "id": "F-8",
+      "title": "Shutdown hangs",
+      "references": ["mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3"]
+    }
+  ]
+}

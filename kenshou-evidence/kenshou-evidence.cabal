@@ -17,6 +17,9 @@ extra-source-files:
   test/fixtures/consumer-records/*.json
   test/fixtures/consumer-records/*.md
   test/fixtures/consumer-records/SOURCE
+  test/fixtures/owners/*.json
+  test/fixtures/owners/owner-a/bug-reports/*.md
+  test/fixtures/owners/owner-b/bug-reports/*.md
   test/fixtures/profile-invalid/*.json
 
 common warnings
@@ -50,6 +53,10 @@ library
     Kenshou.Evidence.Frontmatter
     Kenshou.Evidence.History
     Kenshou.Evidence.HistoryCli
+    Kenshou.Evidence.Owner
+    Kenshou.Evidence.Owner.Record
+    Kenshou.Evidence.Owner.Resolver
+    Kenshou.Evidence.Owner.Snapshot
     Kenshou.Evidence.Publish
     Kenshou.Evidence.Record
     Kenshou.Evidence.Source
@@ -76,12 +83,14 @@ library
     time >=1.14 && <1.15,
     transformers >=0.6 && <0.7,
     unix >=2.8 && <2.9,
+    vector >=0.13 && <0.14,
 
 test-suite kenshou-evidence-test
   import: warnings
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
+  other-modules: OwnerSpec
   build-depends:
     aeson,
     base >=4.21 && <4.22,
