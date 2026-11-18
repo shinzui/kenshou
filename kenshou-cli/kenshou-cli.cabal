@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kenshou-cli
-version: 0.1.0.0
+version: 0.1.1.0
 synopsis: Operator command library for the Kenshou verification harness
 description: Operator and automation interface for the Kenshou verification harness.
 license: BSD-3-Clause
@@ -80,7 +80,7 @@ library
     kenshou-check ^>=0.1.0.0,
     kenshou-core ^>=0.1.0.0,
     kenshou-diagnose ^>=0.1.0.0,
-    kenshou-evidence ^>=0.1.0.0,
+    kenshou-evidence ^>=0.1.1.0,
     kenshou-measure ^>=0.1.0.0,
     kenshou-remote ^>=0.1.0.0,
     kenshou-telemetry ^>=0.1.0.0,
@@ -101,7 +101,10 @@ test-suite kenshou-cli-test
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
-  other-modules: PerfSessionSpec
+  other-modules:
+    OwnersSpec
+    PerfSessionSpec
+
   build-depends:
     aeson >=2.2 && <2.3,
     base >=4.21 && <4.22,
@@ -112,6 +115,7 @@ test-suite kenshou-cli-test
     hspec >=2.11 && <2.12,
     kenshou-cli,
     kenshou-core ^>=0.1.0.0,
+    kenshou-evidence ^>=0.1.1.0,
     kenshou-measure ^>=0.1.0.0,
     kenshou-remote ^>=0.1.0.0,
     kenshou-telemetry ^>=0.1.0.0,

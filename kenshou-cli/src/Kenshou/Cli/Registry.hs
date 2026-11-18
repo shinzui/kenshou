@@ -3,6 +3,7 @@ module Kenshou.Cli.Registry
     Program (..),
     selfTestBundles,
     standardCommands,
+    withCommand,
     standardTopics,
     selfTestAssembly,
   )
@@ -23,12 +24,13 @@ import Kenshou.Cli.Completions (completionsCommand)
 import Kenshou.Cli.Diagnose qualified as Diagnose
 import Kenshou.Cli.Help qualified as Help
 import Kenshou.Core.Bundle (LayerBundle)
-import Kenshou.Core.Cli (CliCommand, HelpTopic, Program (..), defaultProgram)
+import Kenshou.Core.Cli (CliCommand (..), HelpTopic, Program (..), defaultProgram)
 import Kenshou.Core.Selftest qualified as Selftest
 import Kenshou.Diagnose.SelfTest qualified as DiagnoseSelftest
 import Kenshou.Evidence.Attest (Recomputer)
 import Kenshou.Evidence.Cli (attestCommandWith, evidenceCommand, recordCommand)
 import Kenshou.Evidence.HistoryCli (historyCommand)
+import Kenshou.Evidence.Owner.Cli (ownersCommand)
 import Kenshou.Measure.Cli qualified as Measure
 import Kenshou.Measure.Selftest qualified as MeasureSelftest
 import Kenshou.Remote.Selftest qualified as RemoteSelftest
@@ -47,7 +49,15 @@ selfTestBundles = [Selftest.bundle, MeasureSelftest.bundle, CheckSelftest.bundle
 
 -- | The generic operator commands, with @attest@ using the given recomputers.
 standardCommands :: [Recomputer] -> [CliCommand]
-standardCommands recomputers = [listCommand, planCommand, Help.helpCommand, runCommand, executeCommand, cellCommand, perfCommand, overheadCommand, Measure.summarizeCommand, Measure.compareCommand, Diagnose.diagnoseCommand, historyCommand, recordCommand, attestCommandWith recomputers, evidenceCommand, workerCommand, cohortCommand, completionsCommand]
+standardCommands recomputers = [listCommand, planCommand, Help.helpCommand, runCommand, executeCommand, cellCommand, perfCommand, overheadCommand, Measure.summarizeCommand, Measure.compareCommand, Diagnose.diagnoseCommand, historyCommand, ownersCommand, recordCommand, attestCommandWith recomputers, evidenceCommand, workerCommand, cohortCommand, completionsCommand]
+
+-- | Replace the command with the same name, or append the command when none has
+-- it. A program that customises a standard command, or contributes its own
+-- command under a standard name, uses this instead of adding a second command.
+withCommand :: CliCommand -> [CliCommand] -> [CliCommand]
+withCommand replacement commands
+  | any ((== replacement.name) . (.name)) commands = [if current.name == replacement.name then replacement else current | current <- commands]
+  | otherwise = commands <> [replacement]
 
 standardTopics :: [HelpTopic]
 standardTopics = Help.topics

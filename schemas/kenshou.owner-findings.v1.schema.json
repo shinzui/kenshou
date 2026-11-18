@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.owner-findings.v1.schema.json",
+  "title": "Consumer findings that cite owner records",
+  "type": "object",
+  "required": ["schema", "findings"],
+  "properties": {
+    "schema": {"const": "kenshou.owner-findings/v1"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "references"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "title": {"type": "string"},
+          "references": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "location": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

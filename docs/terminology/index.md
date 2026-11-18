@@ -28,6 +28,8 @@ okf_version: "0.2"
 - [named resource](named-resource.md) - A piece of infrastructure besides PostgreSQL that a scenario requires by name and that a registered provider acquires around each run.
 - [oracle](oracle.md) - An independent source of expected state used to judge a scenario's observed behavior.
 - [outcome](outcome.md) - The reported execution state of a run, distinct from whether its failure blocks a gate.
+- [owner record](owner-record.md) - A bug report or improvement request, kept in the repository that owns a behavior, that a known defect or a consumer finding cites by its canonical concept URI.
+- [owner snapshot](owner-snapshot.md) - A create-once directory holding the exact owner-record bytes, their digests, the citations, and the enrichment links from which an owner status can be reported again.
 - [paired comparison](paired-comparison.md) - A controlled performance comparison of interleaved baseline and candidate run trials.
 - [phase](phase.md) - A timed part of a run's workload lifecycle, named warm-up, steady, or drain.
 - [run plan](run-plan.md) - A versioned schedule of selected runs with fixed specifications, reasons, and identities.
@@ -41,4 +43,3 @@ okf_version: "0.2"
 - [tier](tier.md) - A scenario's declared execution cost class used to filter planned work.
 - [verdict](verdict.md) - A saved judgment that a named check held, was violated, or could not be evaluated.
 - [verification cell](verification-cell.md) - A leased and resettable machine environment for controlled remote verification runs.
-

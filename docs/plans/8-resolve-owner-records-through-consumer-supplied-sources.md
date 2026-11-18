@@ -87,13 +87,29 @@ not an owner record.
   `kenshou-evidence/test/fixtures/owners/status.golden.json` and the snapshot round trip. The
   suite as a whole reports 44 examples, 3 failures; the same 3 fail on the untouched tree (see
   Surprises & Discoveries).
-- [ ] M2: `owners status` and `owners snapshot` are standard commands; the fixture command
+- [x] M2: `owners status` and `owners snapshot` are standard commands; the fixture command
   above prints the expected text and `kenshou.owner-status/v1` JSON, a snapshot replays to a
   semantically identical report after the fixture owner files are changed, and owner files are
   byte-identical before and after every command.
+  Done 2026-11-18. The fixture command prints the expected blocks and exits 0. The hand
+  transcript in Concrete Steps printed `owner files unchanged`, `replay identical`, `refusing
+  to overwrite an existing snapshot`, and `exit=2`. The tests `replays a snapshot unchanged
+  after the owner files change, and never writes to them` and `refuses an existing snapshot,
+  mixed options, unreadable inputs, and tampered snapshots` (`kenshou-cli/test/OwnersSpec.hs`)
+  pass. `check-jsonschema` accepts both goldens, the findings fixture, and a live
+  status/snapshot pair.
 - [ ] M3: a synthetic consumer assembled in the CLI test suite supplies its own source,
   resolver, and enrichment through the public extension points; `just verify` (including the
   coupling guard, schema checks, and the documentation bundles) passes.
+  Partial, 2026-11-18. The synthetic-consumer test `assembles a consumer's own source,
+  resolver, record kind, and enrichment without Mori` passes. Its fake `mori` on `PATH` is
+  never invoked, and a replay does not rerun the enrichment. The documentation, ADR-21,
+  version step, and CHANGELOG entries are done. `just verify` exits 1 only at `haskell-test`,
+  on the 3 pre-existing `kenshou-evidence` failures (FRIC-2). Every other recipe passes when
+  run on its own: fmt-check, haskell-build, `plan-check: clean`, `coupling-guard: clean`,
+  cohort-check, graph-check, the other seven test suites (`kenshou-cli` 47 examples, 0
+  failures), schemas-check, selftest, synthetic, and all six documentation validations. This
+  milestone closes when FRIC-2 is repaired and `just verify` exits 0.
 
 
 ## Surprises & Discoveries
@@ -104,6 +120,11 @@ not an owner record.
   because the top-level `.gitignore` rule `runs/` kept them out of git. This plan does not
   change that fixture, so `just verify` cannot pass until it is repaired. Recorded as FRIC-2.
   Evidence: `git stash -u` then the suite reports `29 examples, 3 failures`.
+
+- The `upload-candidate` and `publish` recipes in `justfile` name every release
+  tarball `<package>-0.1.0.0.tar.gz`. With `kenshou-evidence` and `kenshou-cli` now at 0.1.1.0,
+  those recipes need per-package versions before the next publication. This plan does not
+  publish, so it leaves them unchanged.
 
 - `mori path` canonicalises the URI it is given: a guide cited by its file slug comes back as
   `mori://shinzui/kenshou/okf/guides/concepts/DOC-1`. The Mori resolver therefore relies on
@@ -225,7 +246,23 @@ not an owner record.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+2026-11-18. IR-2's four criteria hold as tested behavior. AC-1 is covered by the golden status
+document and the fixture command. AC-2 is covered by the `owner records` block: cycles,
+chains, missing records and targets, non-record references, all six version states, and a
+`BUG-1` in two owners. AC-3 is covered by the synthetic-consumer CLI test and `coupling-guard:
+clean`. AC-4 is covered by the snapshot replay tests and the unchanged owner-file digests.
+IR-2 is marked `in-progress` rather than `completed`, because the plan's final gate, `just
+verify`, is still blocked by a defect that predates this plan.
+
+What differed from the plan is recorded in the Decision Log: a sixth `malformed` version
+state; resolver answers carrying a local path and an `ambiguous-handle` answer; snapshots
+storing raw resolver answers and record kinds, so `readSnapshot` takes no kinds; and mapped
+lookup of non-record concepts by the first configured handle field.
+
+Friction: FRIC-2 (docs/friction-log/2-vendored-verification-bundle-lacks-its-run-records.md),
+the vendored verification bundle missing its run records, stays `logged`. Repairing it means
+deciding whether to restore those records and un-ignore them under `.gitignore`'s `runs/`
+rule, which is outside this plan's scope.
 
 
 ## Context and Orientation
@@ -668,9 +705,15 @@ the golden file is the acceptance evidence, not an output to accept blindly.
 
 ## Interfaces and Dependencies
 
-No new library dependency is needed. `kenshou-evidence` already depends on `okf-core`, `aeson`,
-`process`, `directory`, `filepath`, `containers`, `text`, `bytestring`, and `time`. Use
-`Kenshou.Core.Canonical.sha256Hex` for digests, as `Kenshou.Evidence.Source` does.
+No new third-party package is needed. `kenshou-evidence` already depends on `okf-core`,
+`aeson`, `process`, `directory`, `filepath`, `containers`, `text`, `bytestring`, and `time`. It
+now also lists `vector` (already in the cohort through `kenshou-core`) for the indented JSON
+renderer, and the `kenshou-cli` test suite depends on `kenshou-evidence`. Digests use
+`Kenshou.Core.Canonical.sha256Hex`, as `Kenshou.Evidence.Source` does; they carry the
+`sha256:` prefix, and a snapshot's record files are named by the bare hex digest.
+
+The signatures below are the implemented ones. Where they differ from the plan as first
+written, the Decision Log entry of 2026-11-18 explains why.
 
 At the end of the plan these names exist. Field details beyond those stated may be adjusted
 during implementation, but the later plans depend on the names and meanings below.
@@ -714,12 +757,21 @@ data OwnerStatus = OwnerStatus
     records :: [OwnerEntry]
   }
 
+data OwnerLink = OwnerLink {label :: Text, target :: Text}
+
 resolveOwners :: [RecordKind] -> OwnerResolver -> [OwnerCitation] -> IO [OwnerEntry]
+resolveOwnersObserved :: [RecordKind] -> OwnerResolver -> [OwnerCitation] -> IO ([OwnerEntry], [(Text, ResolveResult)])
+gatherCitations :: [OwnerSource] -> IO (Either Text [OwnerCitation])
 canonicalOwners :: OwnerStatus -> Map Text OwnerEntry
+ownerStatusValue :: OwnerStatus -> Value
+prettyJson :: Value -> ByteString
 ```
 
-`canonicalOwners` maps every cited reference, including aliases, to the entry of its canonical
-record; plans 9 and 10 use it to join scenarios to owners.
+`canonicalOwners` maps every reference in the document, including aliases, to the entry of its
+canonical record. A reference with no canonical record (a cycle member, a broken chain, an
+unresolved or non-record reference) maps to its own entry, so its reasons stay visible. Plans 9
+and 10 use it to join scenarios to owners. `prettyJson` is the deterministic, indented encoding
+used for the golden files and `snapshot.json`.
 
 In `kenshou-evidence/src/Kenshou/Evidence/Owner/Record.hs`:
 
@@ -733,6 +785,7 @@ data VersionClaim
   | ClaimUnknown
   | ClaimReleased Version Text
   | ClaimUnparseable Text
+  | ClaimMalformed
 
 data OwnerRecord = OwnerRecord
   { kind :: Text,
@@ -743,10 +796,19 @@ data OwnerRecord = OwnerRecord
     affectedVersion :: VersionClaim,
     fixedVersion :: VersionClaim,
     lastWorkingVersion :: VersionClaim,
-    duplicateOf :: Maybe Text
+    duplicateOf :: Maybe Text,
+    malformedFields :: [Text]
   }
 
+data OwnerReason
+  = NotAConcept | UnconfiguredType Text | UnreadableRecord Text | MissingField Text
+  | MalformedField Text Text | HandleMismatch Text Text | NotFoundReason Text
+  | AmbiguousHandle [Text] | ResolverFailure Text | NoResolver | DuplicateCycle [Text]
+  | DuplicateTargetUnresolved Text | DuplicateTargetAbsent
+
 parseOwnerRecord :: [RecordKind] -> ByteString -> Either OwnerReason OwnerRecord
+conceptHandle :: [RecordKind] -> ByteString -> Maybe Text
+reasonCode :: OwnerReason -> Text
 ```
 
 In `kenshou-evidence/src/Kenshou/Evidence/Owner/Resolver.hs`:
@@ -761,9 +823,10 @@ data Provenance = Provenance
   }
 
 data ResolveResult
-  = ResolvedBytes ByteString Provenance
+  = ResolvedBytes ByteString Provenance (Maybe FilePath)
   | NoMapping
   | NotFound Text
+  | Ambiguous [Text]
   | ResolverFailed Text
 
 data OwnerResolver = OwnerResolver {name :: Text, resolve :: Text -> IO ResolveResult}
@@ -772,16 +835,22 @@ mappedResolver :: [RecordKind] -> [(Text, FilePath)] -> OwnerResolver
 moriResolver :: OwnerResolver
 chainResolvers :: [OwnerResolver] -> OwnerResolver
 withGitProvenance :: OwnerResolver -> OwnerResolver
+memoryResolver :: Text -> [(Text, (Text, ByteString))] -> OwnerResolver
+parseConceptReference :: Text -> Maybe ConceptReference
 ```
 
 `location` is always relative, as described in the Plan of Work. Only `withGitProvenance` fills
-`revision` and `dirty`.
+`revision` and `dirty`. The `Maybe FilePath` in `ResolvedBytes` is the local file read, for that
+decorator; no document records it.
 
 In `kenshou-evidence/src/Kenshou/Evidence/Owner/Snapshot.hs`:
 
 ```haskell
-writeSnapshot :: FilePath -> OwnerStatus -> [(Text, ByteString)] -> IO (Either Text ())
-readSnapshot :: [RecordKind] -> FilePath -> IO (Either Text OwnerStatus)
+data SnapshotError = SnapshotExists | SnapshotFailed Text
+
+writeSnapshot :: FilePath -> [RecordKind] -> [OwnerCitation] -> [(Text, ResolveResult)] -> OwnerStatus -> IO (Either SnapshotError Text)
+readSnapshot :: FilePath -> IO (Either Text OwnerStatus)
+loadSnapshot :: FilePath -> IO (Either Text SnapshotContents)
 snapshotResolver :: FilePath -> IO (Either Text OwnerResolver)
 ```
 
@@ -800,7 +869,11 @@ data OwnerConfig = OwnerConfig
 defaultOwnerConfig :: OwnerConfig
 ownersCommand :: CliCommand
 ownersCommandWith :: OwnerConfig -> CliCommand
+renderOwnerStatusText :: OwnerStatus -> Text
 ```
+
+Enrichments run only on entries whose resolution is `Resolved`, during a live `owners status`
+and during `owners snapshot`. An exception from an enrichment makes the command exit 4.
 
 In `kenshou-cli/src/Kenshou/Cli/Registry.hs`, `standardCommands` gains `ownersCommand`, and
 `withCommand :: CliCommand -> [CliCommand] -> [CliCommand]` is exported and re-exported from
@@ -819,3 +892,7 @@ checked-in snapshot depend on the machine and the current commit. Snapshots now 
 links and every reference reached through a duplicate chain, so a replay runs nothing live. The
 plan also states its version step and the `owners` command-name collision, which it did not
 before.
+
+2026-11-18 (implementation): The Interfaces and Dependencies section now gives the
+implemented signatures. Where they differ from the original, the reason is in the Decision
+Log, and Progress records the acceptance evidence for each milestone.

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.owner-snapshot.v1.schema.json",
+  "title": "Index of an owner snapshot directory",
+  "description": "snapshot.json of a directory whose records/ subdirectory holds each resolved record's bytes in a file named by their SHA-256 hex digest.",
+  "type": "object",
+  "required": ["schema", "observedAt", "recordKinds", "citations", "references"],
+  "properties": {
+    "schema": {"const": "kenshou.owner-snapshot/v1"},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "recordKinds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "handleField"],
+        "properties": {"type": {"type": "string"}, "handleField": {"type": "string"}},
+        "additionalProperties": false
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reference"],
+        "properties": {
+          "reference": {"type": "string"},
+          "scenario": {"type": "string"},
+          "labels": {"type": "array", "items": {"type": "string"}},
+          "finding": {"type": "string"},
+          "location": {"type": "string"}
+        },
+        "oneOf": [
+          {"required": ["scenario", "labels"], "not": {"required": ["finding"]}},
+          {"required": ["finding"], "not": {"required": ["scenario"]}}
+        ],
+        "additionalProperties": false
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reference", "answer", "links"],
+        "properties": {
+          "reference": {"type": "string"},
+          "answer": {"enum": ["not-asked", "bytes", "no-mapping", "not-found", "ambiguous-handle", "resolver-failed"]},
+          "message": {"type": "string"},
+          "locations": {"type": "array", "items": {"type": "string"}},
+          "source": {
+            "type": "object",
+            "required": ["resolver", "location", "sha256", "revision", "dirty"],
+            "properties": {
+              "resolver": {"type": "string"},
+              "location": {"type": ["string", "null"], "not": {"pattern": "^/"}},
+              "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+              "revision": {"type": ["string", "null"]},
+              "dirty": {"type": ["boolean", "null"]}
+            },
+            "additionalProperties": false
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["label", "target"],
+              "properties": {"label": {"type": "string"}, "target": {"type": "string"}},
+              "additionalProperties": false
+            }
+          }
+        },
+        "allOf": [
+          {"if": {"properties": {"answer": {"const": "bytes"}}}, "then": {"required": ["source"]}},
+          {"if": {"properties": {"answer": {"enum": ["not-found", "resolver-failed"]}}}, "then": {"required": ["message"]}},
+          {"if": {"properties": {"answer": {"const": "ambiguous-handle"}}}, "then": {"required": ["locations"]}}
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

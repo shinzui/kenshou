@@ -62,7 +62,7 @@ library
     file-embed >=0.0.16 && <0.1,
     hasql >=1.10 && <1.11,
     kenshou-check ^>=0.1.0.0,
-    kenshou-cli ^>=0.1.0.0,
+    kenshou-cli ^>=0.1.1.0,
     kenshou-core ^>=0.1.0.0,
     kenshou-diagnose ^>=0.1.0.0,
     kenshou-measure ^>=0.1.0.0,
@@ -85,7 +85,7 @@ executable kenshou
 
   build-depends:
     base >=4.21 && <4.22,
-    kenshou-cli ^>=0.1.0.0,
+    kenshou-cli ^>=0.1.1.0,
     kenshou-synthetic,
 
 source-repository head

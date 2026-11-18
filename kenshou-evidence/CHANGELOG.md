@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1.0 - 2026-11-18
+
+### New Features
+
+- `Kenshou.Evidence.Owner` resolves the owner records that known defects and consumer findings cite. The module gathers citations from the registry and `kenshou.owner-findings/v1` files, follows duplicate chains with cycle detection, keeps every owner claim exactly as written, and encodes `kenshou.owner-status/v1`.
+- `Kenshou.Evidence.Owner.Resolver` provides the mapped-directory, Mori, chained, and in-memory resolvers, and `withGitProvenance`. Provenance records only relative locations.
+- `Kenshou.Evidence.Owner.Snapshot` writes create-once `kenshou.owner-snapshot/v1` directories of the exact record bytes, and reports from them without reading the owners' files again.
+- `Kenshou.Evidence.Owner.Cli` provides the `owners status` and `owners snapshot` command. Consumers customise it with `ownersCommandWith` and `OwnerConfig`, which adds sources, a resolver, record kinds, and enrichments.
+
 ## 0.1.0.0 - 2026-10-28
 
 ### New Features

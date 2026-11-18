@@ -178,6 +178,19 @@ spec = describe "owner records" do
       siblings <- listDirectory directory
       sort siblings `shouldBe` ["first", "second"]
 
+  it "writes the golden snapshot index for the fixture set" do
+    withSystemTempDirectory "kenshou-owner-snapshot-golden" \directory -> do
+      citations <- fixtureCitations
+      (entries, answers) <- resolveOwnersObserved defaultRecordKinds fixtureResolver citations
+      Right _ <- writeSnapshot (directory </> "snapshot") defaultRecordKinds citations answers (OwnerStatus fixedTime Nothing entries)
+      index <- ByteString.readFile (directory </> "snapshot" </> "snapshot.json")
+      accept <- lookupEnv "KENSHOU_ACCEPT_GOLDEN"
+      case accept of
+        Just "1" -> ByteString.writeFile snapshotGoldenPath index
+        _ -> pure ()
+      golden <- ByteString.readFile snapshotGoldenPath
+      index `shouldBe` golden
+
   it "rejects a snapshot whose record bytes changed" do
     withSystemTempDirectory "kenshou-owner-tamper" \directory -> do
       citations <- fixtureCitations
@@ -204,6 +217,9 @@ fixtureRoot = "test/fixtures/owners"
 
 goldenPath :: FilePath
 goldenPath = fixtureRoot </> "status.golden.json"
+
+snapshotGoldenPath :: FilePath
+snapshotGoldenPath = fixtureRoot </> "snapshot.golden.json"
 
 fixedTime :: UTCTime
 fixedTime = UTCTime (fromGregorian 2026 11 17) 0

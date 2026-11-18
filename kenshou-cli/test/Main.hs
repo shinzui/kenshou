@@ -38,6 +38,7 @@ import Kenshou.Remote.Payload qualified as Payload
 import Kenshou.Remote.Store (Bucket (..), ObjectName (..), ObjectStore (..), Precondition (..))
 import Kenshou.Remote.Store.File (newFileStore)
 import Kenshou.Telemetry.Overhead (OverheadState (..), SlotRun (..), loadOverheadState)
+import OwnersSpec qualified
 import PerfSessionSpec qualified
 import System.Directory (Permissions (..), copyFile, createDirectoryIfMissing, doesFileExist, doesPathExist, getPermissions, listDirectory, makeAbsolute, setPermissions, withCurrentDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -50,6 +51,7 @@ import Test.Hspec (describe, expectationFailure, hspec, it, shouldBe, shouldRetu
 main :: IO ()
 main = hspec do
   PerfSessionSpec.spec
+  OwnersSpec.spec
   describe "performance planning CLI" do
     it "exposes calibration publication and rejects malformed batches before storage effects" $ withSystemTempDirectory "kenshou-calibration-malformed" \directory -> do
       let input = directory </> "definition.json"
@@ -725,7 +727,7 @@ main = hspec do
 
   describe "version" do
     it "includes the cabal package version and a short revision" do
-      appVersionWithGit `shouldSatisfy` Text.isPrefixOf "kenshou v0.1.0.0 ("
+      appVersionWithGit `shouldSatisfy` Text.isPrefixOf "kenshou v0.1.1.0 ("
       Text.dropAround (`elem` ['(', ')']) (Text.takeWhileEnd (/= ' ') appVersionWithGit)
         `shouldSatisfy` (\revision -> revision == "dirty" || Text.length revision == 7)
 

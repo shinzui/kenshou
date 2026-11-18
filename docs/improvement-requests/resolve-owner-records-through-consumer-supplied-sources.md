@@ -6,7 +6,8 @@ generated:
   by: "codex/gpt-6.1-sol"
   at: "2026-11-17T15:52:19Z"
 requestId: IR-2
-status: proposed
+status: in-progress
+targetPlan: docs/plans/8-resolve-owner-records-through-consumer-supplied-sources.md
 origin: mori://shinzui/keiro-runtime-kenshou/masterplans/2-close-the-verification-and-repair-loop-for-the-keiro-runtime-in-rounds
 acceptanceCriteria:
   - id: AC-1

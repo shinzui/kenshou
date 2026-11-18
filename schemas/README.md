@@ -19,6 +19,9 @@ the meaning of a published `v1` document.
 | Plan summary | `kenshou.plan-summary/v1` | `Kenshou.Plan.Summary` |
 | Telemetry overhead policy | `kenshou.overhead-policy/v1` | `Kenshou.Telemetry.Overhead.Policy` |
 | Telemetry overhead report | `kenshou.overhead-report/v1` | `Kenshou.Telemetry.Overhead` |
+| Owner findings | `kenshou.owner-findings/v1` | `Kenshou.Evidence.Owner` |
+| Owner status | `kenshou.owner-status/v1` | `Kenshou.Evidence.Owner` |
+| Owner snapshot index | `kenshou.owner-snapshot/v1` | `Kenshou.Evidence.Owner.Snapshot` |
 
 Run `just schemas-check` to validate the checked-in goldens and fresh CLI
 documents.

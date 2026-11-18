@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1.0 - 2026-11-18
+
+### New Features
+
+- `standardCommands` now includes `owners`, which reports what owners claim about the records that known defects and findings cite, live or from a snapshot. `kenshou help owners` describes it.
+- `withCommand` replaces the command of the same name in a command list, or appends the command when none has that name. It is re-exported from `Kenshou.Cli`.
+
+### Other Changes
+
+- A program that already contributes its own command named `owners` now has two commands with that name. Replace the standard one with `withCommand` instead of appending yours.
+
 ## 0.1.0.0 - 2026-10-28
 
 ### New Features

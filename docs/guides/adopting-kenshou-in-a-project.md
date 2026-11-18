@@ -421,6 +421,66 @@ remaining store options.
 [ADR-12](../adr/0012-keep-verification-records-immutable-and-derive-baselines.md)
 explains why records are never edited after they are written.
 
+## Report owner records
+
+A [known defect](../terminology/known-defect.md) cites an
+[owner record](../terminology/owner-record.md): the bug report, in the
+repository that owns the behavior, that explains an expected failure. `owners
+status` lists every record your scenarios cite, together with the owner's
+current `status` and version claims. It also resolves references from your own
+findings, kept in a `kenshou.owner-findings/v1` file:
+
+```json
+{
+  "schema": "kenshou.owner-findings/v1",
+  "findings": [
+    {"id": "F-1", "references": ["mori://<namespace>/<owner>/okf/bug-reports/concepts/BUG-1"], "location": "docs/findings.md#f-1"}
+  ]
+}
+```
+
+```bash
+"$K" owners status --findings findings.json
+"$K" owners status --findings findings.json --map mori://<namespace>/<owner>/okf/bug-reports=../owner/docs/bug-reports
+```
+
+Without `--map`, a reference is resolved with `mori path`. `--json` prints
+`kenshou.owner-status/v1`. To make a later round report from the same bytes,
+freeze them with `"$K" owners snapshot --out DIR`, then read them back with
+`"$K" owners status --snapshot DIR`. A replay does not reread the owners'
+files, even after an owner changes them.
+
+A suite that keeps findings elsewhere, resolves records from its own store, or
+attaches its own plan links replaces the standard command with
+`ownersCommandWith` from `Kenshou.Evidence.Owner.Cli`:
+
+```haskell
+import Kenshou.Cli (Program (..), selfTestAssembly, withCommand)
+import Kenshou.Evidence.Owner (OwnerLink (..), OwnerSource (..))
+import Kenshou.Evidence.Owner.Cli (OwnerConfig (..), OwnerEnrichment (..), defaultOwnerConfig, ownersCommandWith)
+
+ownerConfig :: OwnerConfig
+ownerConfig =
+  defaultOwnerConfig
+    { sources = [OwnerSource "tracker" readTrackerCitations],
+      enrichments = [OwnerEnrichment "plans" \entry -> pure [OwnerLink "plan" (planFor entry)]]
+    }
+
+suiteProgram :: Program
+suiteProgram =
+  selfTestAssembly
+    { bundles = selfTestAssembly.bundles <> [suiteBundle],
+      commands = withCommand (ownersCommandWith ownerConfig) selfTestAssembly.commands
+    }
+```
+
+`OwnerConfig` also takes a `resolver`, which is tried before the built-in ones,
+and extra `recordKinds`. An enrichment runs only when bytes are captured; a
+snapshot stores its links. `"$K" help owners` describes the report and its
+exit codes.
+[ADR-21](../adr/0021-resolve-owner-records-read-only-and-replay-them-from-snapshots.md)
+explains why the command never edits or verifies an owner's record.
+
 ## Where to read next
 
 - [The architecture decisions](../adr/index.md) record why the harness works

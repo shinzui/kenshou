@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.owner-status.v1.schema.json",
+  "title": "What owners claimed about cited owner records",
+  "type": "object",
+  "required": ["schema", "observedAt", "snapshot", "records"],
+  "properties": {
+    "schema": {"const": "kenshou.owner-status/v1"},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "snapshot": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "records": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nullableText": {"type": ["string", "null"]},
+    "reason": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "not-a-concept",
+            "unconfigured-type",
+            "unreadable-record",
+            "missing-field",
+            "malformed-field",
+            "handle-mismatch",
+            "not-found",
+            "ambiguous-handle",
+            "resolver-failed",
+            "no-mapping",
+            "duplicate-cycle",
+            "duplicate-target-unresolved",
+            "duplicate-target-absent"
+          ]
+        },
+        "message": {"type": "string"},
+        "field": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "required": ["raw", "state"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/nullableText"},
+        "state": {"enum": ["absent", "unreleased", "unknown", "released", "unparseable", "malformed"]}
+      },
+      "additionalProperties": false
+    },
+    "citation": {
+      "type": "object",
+      "properties": {
+        "scenario": {"type": "string"},
+        "labels": {"type": "array", "items": {"type": "string"}},
+        "finding": {"type": "string"},
+        "location": {"type": "string"},
+        "via": {"type": "string"}
+      },
+      "oneOf": [
+        {"required": ["scenario", "labels"], "not": {"required": ["finding"]}},
+        {"required": ["finding"], "not": {"required": ["scenario"]}}
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["resolver", "location", "sha256", "revision", "dirty"],
+      "properties": {
+        "resolver": {"type": "string"},
+        "location": {"type": ["string", "null"], "not": {"pattern": "^/"}},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "revision": {"$ref": "#/$defs/nullableText"},
+        "dirty": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "link": {
+      "type": "object",
+      "required": ["label", "target"],
+      "properties": {"label": {"type": "string"}, "target": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "entry": {
+      "type": "object",
+      "required": ["reference", "resolution", "reasons", "kind", "handle", "title", "status", "affects", "duplicateOf", "versions", "canonical", "aliases", "citedBy", "source", "links"],
+      "properties": {
+        "reference": {"type": "string"},
+        "resolution": {"enum": ["resolved", "unresolved", "not-a-record"]},
+        "reasons": {"type": "array", "items": {"$ref": "#/$defs/reason"}},
+        "kind": {"$ref": "#/$defs/nullableText"},
+        "handle": {"$ref": "#/$defs/nullableText"},
+        "title": {"$ref": "#/$defs/nullableText"},
+        "status": {"$ref": "#/$defs/nullableText"},
+        "affects": {"$ref": "#/$defs/nullableText"},
+        "duplicateOf": {"$ref": "#/$defs/nullableText"},
+        "versions": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "required": ["affected", "fixed", "lastWorking"],
+              "properties": {
+                "affected": {"$ref": "#/$defs/claim"},
+                "fixed": {"$ref": "#/$defs/claim"},
+                "lastWorking": {"$ref": "#/$defs/claim"}
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "canonical": {"type": ["string", "null"], "pattern": "^mori://"},
+        "aliases": {"type": "array", "items": {"type": "string", "pattern": "^mori://"}},
+        "citedBy": {"type": "array", "items": {"$ref": "#/$defs/citation"}},
+        "source": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/provenance"}]},
+        "links": {"type": "array", "items": {"$ref": "#/$defs/link"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}
