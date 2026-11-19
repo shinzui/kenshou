@@ -56,6 +56,7 @@ library
     Kenshou.Core.Compat
     Kenshou.Core.Context
     Kenshou.Core.Contribution
+    Kenshou.Core.Defect
     Kenshou.Core.Dimension
     Kenshou.Core.Env
     Kenshou.Core.Env.Migration
@@ -140,12 +141,14 @@ test-suite kenshou-core-test
   main-is: Main.hs
   other-modules:
     Kenshou.ConsumerBaseline
+    Kenshou.DefectSpec
     Kenshou.PerfCalibrationSpec
     Kenshou.PerfPreparedSpec
     Kenshou.PerfResultSpec
     Kenshou.PerfSpec
     Kenshou.PlanSpec
     Kenshou.ResourceSpec
+    Kenshou.ScopeSpec
 
   build-depends:
     aeson >=2.2 && <2.3,

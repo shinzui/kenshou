@@ -6,6 +6,15 @@ module Kenshou.Core.Scenario
     CohortScope (..),
     PackageCondition (..),
     cohortScopeApplies,
+    conditionPackage,
+    ScopeSource (..),
+    ScopePackage (..),
+    cohortScopePackages,
+    ConditionResult (..),
+    ScopeEvaluation (..),
+    evaluateScope,
+    scopeApplies,
+    parseScopeVersion,
     ScenarioReport (..),
     Scenario (..),
     renderTier,
@@ -20,7 +29,7 @@ where
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Version (parseVersion)
+import Data.Version (Version, parseVersion)
 import Kenshou.Core.Cohort (CohortIdentity (..), PackageSource (..), ResolvedComponent (..), ResolvedPackage (..))
 import Kenshou.Core.Context (RunContext)
 import Kenshou.Core.Dimension (DimensionSupport)
@@ -58,21 +67,99 @@ data PackageCondition
   | RevisionIs Text Text
   deriving stock (Eq, Show)
 
+-- | Whether a scope applies to a resolved cohort: 'AllCohorts' always does, and
+-- 'OnlyWhen' does when every condition holds for at least one resolved package.
+-- Defined through 'evaluateScope', the only scope evaluator.
 cohortScopeApplies :: CohortIdentity -> CohortScope -> Bool
-cohortScopeApplies _ AllCohorts = True
-cohortScopeApplies cohort (OnlyWhen conditions) = all (conditionApplies packages) conditions
-  where
-    packages = concatMap (.resolvedComponentPackages) cohort.identityComponents
+cohortScopeApplies cohort scope = scopeApplies (evaluateScope (cohortScopePackages cohort) scope)
 
-conditionApplies :: [ResolvedPackage] -> PackageCondition -> Bool
-conditionApplies packages condition = any matches packages
+-- | Where a package the scope evaluator sees was resolved from. A Git source
+-- carries its exact revision; any other source (boot, local path) is 'ScopeOther'.
+data ScopeSource = ScopeHackage | ScopeGit Text | ScopeOther
+  deriving stock (Eq, Show)
+
+-- | A resolved package as the scope evaluator sees it. Both a run's resolved
+-- cohort ('cohortScopePackages') and an evidence record's component list convert
+-- to this.
+data ScopePackage = ScopePackage
+  { name :: Text,
+    version :: Text,
+    source :: ScopeSource
+  }
+  deriving stock (Eq, Show)
+
+-- | Every package of every component of a resolved cohort, in order.
+cohortScopePackages :: CohortIdentity -> [ScopePackage]
+cohortScopePackages cohort =
+  [ ScopePackage {name = package.resolvedPackageName, version = package.resolvedPackageVersion, source = scopeSource package.resolvedPackageSource}
+  | component <- cohort.identityComponents,
+    package <- component.resolvedComponentPackages
+  ]
   where
-    matches package = case condition of
-      ResolvedFromHackage name -> package.resolvedPackageName == name && case package.resolvedPackageSource of FromHackage _ -> True; _ -> False
-      ResolvedFromGit name -> package.resolvedPackageName == name && case package.resolvedPackageSource of FromGit _ _ _ -> True; _ -> False
-      VersionBelow name boundary -> package.resolvedPackageName == name && maybe False (uncurry (<)) ((,) <$> parse package.resolvedPackageVersion <*> parse boundary)
-      RevisionIs name revision -> package.resolvedPackageName == name && case package.resolvedPackageSource of FromGit _ actual _ -> actual == revision; _ -> False
-    parse value = case [version | (version, "") <- readP_to_S parseVersion (Text.unpack value)] of [] -> Nothing; versions -> Just (last versions)
+    scopeSource = \case
+      FromHackage _ -> ScopeHackage
+      FromGit _ revision _ -> ScopeGit revision
+      _ -> ScopeOther
+
+-- | Why a condition does or does not hold. 'ConditionFails' means a package of
+-- the named package is present but none satisfies the condition;
+-- 'ConditionPackageMissing' that no package of that name is present;
+-- 'ConditionMalformed' that a version text did not parse (the bound, or the
+-- resolved version of a package of that name), naming the text.
+data ConditionResult
+  = ConditionHolds
+  | ConditionFails
+  | ConditionPackageMissing
+  | ConditionMalformed Text
+  deriving stock (Eq, Show)
+
+-- | A scope's evaluation, condition by condition.
+data ScopeEvaluation
+  = AppliesToAll
+  | Evaluated (NonEmpty (PackageCondition, ConditionResult))
+  deriving stock (Eq, Show)
+
+-- | Evaluate a scope against resolved packages, explaining each condition.
+evaluateScope :: [ScopePackage] -> CohortScope -> ScopeEvaluation
+evaluateScope _ AllCohorts = AppliesToAll
+evaluateScope packages (OnlyWhen conditions) = Evaluated (fmap (\condition -> (condition, evaluateCondition packages condition)) conditions)
+
+evaluateCondition :: [ScopePackage] -> PackageCondition -> ConditionResult
+evaluateCondition packages condition
+  | null named = ConditionPackageMissing
+  | any satisfies named = ConditionHolds
+  | VersionBelow _ bound <- condition, Nothing <- parseScopeVersion bound = ConditionMalformed bound
+  | VersionBelow _ _ <- condition, unparsed : _ <- [package.version | package <- named, Nothing <- [parseScopeVersion package.version]] = ConditionMalformed unparsed
+  | otherwise = ConditionFails
+  where
+    named = [package | package <- packages, package.name == conditionPackage condition]
+    satisfies package = case condition of
+      ResolvedFromHackage _ -> package.source == ScopeHackage
+      ResolvedFromGit _ -> case package.source of ScopeGit _ -> True; _ -> False
+      VersionBelow _ bound -> maybe False (uncurry (<)) ((,) <$> parseScopeVersion package.version <*> parseScopeVersion bound)
+      RevisionIs _ revision -> package.source == ScopeGit revision
+
+-- | The package a condition names.
+conditionPackage :: PackageCondition -> Text
+conditionPackage = \case
+  ResolvedFromHackage package -> package
+  ResolvedFromGit package -> package
+  VersionBelow package _ -> package
+  RevisionIs package _ -> package
+
+-- | Reduce an evaluation to whether the scope applies: every condition holds. A
+-- missing package or a malformed version does not hold.
+scopeApplies :: ScopeEvaluation -> Bool
+scopeApplies AppliesToAll = True
+scopeApplies (Evaluated results) = all ((== ConditionHolds) . snd) results
+
+-- | The version parser for scope bounds and resolved versions: the longest
+-- complete parse of 'Data.Version.parseVersion'. Owner version claims are parsed
+-- with it too, so an owner's version and a scope's bound are always read alike.
+parseScopeVersion :: Text -> Maybe Version
+parseScopeVersion value = case [version | (version, "") <- readP_to_S parseVersion (Text.unpack value)] of
+  [] -> Nothing
+  versions -> Just (last versions)
 
 data ScenarioReport = ScenarioReport
   { outcome :: Outcome,

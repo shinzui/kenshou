@@ -44,12 +44,14 @@ import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), PackageConditi
 import Kenshou.Core.Selector (matchesSelector, parseSelector)
 import Kenshou.Core.Selftest qualified as Selftest
 import Kenshou.Core.Selftest.Schema (selftestMigrationSet, selftestSchema)
+import Kenshou.DefectSpec qualified
 import Kenshou.PerfCalibrationSpec qualified
 import Kenshou.PerfPreparedSpec qualified
 import Kenshou.PerfResultSpec qualified
 import Kenshou.PerfSpec qualified
 import Kenshou.PlanSpec qualified
 import Kenshou.ResourceSpec qualified
+import Kenshou.ScopeSpec qualified
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
@@ -83,6 +85,8 @@ main = hspec do
   openRegistrySpec
   resourceProvisioningSpec
   knownDefectGroupSpec
+  Kenshou.DefectSpec.spec
+  Kenshou.ScopeSpec.spec
   knobSpec
   dimensionSpec
   runSpecSpec

@@ -21,6 +21,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Kenshou.Core.Bundle (LayerBundle, allScenarios, mkRegistry)
+import Kenshou.Core.Defect (defectReferencesValue, defectValue, parseDefect)
 import Kenshou.Core.Dimension
 import Kenshou.Core.Id (ScenarioId)
 import Kenshou.Core.Knob
@@ -86,7 +87,7 @@ instance FromJSON ScenarioInfo where
       <*> (value .:? "placement" .!= "either" >>= parsePlacement)
       <*> value .:? "knobs" .!= []
       <*> value .:? "dimensions" .!= noDimensions
-      <*> pure Nothing
+      <*> (value .:? "knownDefectDeclaration" >>= traverse parseDefect)
 
 instance ToJSON ScenarioInfo where
   toJSON scenario =
@@ -98,12 +99,9 @@ instance ToJSON ScenarioInfo where
         "placement" .= renderPlacement scenario.placement,
         "knobs" .= scenario.knobs,
         "dimensions" .= scenario.dimensions,
-        "knownDefect" .= fmap defectReferences scenario.knownDefect
+        "knownDefect" .= fmap defectReferencesValue scenario.knownDefect,
+        "knownDefectDeclaration" .= fmap defectValue scenario.knownDefect
       ]
-    where
-      defectReferences defect = case individualKnownDefects defect of
-        [single] -> toJSON single.reference
-        many -> toJSON (fmap (.reference) many)
 
 parseTier :: Text -> Parser Tier
 parseTier = \case

@@ -7,7 +7,68 @@
   "properties": {
     "schema": {"const": "kenshou.scenario-list/v1"},
     "suiteVersion": {"type": "string"},
-    "scenarios": {"type": "array", "items": {"type": "object", "required": ["id", "layer", "component", "kind", "name", "revision", "summary", "tier", "placement"]}},
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "layer", "component", "kind", "name", "revision", "summary", "tier", "placement"],
+        "properties": {
+          "knownDefect": {
+            "description": "The reference of a single known defect, or the references of a group's individual defects in order.",
+            "oneOf": [{"type": "null"}, {"type": "string"}, {"type": "array", "items": {"type": "string"}}]
+          },
+          "knownDefectDeclaration": {
+            "description": "The complete known-defect declaration, groups preserved. Optional; older documents omit it.",
+            "oneOf": [{"type": "null"}, {"$ref": "#/$defs/defect"}]
+          }
+        }
+      }
+    },
     "roles": {"type": "array", "items": {"type": "object", "required": ["name", "summary"]}}
+  },
+  "$defs": {
+    "defect": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "reference", "summary", "expectedFailures", "appliesTo"],
+          "properties": {
+            "kind": {"const": "single"},
+            "reference": {"type": "string"},
+            "summary": {"type": "string"},
+            "expectedFailures": {"type": "array", "items": {"type": "string"}},
+            "appliesTo": {"$ref": "#/$defs/scope"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "defects"],
+          "properties": {
+            "kind": {"const": "group"},
+            "defects": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/defect"}}
+          }
+        }
+      ]
+    },
+    "scope": {
+      "oneOf": [
+        {"type": "object", "required": ["kind"], "properties": {"kind": {"const": "all-cohorts"}}},
+        {
+          "type": "object",
+          "required": ["kind", "conditions"],
+          "properties": {
+            "kind": {"const": "only-when"},
+            "conditions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/condition"}}
+          }
+        }
+      ]
+    },
+    "condition": {
+      "oneOf": [
+        {"type": "object", "required": ["kind", "package"], "properties": {"kind": {"enum": ["resolved-from-hackage", "resolved-from-git"]}, "package": {"type": "string"}}},
+        {"type": "object", "required": ["kind", "package", "version"], "properties": {"kind": {"const": "version-below"}, "package": {"type": "string"}, "version": {"type": "string"}}},
+        {"type": "object", "required": ["kind", "package", "revision"], "properties": {"kind": {"const": "revision-is"}, "package": {"type": "string"}, "revision": {"type": "string"}}}
+      ]
+    }
   }
 }

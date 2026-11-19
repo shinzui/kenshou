@@ -27,9 +27,9 @@ import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
-import Data.Version (Version, parseVersion, showVersion)
+import Data.Version (Version, showVersion)
+import Kenshou.Core.Scenario (parseScopeVersion)
 import Okf.Document (OKFDocument (..), frontmatterLookup, parseDocument)
-import Text.ParserCombinators.ReadP (readP_to_S)
 
 -- | A kind of owner record: the OKF @type@ a concept must have, and the
 -- frontmatter key that holds its handle.
@@ -52,16 +52,17 @@ data VersionClaim
   deriving stock (Eq, Show)
 
 -- | Classify a version field's text: the two reserved words, a bare released
--- version (digits separated by dots, as 'Data.Version.parseVersion' reads them,
--- with no tags), or anything else as unparseable.
+-- version (digits separated by dots, as 'parseScopeVersion' reads them, with no
+-- tags), or anything else as unparseable. The parser is the one scope bounds are
+-- read with, so an owner's version and a scope's bound are always compared alike.
 classifyVersion :: Text -> VersionClaim
 classifyVersion "unreleased" = ClaimUnreleased
 classifyVersion "unknown" = ClaimUnknown
-classifyVersion raw = case [version | (version, "") <- readP_to_S parseVersion (Text.unpack raw)] of
-  [] -> ClaimUnparseable raw
-  versions ->
-    let version = last versions
-     in if Text.all (\character -> isDigit character || character == '.') raw && showVersion version == Text.unpack raw then ClaimReleased version raw else ClaimUnparseable raw
+classifyVersion raw = case parseScopeVersion raw of
+  Nothing -> ClaimUnparseable raw
+  Just version
+    | Text.all (\character -> isDigit character || character == '.') raw && showVersion version == Text.unpack raw -> ClaimReleased version raw
+    | otherwise -> ClaimUnparseable raw
 
 -- | The text the owner wrote, when there is any.
 versionClaimRaw :: VersionClaim -> Maybe Text

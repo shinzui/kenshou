@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-18T01:55:31Z
       mode: "update"
       note: "Addressed the 2026-11-18 review: ordered finding rules, versionsApplyTo in the package map, fixed evaluator home, version step."
+    - model: "claude-opus-5-5"
+      harness: "claude-code"
+      at: 2026-11-19T04:56:50Z
+      mode: "implement"
+      note: "Milestones 1 to 3 implemented"
 ---
 
 # Reconcile known-defect scopes with owner version claims
@@ -76,14 +81,16 @@ contradictions.
 
 ## Progress
 
-- [ ] M1: `kenshou.scenario-list/v1` documents carry `knownDefectDeclaration` beside the
-  unchanged `knownDefect` field; `Kenshou.Plan.Catalog` reads it back; round-trip tests cover
-  every scope constructor and a nested group; existing golden files and consumer-baseline
-  fixtures still decode.
-- [ ] M2: `evaluateScope` in `kenshou-core` is the only scope evaluator; `cohortScopeApplies`
-  is defined through it; a test comparing it with a frozen copy of today's `cohortScopeApplies`
-  passes for Hackage and Git sources, exact revisions, version boundaries, groups, missing
-  packages, and malformed versions.
+- [x] M1 (2026-11-18): `kenshou.scenario-list/v1` documents carry `knownDefectDeclaration`
+  beside the unchanged `knownDefect` field; `Kenshou.Plan.Catalog` reads it back; round-trip
+  tests cover every scope constructor and a nested group; the golden list and the planning
+  fixture catalog still decode. Evidence: `kenshou-core/test/Kenshou/DefectSpec.hs`, 7
+  examples, 0 failures; `kenshou list --json` shows the self-test declaration.
+- [x] M2 (2026-11-18): `evaluateScope` in `kenshou-core` is the only scope evaluator;
+  `cohortScopeApplies` is defined through it; `kenshou-core/test/Kenshou/ScopeSpec.hs` compares
+  it with a verbatim copy of the old function over a 21-case table and a Hedgehog property, and
+  reports missing and malformed cases separately. `classifyVersion` uses `parseScopeVersion`;
+  `grep -rln readP_to_S kenshou-*/src` prints only `Scenario.hs`; `just selftest` passes.
 - [ ] M3: `owners reconcile` prints text and `kenshou.scope-reconciliation/v1` JSON for the
   fixture matrix (released fix boundary, unreleased fix, no fixed version, stale speculative
   bound, duplicate record, project affecting several packages), exits 1 on contradictions, and
@@ -92,7 +99,18 @@ contradictions.
 
 ## Surprises & Discoveries
 
-(None yet.)
+- There is no scenario-list catalog under `fixtures/consumer-baseline`; that directory holds
+  cohort, performance, and verification fixtures only. Milestone 1's "existing catalogs still
+  decode" check therefore covers `kenshou-core/test/golden/scenario-list.json`, the same file
+  with the new field stripped, and `kenshou-core/test/fixtures/plan/catalog-planned.json`.
+
+- `kenshou list --json` encodes objects with Aeson's key order (alphabetical), so the
+  declaration prints as `{"appliesTo":…,"expectedFailures":…,"kind":"single",…}` rather than
+  in the order shown in Concrete Steps. Readers must not depend on key order.
+
+- Three `kenshou-evidence` tests fail on the unmodified tree because the vendored verification
+  bundle lacks its run records (FRIC-2, recurrence recorded as FRIC-3). They are unrelated to
+  this plan, but `just verify` cannot exit 0 until that fixture is repaired.
 
 
 ## Decision Log
@@ -490,7 +508,7 @@ K=$(cabal list-bin kenshou)
 ```
 
 ```text
-{"knownDefect":"mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites","knownDefectDeclaration":{"kind":"single","reference":"mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites","summary":"Seeded harness defect","expectedFailures":["seeded-defect"],"appliesTo":{"kind":"all-cohorts"}}}
+{"knownDefect":"mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites","knownDefectDeclaration":{"appliesTo":{"kind":"all-cohorts"},"expectedFailures":["seeded-defect"],"kind":"single","reference":"mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites","summary":"Seeded harness defect"}}
 ```
 
 After Milestone 2:

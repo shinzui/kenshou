@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-19
+* **Addition**: FRIC-3 records slowdown environment friction with mori://shinzui/kenshou: Vendored verification bundle still lacks its run records
+
 ## 2026-11-18
 * **Addition**: FRIC-2 records detour environment friction with mori://shinzui/kenshou: Vendored verification bundle lacks its run records
 

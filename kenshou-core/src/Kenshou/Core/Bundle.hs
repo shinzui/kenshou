@@ -23,7 +23,7 @@ module Kenshou.Core.Bundle
   )
 where
 
-import Data.Aeson (Value, object, toJSON, (.=))
+import Data.Aeson (Value, object, (.=))
 import Data.Foldable (toList)
 import Data.List (group, sort, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -32,6 +32,7 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Kenshou.Core.Contribution (AdvisoryLabel, OracleSpec (..), PoolMethodology, RoutingRule)
+import Kenshou.Core.Defect (defectReferencesValue, defectValue)
 import Kenshou.Core.Dimension (DimensionSupport (..), PgDurability (..), PgVersion (..), Support (..), Supported (..))
 import Kenshou.Core.Env (EnvRequirements (..), MigrationSet (..), MigrationSetName, PostgresRequirement (..), mkMigrationSetName, renderMigrationSetName)
 import Kenshou.Core.Id (Kind (..), LayerId, ScenarioId (..), renderKind, renderLayer, renderScenarioId, unSegment)
@@ -264,9 +265,7 @@ scenarioListDocumentFor scenarios roles =
           "summary" .= scenario.summary,
           "tier" .= renderTier scenario.tier,
           "placement" .= renderPlacement scenario.placement,
-          "knownDefect" .= fmap defectReferences scenario.knownDefect
+          "knownDefect" .= fmap defectReferencesValue scenario.knownDefect,
+          "knownDefectDeclaration" .= fmap defectValue scenario.knownDefect
         ]
     roleValue role = object ["name" .= renderRoleName role.name, "summary" .= role.summary]
-    defectReferences defect = case individualKnownDefects defect of
-      [single] -> toJSON single.reference
-      many -> toJSON (fmap (.reference) many)
