@@ -1,0 +1,23 @@
+{
+  "schema": "kenshou.owner-findings/v1",
+  "findings": [
+    {
+      "id": "RECONCILE-FIXTURE",
+      "title": "Every record the reconciliation fixture catalog cites",
+      "references": [
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-4",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-404",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-6",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-7",
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-8",
+        "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+        "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3",
+        "mori://fixture/owner-d/okf/bug-reports/concepts/BUG-1"
+      ]
+    }
+  ]
+}

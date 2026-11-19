@@ -91,10 +91,13 @@ contradictions.
   it with a verbatim copy of the old function over a 21-case table and a Hedgehog property, and
   reports missing and malformed cases separately. `classifyVersion` uses `parseScopeVersion`;
   `grep -rln readP_to_S kenshou-*/src` prints only `Scenario.hs`; `just selftest` passes.
-- [ ] M3: `owners reconcile` prints text and `kenshou.scope-reconciliation/v1` JSON for the
-  fixture matrix (released fix boundary, unreleased fix, no fixed version, stale speculative
-  bound, duplicate record, project affecting several packages), exits 1 on contradictions, and
-  leaves every input file byte-identical; `just verify` passes.
+- [x] M3 (2026-11-18): `owners reconcile` prints text and `kenshou.scope-reconciliation/v1`
+  JSON for the fixture matrix under `kenshou-evidence/test/fixtures/reconcile/` (24 scenarios,
+  26 findings: 9 contradictions, 12 warnings, 5 consistent), exits 1 on contradictions and 0
+  once they are removed, and leaves every input file byte-identical. Evidence:
+  `ReconcileSpec` 9 examples and `owners command` 4 examples, 0 failures; the property test
+  passes 100 generated cases. `just verify` runs every recipe; the only failures are the three
+  pre-existing `kenshou-evidence` tests of FRIC-2 (see Surprises & Discoveries).
 
 
 ## Surprises & Discoveries
@@ -111,6 +114,23 @@ contradictions.
 - Three `kenshou-evidence` tests fail on the unmodified tree because the vendored verification
   bundle lacks its run records (FRIC-2, recurrence recorded as FRIC-3). They are unrelated to
   this plan, but `just verify` cannot exit 0 until that fixture is repaired.
+
+- `suiteVersion` (`Kenshou.Core.Version`) is kenshou-core's cabal version, and it is a field
+  of comparison and series keys (`Kenshou.Core.Compat`). The planned 0.1.1.0 step therefore
+  makes runs made after this plan non-comparable with runs made with 0.1.0.0. That is the
+  compatibility rule working as designed, so the step stands; the kenshou-core CHANGELOG says
+  so. A consumer comparing against older baselines must re-record them.
+
+- With `DuplicateRecordFields`, a record update of a field shared by two types in scope is
+  ambiguous, so `Reconcile.hs` rebuilds `Verdict` and `KnownDefect` values explicitly rather
+  than using update syntax. The scenario identifiers in tests must be valid segments; digits
+  in a name segment such as `defect-bug-1` are rejected by `parseScenarioId`.
+
+- Cabal rejects `extra-source-files` wildcards without an extension (`invalid file glob
+  'test/fixtures/reconcile/snapshot/records/*'`), and snapshot record files are named by their
+  bare SHA-256. `kenshou-evidence.cabal` therefore lists each record file explicitly; a
+  regenerated fixture snapshot must update that list. `cabal build` does not report the bad
+  glob; `cabal sdist` does.
 
 
 ## Decision Log
@@ -196,9 +216,50 @@ contradictions.
   Date: 2026-11-18
 
 
+- Decision: `ScopeFinding` carries, beyond the fields listed in Interfaces and Dependencies,
+  `snapshot`, `ownerStatus`, `ownerFixedVersion`, `package`, `primary`, and `notes`. `current`
+  and `proposed` are the individual defect (not the whole group) with its present and proposed
+  scope. `conditionPackage` is exported from `Kenshou.Core.Scenario`.
+  Rationale: The text and JSON reports must show the owner's raw claim, the compared package,
+  and the snapshot digest per finding, and the `fixed-version-without-fixed-status` remark
+  needs a machine-readable home; a finding is about one individual defect, so its proposal is
+  that defect's corrected declaration.
+  Date: 2026-11-18
+
+- Decision: A `reference`-keyed package-map entry is looked up first for the cited reference,
+  then for its canonical record, and only then is the canonical record's `affects` used. When
+  a scope has several bounds for the compared package, a proposal replaces them with one bound
+  at the position of the first. Removing the last condition of a scope yields `all-cohorts`.
+  Rationale: An alias may need its own mapping; collapsing redundant bounds keeps the proposal
+  equal in meaning to "the bound is V".
+  Date: 2026-11-18
+
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+All three milestones are implemented. `kenshou list --json` and the planning catalog carry
+complete declarations beside the unchanged reference field; `evaluateScope` is the only scope
+evaluator and agrees with a frozen copy of the old one on a 21-case table and generated
+cohorts; `owners reconcile` produces one primary finding per individual defect, proposes only
+the two permitted corrections, exits 1 on contradictions, and writes nothing. The design held:
+the ordered rule list made the fixture expectations and the property test straightforward to
+state, and no rule needed changing once implemented.
+
+What remains outside this plan: `just verify` still fails on the three FRIC-2 tests until the
+vendored verification bundle's run records are restored, and IR-3 stays `in-progress` until
+the consumer's integration
+(`mori://shinzui/keiro-runtime-kenshou/plans/21-reconcile-known-defect-cohort-scopes-with-owner-records`)
+confirms it. Plan 10 can now convert evidence components to `ScopePackage` and reuse
+`PackageMap`, `ownerPackages`, and `choosePackage`.
+
+Friction recorded under this plan: FRIC-3 in `docs/friction-log/` (the FRIC-2 evidence
+failures recurred) is left `logged`: it is a second occurrence of FRIC-2's cause, not a
+duplicate, and the remedy, restoring the vendored bundle's run records from the consumer
+repository, is not decided here. Its recurrence across plans 8 and 9 is the case for promoting
+the cause to a bug report.
+
+ADR distillation: ADR-22 records the single evaluator and proposals-only reconciliation. The
+`suiteVersion` consequence of a kenshou-core version step is recorded in the kenshou-core
+CHANGELOG; it follows from the existing compatibility rule rather than a new decision.
 
 
 ## Context and Orientation
@@ -528,14 +589,14 @@ The output contains blocks of this shape and ends with the counts and exit code:
 
 ```text
 consumer/table/correctness/lease-release
-  owner     mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2  (status=fixed, fixedVersion=1.3.0)
+  owner     mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1  (status=fixed, fixedVersion=1.3.0)
   finding   bound-above-fixed-version  [contradiction]
-  current   version-below fixture-store 1.4.0
-  proposed  version-below fixture-store 1.3.0
-  because   the owner records the fix in released version 1.3.0
+  current   resolved-from-hackage fixture-store, version-below fixture-store 1.4.0
+  proposed  resolved-from-hackage fixture-store, version-below fixture-store 1.3.0
+  because   the owner records the fix in released version 1.3.0, but the bound 1.4.0 also excuses failures from 1.3.0 up to 1.4.0
   source    consumer/src/Lease.hs:41
 
-4 contradictions, 5 warnings
+9 contradictions, 12 warnings
 exit=1
 ```
 

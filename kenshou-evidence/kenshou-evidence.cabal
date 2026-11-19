@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kenshou-evidence
-version: 0.1.1.0
+version: 0.1.2.0
 synopsis: Historic verification records and durable object storage
 description: Evidence types and storage boundaries for Kenshou run records.
 license: BSD-3-Clause
@@ -21,6 +21,22 @@ extra-source-files:
   test/fixtures/owners/owner-a/bug-reports/*.md
   test/fixtures/owners/owner-b/bug-reports/*.md
   test/fixtures/profile-invalid/*.json
+  test/fixtures/reconcile/*.json
+  test/fixtures/reconcile/owners/owner-a/bug-reports/*.md
+  test/fixtures/reconcile/owners/owner-b/bug-reports/*.md
+  test/fixtures/reconcile/owners/owner-d/bug-reports/*.md
+  test/fixtures/reconcile/snapshot/records/164a1c744b2bef638226ce44ad3a61bd6704678f7fbafca6fe319b2feffa3ebd
+  test/fixtures/reconcile/snapshot/records/765e3f5368b24ad8c6b3b390398b007ca66cb47df817c2c8b6687876a98da4fc
+  test/fixtures/reconcile/snapshot/records/8a4ca3cbc74e8ed7c6783e06a785bbc5dfc2a263c1272e560f1ba85305bcfc3b
+  test/fixtures/reconcile/snapshot/records/8f1960653afcd84f973a172685aa9a6067f8ca0f0e1897ecdb0dcf31d0ccf2d2
+  test/fixtures/reconcile/snapshot/records/a0eb863f03573405833f41098ed9896f47165efebe6ab4d934469457ee46f6cd
+  test/fixtures/reconcile/snapshot/records/bcf4faf512e1bff0c04d37a30a9c888ed347ca514bcfc12fd08324a6fa912d40
+  test/fixtures/reconcile/snapshot/records/c3b5d0e38026bb78a0c49695d0108b51d7c535ce65926c3253bcd2d84cc030eb
+  test/fixtures/reconcile/snapshot/records/e45e1d47d8901c30b7ac524faea0180c3fb8d2765932367ff591462ca2e486f8
+  test/fixtures/reconcile/snapshot/records/ec946fc793e4861717ccb282d9ea0260cf2c64b506ce96515bb77d553b1daa1f
+  test/fixtures/reconcile/snapshot/records/f0d1088d68b4cb3a453910c7abe5d4cb0810203506aae50ba3034bc3382b88e8
+  test/fixtures/reconcile/snapshot/records/fca589e186bd40d17868db176d5d2c488f982a579a75a0bd5651ff1045072b77
+  test/fixtures/reconcile/snapshot/snapshot.json
 
 common warnings
   ghc-options:
@@ -55,6 +71,7 @@ library
     Kenshou.Evidence.HistoryCli
     Kenshou.Evidence.Owner
     Kenshou.Evidence.Owner.Cli
+    Kenshou.Evidence.Owner.Reconcile
     Kenshou.Evidence.Owner.Record
     Kenshou.Evidence.Owner.Resolver
     Kenshou.Evidence.Owner.Snapshot
@@ -71,7 +88,7 @@ library
     containers >=0.7 && <0.8,
     directory >=1.3 && <1.4,
     filepath >=1.5 && <1.6,
-    kenshou-core ^>=0.1.0.0,
+    kenshou-core ^>=0.1.1.0,
     kenshou-remote ^>=0.1.0.0,
     okf-core ^>=0.9.0.0,
     optparse-applicative >=0.19 && <0.20,
@@ -91,7 +108,10 @@ test-suite kenshou-evidence-test
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   main-is: Main.hs
-  other-modules: OwnerSpec
+  other-modules:
+    OwnerSpec
+    ReconcileSpec
+
   build-depends:
     aeson,
     base >=4.21 && <4.22,
@@ -99,8 +119,10 @@ test-suite kenshou-evidence-test
     containers,
     directory >=1.3 && <1.4,
     filepath,
+    hedgehog >=1.4 && <1.8,
     hspec >=2.11 && <2.12,
-    kenshou-core ^>=0.1.0.0,
+    hspec-hedgehog >=0.0 && <0.4,
+    kenshou-core ^>=0.1.1.0,
     kenshou-evidence,
     kenshou-remote ^>=0.1.0.0,
     okf-core,

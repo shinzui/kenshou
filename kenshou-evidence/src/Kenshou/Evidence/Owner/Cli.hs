@@ -1,5 +1,6 @@
 -- | The @owners@ command: report what owners claim about the records that
--- registered scenarios and a consumer's findings cite, live or from a snapshot.
+-- registered scenarios and a consumer's findings cite, live or from a snapshot,
+-- and reconcile known-defect scopes with those claims.
 --
 -- A consumer that needs its own sources, resolver, record kinds, or enrichments
 -- replaces the standard command with 'ownersCommandWith'.
@@ -13,21 +14,26 @@ module Kenshou.Evidence.Owner.Cli
   )
 where
 
-import Control.Exception (SomeException, displayException, try)
+import Control.Exception (IOException, SomeException, displayException, try)
 import Control.Monad (forM, forM_)
 import Data.Aeson (encode)
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as ByteString
 import Data.ByteString.Lazy.Char8 qualified as LazyByteString
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Time (getCurrentTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
+import Kenshou.Core.Bundle (allScenarios)
 import Kenshou.Core.Cli (CliCommand (..), CliEnv (..), CliGroup (Analysis))
 import Kenshou.Core.Id (renderScenarioId)
 import Kenshou.Evidence.Owner
+import Kenshou.Evidence.Owner.Reconcile (ScopeFinding (..), Severity (..), decodePackageMap, reconcileScopes, reconciliationValue, renderReconciliationText)
 import Kenshou.Evidence.Owner.Record (reasonCode, reasonMessage, versionClaimRaw, versionClaimState)
 import Kenshou.Evidence.Owner.Resolver (chainResolvers, mappedResolver, moriResolver, withGitProvenance)
 import Kenshou.Evidence.Owner.Snapshot (SnapshotError (..), readSnapshot, writeSnapshot)
+import Kenshou.Plan.Catalog (decodeCatalog, fromScenario)
 import Options.Applicative
 import System.Directory (doesPathExist)
 import System.Exit (ExitCode (..))
@@ -65,6 +71,7 @@ ownersCommandWith config =
         subparser
           ( command "status" (info (statusHandler config <$> statusParser <**> helper) (progDesc "Report every cited owner record, live or from a snapshot"))
               <> command "snapshot" (info (snapshotHandler config <$> snapshotParser <**> helper) (progDesc "Freeze the owner records' bytes into a new directory"))
+              <> command "reconcile" (info (reconcileHandler <$> reconcileParser <**> helper) (progDesc "Compare known-defect scopes with a snapshot's owner version claims and propose corrections"))
           )
     }
 
@@ -95,6 +102,21 @@ statusParser =
     <$> liveParser
     <*> optional (strOption (long "snapshot" <> metavar "DIR" <> help "Report from a snapshot instead of reading the owners' files"))
     <*> switch (long "json" <> help "Emit kenshou.owner-status/v1 JSON")
+
+data ReconcileOptions = ReconcileOptions
+  { snapshot :: FilePath,
+    packageMap :: FilePath,
+    catalog :: Maybe FilePath,
+    json :: Bool
+  }
+
+reconcileParser :: Parser ReconcileOptions
+reconcileParser =
+  ReconcileOptions
+    <$> strOption (long "snapshot" <> metavar "DIR" <> help "The owner snapshot whose claims scopes are compared with")
+    <*> strOption (long "package-map" <> metavar "FILE" <> help "A kenshou.owner-package-map/v1 file naming each owner's packages")
+    <*> optional (strOption (long "catalog" <> metavar "FILE" <> help "A kenshou.scenario-list/v1 catalog; defaults to the registered scenarios"))
+    <*> switch (long "json" <> help "Emit kenshou.scope-reconciliation/v1 JSON")
 
 snapshotParser :: Parser SnapshotOptions
 snapshotParser = SnapshotOptions <$> liveParser <*> strOption (long "out" <> metavar "DIR" <> help "Directory to create; must not exist")
@@ -144,6 +166,43 @@ snapshotHandler config options environment = do
               pure ExitSuccess
   where
     refuse = usage "kenshou owners snapshot: refusing to overwrite an existing snapshot"
+
+-- | Read the snapshot, package map, and catalog, print the findings, and exit 1
+-- when any finding is a contradiction. Every input is only read.
+reconcileHandler :: ReconcileOptions -> CliEnv -> IO ExitCode
+reconcileHandler options environment = do
+  loaded <- load
+  case loaded of
+    Left message -> failure ("kenshou owners reconcile: " <> message)
+    Right (status, packageMap, scenarios) -> do
+      let findings = reconcileScopes status packageMap scenarios
+      if options.json
+        then LazyByteString.putStrLn (encode (reconciliationValue status findings))
+        else Text.IO.putStr (renderReconciliationText status findings)
+      forM_ [finding | finding <- findings, finding.severity == Warning] \finding ->
+        Text.IO.hPutStrLn stderr ("kenshou owners reconcile: warning: " <> renderScenarioId finding.scenario <> ": " <> finding.code <> ": " <> finding.rationale)
+      pure (if any ((== Contradiction) . (.severity)) findings then ExitFailure 1 else ExitSuccess)
+  where
+    load = do
+      snapshotRead <- try (readSnapshot options.snapshot) :: IO (Either SomeException (Either Text OwnerStatus))
+      case either (Left . Text.pack . displayException) id snapshotRead of
+        Left message -> pure (Left message)
+        Right status ->
+          readInput options.packageMap >>= \case
+            Left message -> pure (Left message)
+            Right bytes -> case decodePackageMap bytes of
+              Left message -> pure (Left (Text.pack options.packageMap <> ": " <> message))
+              Right packageMap -> case options.catalog of
+                Nothing -> pure (Right (status, packageMap, fmap fromScenario (allScenarios environment.registry)))
+                Just path ->
+                  readInput path >>= \case
+                    Left message -> pure (Left message)
+                    Right catalogBytes -> pure case decodeCatalog catalogBytes of
+                      Left message -> Left (Text.pack path <> ": " <> message)
+                      Right scenarios -> Right (status, packageMap, scenarios)
+    readInput path = do
+      result <- try (ByteString.readFile path) :: IO (Either IOException ByteString)
+      pure (either (\problem -> Left ("cannot read " <> Text.pack path <> ": " <> Text.pack (displayException problem))) Right result)
 
 data Observation = Observation
   { kinds :: [RecordKind],

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.scope-reconciliation.v1.schema.json",
+  "title": "Known-defect scopes reconciled with owner version claims",
+  "type": "object",
+  "required": ["schema", "snapshot", "observedAt", "counts", "findings"],
+  "properties": {
+    "schema": {"const": "kenshou.scope-reconciliation/v1"},
+    "snapshot": {"type": ["string", "null"]},
+    "observedAt": {"type": "string"},
+    "counts": {
+      "type": "object",
+      "required": ["contradictions", "warnings", "consistent"],
+      "properties": {
+        "contradictions": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "consistent": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario", "reference", "canonical", "snapshot", "owner", "package", "code", "severity", "primary", "current", "proposed", "rationale", "notes", "location"],
+        "properties": {
+          "scenario": {"type": "string"},
+          "reference": {"type": "string"},
+          "canonical": {"type": ["string", "null"]},
+          "snapshot": {"type": ["string", "null"]},
+          "owner": {
+            "type": "object",
+            "required": ["status", "fixedVersion"],
+            "properties": {
+              "status": {"type": ["string", "null"]},
+              "fixedVersion": {
+                "type": "object",
+                "required": ["raw", "state"],
+                "properties": {
+                  "raw": {"type": ["string", "null"]},
+                  "state": {"enum": ["absent", "unreleased", "unknown", "released", "unparseable", "malformed"]}
+                }
+              }
+            }
+          },
+          "package": {"type": ["string", "null"]},
+          "code": {
+            "enum": [
+              "consistent",
+              "no-owner-claim",
+              "unmapped-owner",
+              "ambiguous-package-mapping",
+              "unsupported-claim",
+              "speculative-bound",
+              "fix-unreleased",
+              "owner-version-not-package-version",
+              "missing-upper-bound",
+              "bound-above-fixed-version",
+              "bound-below-fixed-version",
+              "scope-package-not-mapped"
+            ]
+          },
+          "severity": {"enum": ["contradiction", "warning", null]},
+          "primary": {"type": "boolean"},
+          "current": {"$ref": "scenario-list-v1.schema.json#/$defs/defect"},
+          "proposed": {"oneOf": [{"type": "null"}, {"$ref": "scenario-list-v1.schema.json#/$defs/defect"}]},
+          "rationale": {"type": "string"},
+          "notes": {"type": "array", "items": {"type": "string"}},
+          "location": {
+            "oneOf": [
+              {"type": "null"},
+              {"type": "object", "required": ["path", "line"], "properties": {"path": {"type": "string"}, "line": {"type": ["integer", "null"]}}}
+            ]
+          }
+        }
+      }
+    }
+  }
+}

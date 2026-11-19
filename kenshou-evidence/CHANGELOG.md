@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2.0 - 2026-11-19
+
+### New Features
+
+- `Kenshou.Evidence.Owner.Reconcile` compares each known defect's cohort scope with the version claims of the owner record it cites. `reconcileScopes` gives each individual defect exactly one primary finding from an ordered rule list, proposes only a `version-below` bound at the owner's released fixed version or the removal of an unsupported bound, and never changes labels, source conditions, or revisions. It reads the consumer's `kenshou.owner-package-map/v1` (`decodePackageMap`, `ownerPackages`, `choosePackage`) and encodes `kenshou.scope-reconciliation/v1`.
+- The `owners` command has a `reconcile` subcommand: `--snapshot DIR` and `--package-map FILE` are required, `--catalog FILE` replaces the registered scenarios, and `--json` prints the versioned report. It exits 1 when a finding is a contradiction and writes nothing.
+
+### Other Changes
+
+- Owner version claims are classified with `Kenshou.Core.Scenario.parseScopeVersion`, the parser scope bounds use; the classification is unchanged.
+- Requires `kenshou-core` 0.1.1.0.
+
 ## 0.1.1.0 - 2026-11-18
 
 ### New Features

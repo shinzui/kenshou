@@ -22,6 +22,8 @@ the meaning of a published `v1` document.
 | Owner findings | `kenshou.owner-findings/v1` | `Kenshou.Evidence.Owner` |
 | Owner status | `kenshou.owner-status/v1` | `Kenshou.Evidence.Owner` |
 | Owner snapshot index | `kenshou.owner-snapshot/v1` | `Kenshou.Evidence.Owner.Snapshot` |
+| Owner package map | `kenshou.owner-package-map/v1` | `Kenshou.Evidence.Owner.Reconcile` |
+| Scope reconciliation | `kenshou.scope-reconciliation/v1` | `Kenshou.Evidence.Owner.Reconcile` |
 
 Run `just schemas-check` to validate the checked-in goldens and fresh CLI
 documents.

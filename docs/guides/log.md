@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-19
+* **Update**: Added a section on reconciling known-defect scopes with owners reconcile and a package map to DOC-1.
+
 ## 2026-11-18
 * **Update**: Added a section on reporting owner records with owners status, snapshots, and OwnerConfig to DOC-1.
 

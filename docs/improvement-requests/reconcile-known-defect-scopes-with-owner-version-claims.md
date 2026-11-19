@@ -6,7 +6,8 @@ generated:
   by: "codex/gpt-6.1-sol"
   at: "2026-11-17T15:52:19Z"
 requestId: IR-3
-status: proposed
+status: in-progress
+targetPlan: docs/plans/9-reconcile-known-defect-scopes-with-owner-version-claims.md
 origin: mori://shinzui/keiro-runtime-kenshou/masterplans/2-close-the-verification-and-repair-loop-for-the-keiro-runtime-in-rounds
 dependencies:
   - ref: mori://shinzui/kenshou/okf/improvement-requests/concepts/IR-2

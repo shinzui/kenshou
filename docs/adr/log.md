@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-19
+* **Addition**: Recorded the single known-defect scope evaluator and reconciliation that only proposes corrections from an explicit consumer package map (ADR-22).
+
 ## 2026-11-18
 * **Addition**: Recorded owner-record resolution in kenshou-evidence with read-only reports, relative provenance, and create-once replayable snapshots (ADR-21).
 

@@ -1,0 +1,216 @@
+{
+  "citations": [
+    {
+      "labels": [
+        "seeded-defect"
+      ],
+      "reference": "mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites",
+      "scenario": "selftest/kernel/correctness/known-defect"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-4"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-404"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-6"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-7"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-8"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3"
+    },
+    {
+      "finding": "RECONCILE-FIXTURE",
+      "reference": "mori://fixture/owner-d/okf/bug-reports/concepts/BUG-1"
+    }
+  ],
+  "observedAt": "2026-11-19T05:02:42.454876Z",
+  "recordKinds": [
+    {
+      "handleField": "bugId",
+      "type": "Bug Report"
+    },
+    {
+      "handleField": "requestId",
+      "type": "Improvement Request"
+    }
+  ],
+  "references": [
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "source": {
+        "dirty": null,
+        "location": "lease-not-released.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:f0d1088d68b4cb3a453910c7abe5d4cb0810203506aae50ba3034bc3382b88e8"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "source": {
+        "dirty": null,
+        "location": "flush-reordered.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:164a1c744b2bef638226ce44ad3a61bd6704678f7fbafca6fe319b2feffa3ebd"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3",
+      "source": {
+        "dirty": null,
+        "location": "scan-stalls.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:ec946fc793e4861717ccb282d9ea0260cf2c64b506ce96515bb77d553b1daa1f"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-4",
+      "source": {
+        "dirty": null,
+        "location": "reader-skips-tail.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:a0eb863f03573405833f41098ed9896f47165efebe6ab4d934469457ee46f6cd"
+      }
+    },
+    {
+      "answer": "not-found",
+      "links": [],
+      "message": "no record in the mapped bundle carries the handle BUG-404",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-404"
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5",
+      "source": {
+        "dirty": null,
+        "location": "checkpoint-lost.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:8f1960653afcd84f973a172685aa9a6067f8ca0f0e1897ecdb0dcf31d0ccf2d2"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-6",
+      "source": {
+        "dirty": null,
+        "location": "cancelled-write-keeps-lease.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:fca589e186bd40d17868db176d5d2c488f982a579a75a0bd5651ff1045072b77"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-7",
+      "source": {
+        "dirty": null,
+        "location": "compaction-drops-tombstones.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:8a4ca3cbc74e8ed7c6783e06a785bbc5dfc2a263c1272e560f1ba85305bcfc3b"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-8",
+      "source": {
+        "dirty": null,
+        "location": "retry-storm.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:c3b5d0e38026bb78a0c49695d0108b51d7c535ce65926c3253bcd2d84cc030eb"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "source": {
+        "dirty": null,
+        "location": "writer-stalls.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:765e3f5368b24ad8c6b3b390398b007ca66cb47df817c2c8b6687876a98da4fc"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3",
+      "source": {
+        "dirty": null,
+        "location": "client-drops-acks.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:bcf4faf512e1bff0c04d37a30a9c888ed347ca514bcfc12fd08324a6fa912d40"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-d/okf/bug-reports/concepts/BUG-1",
+      "source": {
+        "dirty": null,
+        "location": "metrics-double-count.md",
+        "resolver": "mapped",
+        "revision": null,
+        "sha256": "sha256:e45e1d47d8901c30b7ac524faea0180c3fb8d2765932367ff591462ca2e486f8"
+      }
+    },
+    {
+      "answer": "not-asked",
+      "links": [],
+      "reference": "mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites"
+    }
+  ],
+  "schema": "kenshou.owner-snapshot/v1"
+}

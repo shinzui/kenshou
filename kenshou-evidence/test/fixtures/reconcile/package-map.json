@@ -1,0 +1,47 @@
+{
+  "schema": "kenshou.owner-package-map/v1",
+  "owners": [
+    {
+      "affects": "mori://fixture/owner-a",
+      "packages": [
+        "fixture-store"
+      ],
+      "versionsApplyTo": [
+        "fixture-store"
+      ]
+    },
+    {
+      "affects": "mori://fixture/owner-b",
+      "packages": [
+        "fixture-queue",
+        "fixture-queue-client"
+      ],
+      "versionsApplyTo": [
+        "fixture-queue"
+      ]
+    },
+    {
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3",
+      "packages": [
+        "fixture-queue-client"
+      ],
+      "versionsApplyTo": []
+    }
+  ],
+  "sources": [
+    {
+      "scenario": "consumer/table/correctness/lease-release",
+      "path": "consumer/src/Lease.hs",
+      "line": 41
+    },
+    {
+      "scenario": "consumer/table/correctness/released-fix-no-bound",
+      "path": "consumer/src/Lease.hs",
+      "line": 58
+    },
+    {
+      "scenario": "consumer/table/correctness/several-packages-chosen",
+      "path": "consumer/src/Queue.hs"
+    }
+  ]
+}

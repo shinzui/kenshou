@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-19
+* **Update**: IR-3 is in progress under docs/plans/9-reconcile-known-defect-scopes-with-owner-version-claims.md; complete declarations in the catalog, the single scope evaluator, and owners reconcile are implemented.
+
 ## 2026-11-18
 * **Update**: IR-2 is in progress under docs/plans/8-resolve-owner-records-through-consumer-supplied-sources.md; the owners command and its library are implemented.
 

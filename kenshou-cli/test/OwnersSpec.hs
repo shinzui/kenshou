@@ -4,7 +4,7 @@
 module OwnersSpec (spec) where
 
 import Control.Exception (finally)
-import Control.Monad (forM)
+import Control.Monad (forM, forM_)
 import Data.Aeson (Value (..))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
@@ -23,11 +23,12 @@ import Kenshou.Cli (Program (..), runWithArgsWith, selfTestAssembly, withCommand
 import Kenshou.Core.Bundle (LayerBundle, mkBundle)
 import Kenshou.Core.Canonical (sha256Hex)
 import Kenshou.Core.Cli (CliCommand (..))
+import Kenshou.Core.Defect (defectValue)
 import Kenshou.Core.Dimension (noDimensions)
 import Kenshou.Core.Env (noEnvironment)
 import Kenshou.Core.Id (mkLayerId, parseScenarioId)
 import Kenshou.Core.Phase (zeroPhases)
-import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), Placement (..), Scenario (..), Tier (..), passed)
+import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), PackageCondition (..), Placement (..), Scenario (..), Tier (..), passed)
 import Kenshou.Evidence.Owner (Citer (..), OwnerCitation (..), OwnerEntry (..), OwnerLink (..), OwnerRecord (..), OwnerResolver, OwnerSource (..), RecordKind (..))
 import Kenshou.Evidence.Owner.Cli (OwnerConfig (..), OwnerEnrichment (..), defaultOwnerConfig, ownersCommandWith)
 import Kenshou.Evidence.Owner.Resolver (memoryResolver)
@@ -99,6 +100,59 @@ spec = describe "owners command" do
       ByteString.appendFile (snapshot </> "records" </> record) "changed\n"
       fst <$> quietly (runOwners ["owners", "status", "--snapshot", snapshot]) `shouldReturn` ExitFailure 4
 
+  it "reconciles scopes read-only, exits 1 on a contradiction and 0 once it is removed" $
+    withSystemTempDirectory "kenshou-owners-reconcile" \root -> do
+      let bundle = root </> "owner-x" </> "bug-reports"
+          findings = root </> "findings.json"
+          snapshot = root </> "snapshot"
+          catalog = root </> "catalog.json"
+          packageMap = root </> "package-map.json"
+          reconcile extra = quietly (runOwners (["owners", "reconcile", "--snapshot", snapshot, "--catalog", catalog, "--package-map", packageMap] <> extra))
+          stale = catalogScenario "consumer/table/correctness/writer-stall" (ownerX "BUG-1") (OnlyWhen (ResolvedFromHackage "fixture-writer" :| [VersionBelow "fixture-writer" "2.1.0"]))
+          agreeing = catalogScenario "consumer/table/correctness/writer-ok" (ownerX "BUG-1") (OnlyWhen (VersionBelow "fixture-writer" "2.0.0" :| []))
+          open = catalogScenario "consumer/table/correctness/slow-scan" (ownerX "BUG-3") AllCohorts
+      createDirectoryIfMissing True bundle
+      writeBugReport (bundle </> "writer-stall.md") "BUG-1" "fixed" ["affects: mori://fixture/owner-x", "fixedVersion: 2.0.0"]
+      writeBugReport (bundle </> "slow-scan.md") "BUG-3" "confirmed" ["affects: mori://fixture/owner-x"]
+      ByteString.writeFile findings (findingsDocument [("F-1", [ownerX "BUG-1", ownerX "BUG-3"])])
+      fst <$> quietly (runOwners ["owners", "snapshot", "--out", snapshot, "--no-git-provenance", "--findings", findings, "--map", "mori://fixture/owner-x/okf/bug-reports=" <> bundle]) `shouldReturn` ExitSuccess
+      ByteString.writeFile packageMap (packageMapDocument [Aeson.object ["affects" Aeson..= ("mori://fixture/owner-x" :: Text), "packages" Aeson..= ["fixture-writer" :: Text], "versionsApplyTo" Aeson..= ["fixture-writer" :: Text]]])
+      ByteString.writeFile catalog (catalogDocument [stale, agreeing, open])
+      unchanged <- digests root
+      (code, text) <- reconcile []
+      code `shouldBe` ExitFailure 1
+      let report = Text.Encoding.decodeUtf8 text
+      report `shouldSatisfy` Text.isInfixOf "finding   bound-above-fixed-version  [contradiction]"
+      report `shouldSatisfy` Text.isInfixOf "proposed  resolved-from-hackage fixture-writer, version-below fixture-writer 2.0.0"
+      report `shouldSatisfy` Text.isInfixOf "source    consumer/src/Writer.hs:12"
+      report `shouldSatisfy` Text.isInfixOf "1 contradiction, 0 warnings"
+      (jsonCode, json) <- reconcile ["--json"]
+      jsonCode `shouldBe` ExitFailure 1
+      document <- decodeValue json
+      field "schema" document `shouldBe` String "kenshou.scope-reconciliation/v1"
+      let digest = field "snapshot" document
+          contradicting = [finding | finding <- toArray (field "findings" document), field "severity" finding == String "contradiction"]
+      digest `shouldSatisfy` (/= Null)
+      fmap (field "scenario") contradicting `shouldBe` [String "consumer/table/correctness/writer-stall"]
+      forM_ contradicting \finding -> do
+        field "snapshot" finding `shouldBe` digest
+        field "kind" (field "current" finding) `shouldBe` String "single"
+        field "kind" (field "proposed" finding) `shouldBe` String "single"
+        field "rationale" finding `shouldSatisfy` (/= Null)
+        field "location" finding `shouldBe` Aeson.object ["path" Aeson..= ("consumer/src/Writer.hs" :: Text), "line" Aeson..= (12 :: Int)]
+      digests root `shouldReturn` unchanged
+      ByteString.writeFile catalog (catalogDocument [agreeing, open])
+      edited <- digests root
+      fst <$> reconcile [] `shouldReturn` ExitSuccess
+      fst <$> reconcile ["--json"] `shouldReturn` ExitSuccess
+      digests root `shouldReturn` edited
+      fst <$> quietly (runOwners ["owners", "reconcile", "--snapshot", snapshot]) `shouldReturn` ExitFailure 2
+      fst <$> quietly (runOwners ["owners", "reconcile", "--snapshot", snapshot, "--package-map", root </> "absent.json"]) `shouldReturn` ExitFailure 4
+      fst <$> quietly (runOwners ["owners", "reconcile", "--snapshot", root </> "absent", "--package-map", packageMap]) `shouldReturn` ExitFailure 4
+      record : _ <- listDirectory (snapshot </> "records")
+      ByteString.appendFile (snapshot </> "records" </> record) "changed\n"
+      fst <$> reconcile [] `shouldReturn` ExitFailure 4
+
   it "assembles a consumer's own source, resolver, record kind, and enrichment without Mori" $
     withSystemTempDirectory "kenshou-owners-consumer" \root -> do
       calls <- newIORef (0 :: Int)
@@ -140,6 +194,18 @@ spec = describe "owners command" do
         replayed <- decodeValue replay
         field "links" (recordFor (ownerX "BUG-1") replayed) `shouldBe` field "links" canonical
         citers (recordFor (ownerX "BUG-3") replayed) `shouldBe` ["T-1"]
+        -- Without --catalog, reconciliation reads the registered scenarios.
+        let packageMap = root </> "package-map.json"
+        ByteString.writeFile packageMap (packageMapDocument [Aeson.object ["reference" Aeson..= ownerX "BUG-1", "packages" Aeson..= ["fixture-store" :: Text], "versionsApplyTo" Aeson..= ["fixture-store" :: Text]]])
+        (reconcileCode, reconciled) <- quietly (runWithArgsWith program ["owners", "reconcile", "--snapshot", snapshot, "--package-map", packageMap, "--json"])
+        reconcileCode `shouldBe` ExitFailure 1
+        reconciliation <- decodeValue reconciled
+        [(field "scenario" finding, field "reference" finding, field "code" finding) | finding <- toArray (field "findings" reconciliation)]
+          `shouldBe` [ (String "consumer/table/concurrency/competing-writers", String (ownerX "BUG-2"), String "missing-upper-bound"),
+                       (String "consumer/table/concurrency/competing-writers", String (ownerY "INC-7"), String "unmapped-owner"),
+                       (String "consumer/table/correctness/lease-release", String (ownerX "BUG-1"), String "missing-upper-bound"),
+                       (String "selftest/kernel/correctness/known-defect", String "mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites", String "no-owner-claim")
+                     ]
       doesFileExist marker `shouldReturn` False
 
 ownerX :: Text -> Text
@@ -198,6 +264,30 @@ bugReportBytes handle status extra =
 
 writeBugReport :: FilePath -> Text -> Text -> [Text] -> IO ()
 writeBugReport path handle status extra = ByteString.writeFile path (bugReportBytes handle status extra)
+
+packageMapDocument :: [Value] -> ByteString
+packageMapDocument owners =
+  ByteString.toStrict . Aeson.encode $
+    Aeson.object
+      [ "schema" Aeson..= ("kenshou.owner-package-map/v1" :: Text),
+        "owners" Aeson..= owners,
+        "sources" Aeson..= [Aeson.object ["scenario" Aeson..= ("consumer/table/correctness/writer-stall" :: Text), "path" Aeson..= ("consumer/src/Writer.hs" :: Text), "line" Aeson..= (12 :: Int)]]
+      ]
+
+-- | A catalog scenario carrying a single known defect's complete declaration.
+catalogScenario :: Text -> Text -> CohortScope -> Value
+catalogScenario identifier reference scope =
+  Aeson.object
+    [ "id" Aeson..= identifier,
+      "summary" Aeson..= ("Reconciliation scenario" :: Text),
+      "knownDefect" Aeson..= reference,
+      "knownDefectDeclaration" Aeson..= defectValue KnownDefect {reference, summary = "Owner record fixture", expectedFailures = ["lease-held"], appliesTo = scope}
+    ]
+
+catalogDocument :: [Value] -> ByteString
+catalogDocument scenarios =
+  ByteString.toStrict . Aeson.encode $
+    Aeson.object ["schema" Aeson..= ("kenshou.scenario-list/v1" :: Text), "suiteVersion" Aeson..= ("0.1.0.0" :: Text), "scenarios" Aeson..= scenarios, "roles" Aeson..= ([] :: [Value])]
 
 findingsDocument :: [(Text, [Text])] -> ByteString
 findingsDocument findings =

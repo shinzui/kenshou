@@ -727,7 +727,7 @@ main = hspec do
 
   describe "version" do
     it "includes the cabal package version and a short revision" do
-      appVersionWithGit `shouldSatisfy` Text.isPrefixOf "kenshou v0.1.1.0 ("
+      appVersionWithGit `shouldSatisfy` Text.isPrefixOf "kenshou v0.1.2.0 ("
       Text.dropAround (`elem` ['(', ')']) (Text.takeWhileEnd (/= ' ') appVersionWithGit)
         `shouldSatisfy` (\revision -> revision == "dirty" || Text.length revision == 7)
 

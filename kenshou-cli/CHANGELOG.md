@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2.0 - 2026-11-19
+
+### New Features
+
+- `kenshou owners reconcile` compares known-defect scopes with a snapshot's owner version claims and prints reviewable proposals, as text or `kenshou.scope-reconciliation/v1` JSON. `kenshou help owners` describes it.
+- `kenshou list --json` includes each scenario's complete `knownDefectDeclaration`.
+
+### Other Changes
+
+- Requires `kenshou-core` 0.1.1.0 and `kenshou-evidence` 0.1.2.0.
+
 ## 0.1.1.0 - 2026-11-18
 
 ### New Features

@@ -43,6 +43,7 @@ import Kenshou.Remote.Cell.Index (CellManifestLink (CellManifestLink), CellRunIn
 import Okf.Actor (Actor (ProcessActor))
 import Okf.Document (OKFDocument (..), Verification (..), frontmatterLookup, parseDocument, readVerified, removeField, serializeDocument, setField, setVerified)
 import OwnerSpec qualified
+import ReconcileSpec qualified
 import Settei (ResolveResult (..))
 import Settei.Env (envSnapshot)
 import Settei.Optparse (DiagnosticMode (NoDiagnostic), cliOverride, cliSources)
@@ -55,6 +56,7 @@ import Test.Hspec
 main :: IO ()
 main = hspec do
   OwnerSpec.spec
+  ReconcileSpec.spec
   -- Verbatim data from the first consumer: what it has already sealed must keep
   -- decoding, and its comparison keys must not change when it adopts this release.
   describe "consumer compatibility" do

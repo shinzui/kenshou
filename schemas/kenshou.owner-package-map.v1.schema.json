@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.owner-package-map.v1.schema.json",
+  "title": "Consumer mapping from owner records to the cabal packages they affect",
+  "type": "object",
+  "required": ["schema", "owners"],
+  "properties": {
+    "schema": {"const": "kenshou.owner-package-map/v1"},
+    "owners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["packages", "versionsApplyTo"],
+        "properties": {
+          "affects": {"type": "string", "minLength": 1, "description": "An owner record's affects value; the entry applies to every record of that project."},
+          "reference": {"type": "string", "minLength": 1, "description": "One owner record's reference; overrides the entry for its affects value."},
+          "packages": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "versionsApplyTo": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "The packages, a subset of packages, whose version numbers are the ones the owner writes in its version fields."}
+        },
+        "oneOf": [{"required": ["affects"], "not": {"required": ["reference"]}}, {"required": ["reference"], "not": {"required": ["affects"]}}],
+        "additionalProperties": false
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario", "path"],
+        "properties": {
+          "scenario": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "line": {"type": "integer", "minimum": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

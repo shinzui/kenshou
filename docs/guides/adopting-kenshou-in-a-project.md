@@ -481,6 +481,53 @@ exit codes.
 [ADR-21](../adr/0021-resolve-owner-records-read-only-and-replay-them-from-snapshots.md)
 explains why the command never edits or verifies an owner's record.
 
+## Reconcile known-defect scopes
+
+A known defect's scope says on which resolved package versions its failure is
+excused. When the owner ships a fix, the scope should end at the fixed release;
+`owners reconcile` checks that for every scenario. `"$K" list --json` shows the
+complete declaration each scenario holds under `knownDefectDeclaration`.
+
+Reconciliation needs to know which of your cabal packages an owner's project
+covers, and which of them carry the project's release version numbers. Write
+that down in a `kenshou.owner-package-map/v1` file:
+
+```json
+{
+  "schema": "kenshou.owner-package-map/v1",
+  "owners": [
+    {"affects": "mori://<namespace>/<owner>", "packages": ["<owner>-store"], "versionsApplyTo": ["<owner>-store"]},
+    {"reference": "mori://<namespace>/<owner>/okf/bug-reports/concepts/BUG-3", "packages": ["<owner>-client"], "versionsApplyTo": []}
+  ],
+  "sources": [
+    {"scenario": "<layer>/<component>/correctness/<name>", "path": "src/Suite/Scenarios.hs", "line": 41}
+  ]
+}
+```
+
+An entry keyed by `reference` overrides the one for the record's `affects`
+value. `versionsApplyTo` is required, because only you know whether an owner's
+`fixedVersion` is also a version of a given package. `sources` is optional and
+lets a finding point at the line to edit. Then compare the scopes with a
+snapshot:
+
+```bash
+"$K" owners snapshot --out owner-snapshot --findings findings.json
+"$K" owners reconcile --snapshot owner-snapshot --package-map package-map.json
+```
+
+Each finding names the scenario, the owner's claim, the current scope, a
+proposed scope when there is one, and the reason. A contradiction (for example
+`bound-above-fixed-version`: the owner fixed it in 1.3.0 but the scope excuses
+failures up to 1.4.0) makes the command exit 1, so it can gate CI. Warnings such
+as `ambiguous-package-mapping` or `fix-unreleased` ask for your input and do not
+change the exit code. The command never edits your source or the owner's
+records, and never changes failure labels; apply a proposal as a reviewed edit.
+`--catalog FILE` reads the declarations from a saved `list --json` document and
+`--json` prints `kenshou.scope-reconciliation/v1`.
+[ADR-22](../adr/0022-evaluate-known-defect-scopes-once-and-propose-corrections.md)
+explains why corrections are only proposals.
+
 ## Where to read next
 
 - [The architecture decisions](../adr/index.md) record why the harness works

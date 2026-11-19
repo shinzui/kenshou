@@ -1,0 +1,726 @@
+{
+  "schema": "kenshou.scenario-list/v1",
+  "suiteVersion": "0.1.0.0",
+  "scenarios": [
+    {
+      "id": "consumer/table/correctness/released-fix-bound-correct",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "released-fix-bound-correct",
+      "revision": 1,
+      "summary": "Reconciliation fixture: released-fix-bound-correct",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for released-fix-bound-correct",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "resolved-from-hackage",
+              "package": "fixture-store"
+            },
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.3.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/lease-release",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "lease-release",
+      "revision": 1,
+      "summary": "Reconciliation fixture: lease-release",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for lease-release",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "resolved-from-hackage",
+              "package": "fixture-store"
+            },
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/released-fix-bound-below",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "released-fix-bound-below",
+      "revision": 1,
+      "summary": "Reconciliation fixture: released-fix-bound-below",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for released-fix-bound-below",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.2.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/released-fix-no-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "released-fix-no-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: released-fix-no-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for released-fix-no-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/released-fix-two-bounds",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "released-fix-two-bounds",
+      "revision": 1,
+      "summary": "Reconciliation fixture: released-fix-two-bounds",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for released-fix-two-bounds",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.5.0"
+            },
+            {
+              "kind": "resolved-from-hackage",
+              "package": "fixture-store"
+            },
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/released-fix-git-revision",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "released-fix-git-revision",
+      "revision": 1,
+      "summary": "Reconciliation fixture: released-fix-git-revision",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for released-fix-git-revision",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "resolved-from-git",
+              "package": "fixture-store"
+            },
+            {
+              "kind": "revision-is",
+              "package": "fixture-store",
+              "revision": "0123456789abcdef0123456789abcdef01234567"
+            },
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/released-fix-unmapped-condition",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "released-fix-unmapped-condition",
+      "revision": 1,
+      "summary": "Reconciliation fixture: released-fix-unmapped-condition",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for released-fix-unmapped-condition",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "resolved-from-hackage",
+              "package": "fixture-other"
+            },
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.3.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/unparseable-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "unparseable-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: unparseable-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for unparseable-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "next"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/unreleased-fix-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "unreleased-fix-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: unreleased-fix-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "summary": "Fixture defect for unreleased-fix-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/unreleased-fix-no-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "unreleased-fix-no-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: unreleased-fix-no-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "summary": "Fixture defect for unreleased-fix-no-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/open-speculative-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "open-speculative-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: open-speculative-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3",
+        "summary": "Fixture defect for open-speculative-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/open-stray-fixed-version",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "open-stray-fixed-version",
+      "revision": 1,
+      "summary": "Reconciliation fixture: open-stray-fixed-version",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-4",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-4",
+        "summary": "Fixture defect for open-stray-fixed-version",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/fixed-no-version-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "fixed-no-version-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: fixed-no-version-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5",
+        "summary": "Fixture defect for fixed-no-version-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/fixed-no-version-no-bound",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "fixed-no-version-no-bound",
+      "revision": 1,
+      "summary": "Reconciliation fixture: fixed-no-version-no-bound",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-5",
+        "summary": "Fixture defect for fixed-no-version-no-bound",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/duplicate-record",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "duplicate-record",
+      "revision": 1,
+      "summary": "Reconciliation fixture: duplicate-record",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-6",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-6",
+        "summary": "Fixture defect for duplicate-record",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/unparseable-fixed-version",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "unparseable-fixed-version",
+      "revision": 1,
+      "summary": "Reconciliation fixture: unparseable-fixed-version",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-7",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-7",
+        "summary": "Fixture defect for unparseable-fixed-version",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-store",
+              "version": "1.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/unknown-fixed-version",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "unknown-fixed-version",
+      "revision": 1,
+      "summary": "Reconciliation fixture: unknown-fixed-version",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-8",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-8",
+        "summary": "Fixture defect for unknown-fixed-version",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/missing-record",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "missing-record",
+      "revision": 1,
+      "summary": "Reconciliation fixture: missing-record",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-404",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-404",
+        "summary": "Fixture defect for missing-record",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/several-packages-ambiguous",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "several-packages-ambiguous",
+      "revision": 1,
+      "summary": "Reconciliation fixture: several-packages-ambiguous",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for several-packages-ambiguous",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/several-packages-chosen",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "several-packages-chosen",
+      "revision": 1,
+      "summary": "Reconciliation fixture: several-packages-chosen",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for several-packages-chosen",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-queue",
+              "version": "2.1.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/several-packages-other-version",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "several-packages-other-version",
+      "revision": 1,
+      "summary": "Reconciliation fixture: several-packages-other-version",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for several-packages-other-version",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "resolved-from-hackage",
+              "package": "fixture-queue-client"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/reference-override",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "reference-override",
+      "revision": 1,
+      "summary": "Reconciliation fixture: reference-override",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-3",
+        "summary": "Fixture defect for reference-override",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-queue-client",
+              "version": "0.4.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/unmapped-owner",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "correctness",
+      "name": "unmapped-owner",
+      "revision": 1,
+      "summary": "Reconciliation fixture: unmapped-owner",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": "mori://fixture/owner-d/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-d/okf/bug-reports/concepts/BUG-1",
+        "summary": "Fixture defect for unmapped-owner",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/concurrency/grouped-defects",
+      "layer": "consumer",
+      "component": "table",
+      "kind": "concurrency",
+      "name": "grouped-defects",
+      "revision": 1,
+      "summary": "Reconciliation fixture: a grouped defect",
+      "tier": "smoke",
+      "placement": "either",
+      "knownDefect": [
+        "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+        "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1"
+      ],
+      "knownDefectDeclaration": {
+        "kind": "group",
+        "defects": [
+          {
+            "kind": "single",
+            "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-1",
+            "summary": "Grouped fixture defect",
+            "expectedFailures": [
+              "stale-read"
+            ],
+            "appliesTo": {
+              "kind": "only-when",
+              "conditions": [
+                {
+                  "kind": "version-below",
+                  "package": "fixture-store",
+                  "version": "1.3.0"
+                }
+              ]
+            }
+          },
+          {
+            "kind": "single",
+            "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+            "summary": "Grouped fixture defect",
+            "expectedFailures": [
+              "stale-read"
+            ],
+            "appliesTo": {
+              "kind": "only-when",
+              "conditions": [
+                {
+                  "kind": "version-below",
+                  "package": "fixture-queue",
+                  "version": "2.0.0"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "roles": []
+}

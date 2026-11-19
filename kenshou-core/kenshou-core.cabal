@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kenshou-core
-version: 0.1.0.0
+version: 0.1.1.0
 synopsis: Scenario kernel and protocol for the Kenshou verification harness
 description: Shared contracts and utilities for the Kenshou verification harness.
 license: BSD-3-Clause

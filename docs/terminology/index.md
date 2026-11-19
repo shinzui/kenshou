@@ -36,6 +36,7 @@ okf_version: "0.2"
 - [run specification](run-specification.md) - A versioned input document that selects a scenario and supplies the values and environment for one execution.
 - [run](run.md) - One identified execution of a scenario whose inputs, outcome, and artifacts are saved together.
 - [scenario](scenario.md) - A registered verification case with a stable identity, declared inputs and environment needs, and executable behavior.
+- [scope reconciliation](scope-reconciliation.md) - Comparing each known defect's cohort scope with the version claims of the owner record it cites, and proposing reviewable corrections without editing source or owner records.
 - [sealed run](sealed-run.md) - A completed run directory whose manifest fixes the files that belong to its evidence.
 - [series key](series-key.md) - A digest of run compatibility inputs including the resolved cohort plan hash.
 - [suite](suite.md) - A named planning policy that selects a useful set of scenario kinds, tiers, and matrix settings.
