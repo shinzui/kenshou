@@ -85,10 +85,12 @@ library
     Kenshou.Evidence.Owner.Snapshot
     Kenshou.Evidence.Publish
     Kenshou.Evidence.Record
+    Kenshou.Evidence.Round
     Kenshou.Evidence.Source
     Kenshou.Evidence.Store
     Kenshou.Evidence.Types
 
+  other-modules: Kenshou.Evidence.Round.Storage
   build-depends:
     aeson >=2.2 && <2.3,
     base >=4.21 && <4.22,
@@ -120,6 +122,7 @@ test-suite kenshou-evidence-test
     DispositionSpec
     OwnerSpec
     ReconcileSpec
+    RoundSpec
 
   build-depends:
     aeson,

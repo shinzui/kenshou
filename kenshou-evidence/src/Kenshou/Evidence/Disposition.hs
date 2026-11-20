@@ -13,6 +13,12 @@ module Kenshou.Evidence.Disposition
     dispositionsValue,
     renderDispositionsText,
     decodeCoverage,
+    observationValue,
+    parseObservation,
+    observationSourceValue,
+    parseObservationSource,
+    parseTrust,
+    renderDisposition,
   )
 where
 
@@ -423,7 +429,7 @@ observationValue :: Observation -> Value
 observationValue run =
   object $
     [ "runId" .= run.runId,
-      "source" .= sourceValue run.source,
+      "source" .= observationSourceValue run.source,
       "scenario" .= run.scenario,
       "scenarioRevision" .= run.scenarioRevision,
       "startedAt" .= run.startedAt,
@@ -436,9 +442,6 @@ observationValue run =
     ]
       <> ["replay" .= result | Just result <- [run.replay]]
   where
-    sourceValue = \case
-      PublishedRecord concept -> object ["kind" .= ("published-record" :: Text), "reference" .= concept]
-      SealedRun path -> object ["kind" .= ("sealed-run" :: Text), "path" .= path]
     labelsValue = \case
       LabelsVerified labels -> object ["kind" .= ("verified" :: Text), "values" .= labels]
       LabelsUnavailable why -> object ["kind" .= ("unavailable" :: Text), "reason" .= why]
@@ -453,7 +456,7 @@ parseObservation :: Value -> Parser Observation
 parseObservation = withObject "observation" \item ->
   Observation
     <$> (renderRunId <$> item .: "runId")
-    <*> (item .: "source" >>= parseSource)
+    <*> (item .: "source" >>= parseObservationSource)
     <*> item .: "scenario"
     <*> item .: "scenarioRevision"
     <*> (item .: "startedAt" >>= timestamp)
@@ -465,11 +468,6 @@ parseObservation = withObject "observation" \item ->
     <*> (item .: "trust" >>= parseTrust)
     <*> item .:! "replay"
   where
-    parseSource = withObject "observation source" \source ->
-      source .: "kind" >>= \case
-        ("published-record" :: Text) -> PublishedRecord <$> source .: "reference"
-        "sealed-run" -> SealedRun <$> source .: "path"
-        _ -> fail "unknown observation source"
     parseLabels = withObject "failure labels" \labels ->
       labels .: "kind" >>= \case
         ("verified" :: Text) -> LabelsVerified <$> labels .: "values"
@@ -483,7 +481,21 @@ parseObservation = withObject "observation" \item ->
           "other" -> pure ScopeOther
           _ -> fail "unknown package source"
       ScopePackage <$> package .: "name" <*> package .: "version" <*> pure source
-    parseTrust raw = maybe (fail "unknown evidence trust") pure (find ((== raw) . renderTrust) [minBound .. maxBound])
+
+observationSourceValue :: ObservationSource -> Value
+observationSourceValue = \case
+  PublishedRecord concept -> object ["kind" .= ("published-record" :: Text), "reference" .= concept]
+  SealedRun path -> object ["kind" .= ("sealed-run" :: Text), "path" .= path]
+
+parseObservationSource :: Value -> Parser ObservationSource
+parseObservationSource = withObject "observation source" \source ->
+  source .: "kind" >>= \case
+    ("published-record" :: Text) -> PublishedRecord <$> source .: "reference"
+    "sealed-run" -> SealedRun <$> source .: "path"
+    _ -> fail "unknown observation source"
+
+parseTrust :: Text -> Parser Trust
+parseTrust raw = maybe (fail "unknown evidence trust") pure (find ((== raw) . renderTrust) [minBound .. maxBound])
 
 -- Reports -------------------------------------------------------------------
 

@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-18T01:55:31Z
       mode: "update"
       note: "Addressed the 2026-11-18 review: round command in kenshou-cli, round evaluate, effective scope overrides, attempt-aware coverage, version step."
+    - model: "gpt-6.2-sol"
+      harness: "codex-cli"
+      at: 2026-11-20T03:25:16Z
+      mode: "implement"
+      note: "Implemented frozen round capture, planning, and evaluation replay."
 ---
 
 # Run verification rounds against frozen baseline evidence
@@ -75,10 +80,11 @@ one run with incomplete evidence, and exits 1 because of the new failure.
 
 ## Progress
 
-- [ ] M1: `round open` writes a create-only `kenshou.round/v1` definition with frozen inputs
+- [x] M1 (2026-11-19): `round open` writes a create-only `kenshou.round/v1` definition with frozen inputs
   and digests, both from fresh capture and from a caller-supplied input directory; reopening an
   existing round is refused; changing owner files or adding history afterwards does not change
-  what the round reads.
+  what the round reads. The evidence suite passes fresh capture, offline adoption,
+  exact published lookup, and missing or tampered input checks.
 - [ ] M2: `round plan` emits a `kenshou.run-plan/v1` document that the existing `kenshou
   execute` accepts, bound to the chosen arm's frozen cohort identity, together with a coverage
   document listing owner reproductions, change-selected scenarios, and every omission; release
@@ -93,7 +99,8 @@ one run with incomplete evidence, and exits 1 because of the new failure.
 
 ## Surprises & Discoveries
 
-(None yet.)
+Plan 8’s owner and CLI contribution tests are present. Plan 10 repaired the
+fixture failure that had left Plan 8’s final verification checkbox open.
 
 
 ## Decision Log
@@ -302,7 +309,7 @@ A round directory has this layout:
     coverage.json                 optional coverage policy
     scope-overrides.json          optional, kenshou.round-scope-overrides/v1
   plans/                          written by round plan
-  evaluations/<id>/               written by round report
+  evaluations/<id>/               written by round evaluate
 ```
 
 `round.json` records the round identifier, when it was opened, the mode (`release` or

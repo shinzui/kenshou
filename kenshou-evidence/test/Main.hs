@@ -46,6 +46,7 @@ import Okf.Actor (Actor (ProcessActor))
 import Okf.Document (OKFDocument (..), Verification (..), frontmatterLookup, parseDocument, readVerified, removeField, serializeDocument, setField, setVerified)
 import OwnerSpec qualified
 import ReconcileSpec qualified
+import RoundSpec qualified
 import Settei (ResolveResult (..))
 import Settei.Env (envSnapshot)
 import Settei.Optparse (DiagnosticMode (NoDiagnostic), cliOverride, cliSources)
@@ -60,6 +61,7 @@ main = hspec do
   OwnerSpec.spec
   ReconcileSpec.spec
   DispositionSpec.spec
+  RoundSpec.spec
   -- Verbatim data from the first consumer: what it has already sealed must keep
   -- decoding, and its comparison keys must not change when it adopts this release.
   describe "consumer compatibility" do
@@ -429,6 +431,9 @@ main = hspec do
         attestRun "confirmed.md" "confirmed" "2026-09-26T00:00:02Z"
         let locator = Observation.objectStoreRunData store
         published <- loadPublished locator
+        Observation.loadSelectedPublishedObservations locator bundle Nothing [record.runId] `shouldReturn` Right [published]
+        Observation.loadSelectedPublishedObservations locator bundle Nothing ["absent-run"]
+          `shouldReturn` Left "published observation not found: absent-run"
         published.trust `shouldBe` Observation.MachineConfirmed
         published.labels `shouldBe` sealed.labels
         published.scenarioRevision `shouldBe` Just 2

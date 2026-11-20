@@ -9,17 +9,20 @@ module Kenshou.Evidence.Observation
     directoryRunData,
     objectStoreRunData,
     loadPublishedObservations,
+    loadSelectedPublishedObservations,
     loadSealedObservation,
     mergeObservations,
   )
 where
 
 import Control.Exception (IOException, try)
-import Data.Aeson (Value, eitherDecodeStrict', withObject, (.!=), (.:), (.:?))
+import Data.Aeson (Value (..), eitherDecodeStrict', withObject, (.!=), (.:), (.:?))
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Parser, parseEither)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as ByteString
+import Data.List (nub)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -89,13 +92,39 @@ optionalRead path = either (const Nothing) Just <$> (try (ByteString.readFile pa
 
 -- | The source of a published observation is its bundle-relative concept path.
 loadPublishedObservations :: RunDataLocator -> FilePath -> IO (Either Text [Observation])
-loadPublishedObservations locate root = do
+loadPublishedObservations = loadPublished Nothing
+
+-- | Resolve exactly the requested IDs or concept references. Only those runs'
+-- linked results are fetched. A URI must belong to the configured bundle.
+loadSelectedPublishedObservations :: RunDataLocator -> FilePath -> Maybe Text -> [Text] -> IO (Either Text [Observation])
+loadSelectedPublishedObservations _ _ _ [] = pure (Right [])
+loadSelectedPublishedObservations locate root bundleUri requests =
+  loadPublished (Just (bundleUri, requests)) locate root
+
+loadPublished :: Maybe (Maybe Text, [Text]) -> RunDataLocator -> FilePath -> IO (Either Text [Observation])
+loadPublished selection locate root = do
   entries <- historyEntries root
   case entries of
     Left (HistoryError problem) -> pure (Left problem)
-    Right history -> fmap sequence . traverse loadPublished $ filter ((== "run") . (.recordKind)) history
+    Right history -> case choose (filter ((== "run") . (.recordKind)) history) of
+      Left problem -> pure (Left problem)
+      Right selected -> fmap sequence (traverse loadEntry selected)
   where
-    loadPublished entry = case first (\message -> entry.concept <> ": " <> Text.pack message) (parseEither (parseRecord entry) entry.record) of
+    choose entries = case selection of
+      Nothing -> Right entries
+      Just (bundleUri, requests) ->
+        let byReference = Map.fromListWith (<>) [(reference, [entry]) | entry <- entries, reference <- references bundleUri entry]
+         in traverse (resolve byReference) requests
+    references bundleUri entry =
+      nub $
+        [entry.concept, entry.concept <> ".md", Text.pack (root </> Text.unpack entry.concept <> ".md")]
+          <> [uri <> "/concepts/" <> entry.concept | Just uri <- [bundleUri]]
+          <> [runId | Object record <- [entry.record], Just (String runId) <- [KeyMap.lookup "runId" record]]
+    resolve byReference reference = case Map.findWithDefault [] reference byReference of
+      [] -> Left ("published observation not found: " <> reference)
+      [entry] -> Right entry
+      _ -> Left ("ambiguous published observation: " <> reference)
+    loadEntry entry = case first (\message -> entry.concept <> ": " <> Text.pack message) (parseEither (parseRecord entry) entry.record) of
       Left problem -> pure (Left problem)
       Right (observation, links) -> Right <$> loadLabels locate observation links
 

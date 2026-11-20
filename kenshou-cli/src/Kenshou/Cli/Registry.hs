@@ -18,6 +18,7 @@ import Kenshou.Cli.Command.List (listCommand)
 import Kenshou.Cli.Command.Overhead (overheadCommand)
 import Kenshou.Cli.Command.Perf (perfCommand)
 import Kenshou.Cli.Command.Plan (planCommand)
+import Kenshou.Cli.Command.Round (roundCommand)
 import Kenshou.Cli.Command.Run (runCommand)
 import Kenshou.Cli.Command.Worker (workerCommand)
 import Kenshou.Cli.Completions (completionsCommand)
@@ -49,7 +50,7 @@ selfTestBundles = [Selftest.bundle, MeasureSelftest.bundle, CheckSelftest.bundle
 
 -- | The generic operator commands, with @attest@ using the given recomputers.
 standardCommands :: [Recomputer] -> [CliCommand]
-standardCommands recomputers = [listCommand, planCommand, Help.helpCommand, runCommand, executeCommand, cellCommand, perfCommand, overheadCommand, Measure.summarizeCommand, Measure.compareCommand, Diagnose.diagnoseCommand, historyCommand, ownersCommand, recordCommand, attestCommandWith recomputers, evidenceCommand, workerCommand, cohortCommand, completionsCommand]
+standardCommands recomputers = [listCommand, planCommand, Help.helpCommand, runCommand, executeCommand, cellCommand, perfCommand, overheadCommand, Measure.summarizeCommand, Measure.compareCommand, Diagnose.diagnoseCommand, historyCommand, ownersCommand, roundCommand, recordCommand, attestCommandWith recomputers, evidenceCommand, workerCommand, cohortCommand, completionsCommand]
 
 -- | Replace the command with the same name, or append the command when none has
 -- it. A program that customises a standard command, or contributes its own
