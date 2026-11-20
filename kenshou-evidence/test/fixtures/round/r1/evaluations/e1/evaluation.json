@@ -1,0 +1,228 @@
+{
+  "schema": "kenshou.round-evaluation/v1",
+  "evaluationId": "e1",
+  "createdAt": "2026-11-17T19:10:00Z",
+  "roundDigest": "sha256:baa1f50575dc1d26b6af2e9275aa6fdb68dce8b085dff3e33d0a93598ddedafc",
+  "candidate": [
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-00000000000b",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-00000000000b"
+      },
+      "scenario": "consumer/table/correctness/lease-release",
+      "scenarioRevision": 2,
+      "startedAt": "2026-11-17T19:01:00Z",
+      "outcome": "passed",
+      "labels": {
+        "kind": "verified",
+        "values": []
+      },
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.3.0",
+          "source": "hackage"
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": "hackage"
+        }
+      ],
+      "cohortName": "released-1.3",
+      "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-00000000000c",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-00000000000c"
+      },
+      "scenario": "consumer/table/correctness/close-flush",
+      "scenarioRevision": 2,
+      "startedAt": "2026-11-17T19:02:00Z",
+      "outcome": "failed",
+      "labels": {
+        "kind": "verified",
+        "values": [
+          "flush-deferred"
+        ]
+      },
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.3.0",
+          "source": "hackage"
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": "hackage"
+        }
+      ],
+      "cohortName": "released-1.3",
+      "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-00000000000d",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-00000000000d"
+      },
+      "scenario": "consumer/table/concurrency/writers",
+      "scenarioRevision": 2,
+      "startedAt": "2026-11-17T19:03:00Z",
+      "outcome": "failed",
+      "labels": {
+        "kind": "verified",
+        "values": [
+          "lease-double-grant"
+        ]
+      },
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.3.0",
+          "source": "hackage"
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": "hackage"
+        }
+      ],
+      "cohortName": "released-1.3",
+      "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-00000000000f",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-00000000000f"
+      },
+      "scenario": "consumer/echo/correctness/roundtrip",
+      "scenarioRevision": 2,
+      "startedAt": "2026-11-17T19:05:00Z",
+      "outcome": "infrastructure-failure",
+      "labels": {
+        "kind": "verified",
+        "values": []
+      },
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.3.0",
+          "source": "hackage"
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": "hackage"
+        }
+      ],
+      "cohortName": "released-1.3",
+      "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000010",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000010"
+      },
+      "scenario": "consumer/table/soak/steady",
+      "scenarioRevision": null,
+      "startedAt": "2026-11-17T19:06:00Z",
+      "outcome": "failed",
+      "labels": {
+        "kind": "unavailable",
+        "reason": "run-data-missing"
+      },
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.3.0",
+          "source": "hackage"
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": "hackage"
+        }
+      ],
+      "cohortName": "released-1.3",
+      "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000011",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000011"
+      },
+      "scenario": "consumer/echo/correctness/roundtrip",
+      "scenarioRevision": 2,
+      "startedAt": "2026-11-17T19:07:00Z",
+      "outcome": "passed",
+      "labels": {
+        "kind": "verified",
+        "values": []
+      },
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.3.0",
+          "source": "hackage"
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": "hackage"
+        }
+      ],
+      "cohortName": "released-1.3",
+      "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    }
+  ],
+  "plan": {
+    "name": "refresh",
+    "runPlan": {
+      "artifact": {
+        "kind": "run-plan",
+        "path": "plans/refresh.run-plan.json",
+        "sha256": "sha256:feefdb6be5f7672e2badcf0ccfae1af09635336119f7d23cdce36dc5dd28d66a"
+      },
+      "contents": "{\"schema\": \"kenshou.run-plan/v1\", \"planId\": \"01997f3a-5b7c-7e21-8a44-00000000000a\", \"createdAt\": \"2026-11-17T19:00:00Z\", \"suite\": null, \"graphDigest\": \"sha256:220efd453127485e01d0949fbaee8480f546a59a15bb954a4f2c171a25c90ad7\", \"cohort\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"inputs\": {\"roundId\": \"r1\", \"roundMode\": \"release\", \"arm\": \"candidate\", \"select\": [], \"exclude\": []}, \"policy\": {\"maxTier\": \"smoke\", \"kinds\": [\"correctness\", \"concurrency\", \"soak\"], \"placement\": \"local\", \"dimensionPolicy\": \"default-only\", \"knobPolicy\": \"defaults\", \"trials\": 3, \"seed\": 42}, \"changes\": [], \"skipped\": [], \"warnings\": [], \"estimateMinutes\": 6, \"runs\": [{\"ordinal\": 1, \"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000b\", \"estimateMinutes\": 1, \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}], \"trial\": null, \"spec\": {\"schema\": \"kenshou.run-spec/v1\", \"scenario\": \"consumer/table/correctness/lease-release\", \"scenarioRevision\": 2, \"knobs\": {}, \"dimensions\": {}, \"seed\": 42, \"environment\": {\"placement\": \"local\"}, \"cohortExpectation\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"labels\": {}}}, {\"ordinal\": 2, \"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000c\", \"estimateMinutes\": 1, \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}], \"trial\": null, \"spec\": {\"schema\": \"kenshou.run-spec/v1\", \"scenario\": \"consumer/table/correctness/close-flush\", \"scenarioRevision\": 2, \"knobs\": {}, \"dimensions\": {}, \"seed\": 42, \"environment\": {\"placement\": \"local\"}, \"cohortExpectation\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"labels\": {}}}, {\"ordinal\": 3, \"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000d\", \"estimateMinutes\": 1, \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}], \"trial\": null, \"spec\": {\"schema\": \"kenshou.run-spec/v1\", \"scenario\": \"consumer/table/concurrency/writers\", \"scenarioRevision\": 2, \"knobs\": {}, \"dimensions\": {}, \"seed\": 42, \"environment\": {\"placement\": \"local\"}, \"cohortExpectation\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"labels\": {}}}, {\"ordinal\": 4, \"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000e\", \"estimateMinutes\": 1, \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}], \"trial\": null, \"spec\": {\"schema\": \"kenshou.run-spec/v1\", \"scenario\": \"consumer/table/correctness/reader-restart\", \"scenarioRevision\": 2, \"knobs\": {}, \"dimensions\": {}, \"seed\": 42, \"environment\": {\"placement\": \"local\"}, \"cohortExpectation\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"labels\": {}}}, {\"ordinal\": 5, \"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000f\", \"estimateMinutes\": 1, \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}], \"trial\": null, \"spec\": {\"schema\": \"kenshou.run-spec/v1\", \"scenario\": \"consumer/echo/correctness/roundtrip\", \"scenarioRevision\": 2, \"knobs\": {}, \"dimensions\": {}, \"seed\": 42, \"environment\": {\"placement\": \"local\"}, \"cohortExpectation\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"labels\": {}}}, {\"ordinal\": 6, \"runId\": \"01997f3a-5b7c-7e21-8a44-000000000010\", \"estimateMinutes\": 1, \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}], \"trial\": null, \"spec\": {\"schema\": \"kenshou.run-spec/v1\", \"scenario\": \"consumer/table/soak/steady\", \"scenarioRevision\": 2, \"knobs\": {}, \"dimensions\": {}, \"seed\": 42, \"environment\": {\"placement\": \"local\"}, \"cohortExpectation\": {\"name\": \"released-1.3\", \"planHash\": \"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}, \"labels\": {}}}]}\n"
+    },
+    "coverage": {
+      "artifact": {
+        "kind": "round-coverage",
+        "path": "plans/refresh.coverage.json",
+        "sha256": "sha256:426d03fb92be4fc2a78c7a5a1d472adf0644bc865afd77727295509d8376da5f"
+      },
+      "contents": "{\"schema\": \"kenshou.round-coverage/v1\", \"roundId\": \"r1\", \"mode\": \"release\", \"arm\": \"candidate\", \"planId\": \"01997f3a-5b7c-7e21-8a44-00000000000a\", \"owners\": {\"mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2\": {\"planned\": [\"consumer/table/correctness/lease-release\"], \"omitted\": []}, \"mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1\": {\"planned\": [\"consumer/table/correctness/close-flush\"], \"omitted\": []}}, \"selected\": [{\"scenario\": \"consumer/table/correctness/lease-release\", \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}]}, {\"scenario\": \"consumer/table/correctness/close-flush\", \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}]}, {\"scenario\": \"consumer/table/concurrency/writers\", \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}]}, {\"scenario\": \"consumer/table/correctness/reader-restart\", \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}]}, {\"scenario\": \"consumer/echo/correctness/roundtrip\", \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}]}, {\"scenario\": \"consumer/table/soak/steady\", \"reasons\": [{\"component\": \"all\", \"source\": \"all\", \"via\": [\"all\"], \"selector\": \"**\", \"distance\": 0}]}], \"omissions\": [], \"estimateMinutes\": 6}\n"
+    }
+  },
+  "summaries": [
+    {
+      "artifact": {
+        "kind": "plan-summary",
+        "path": "capture/plan-summary.json",
+        "sha256": "sha256:6fb4dd224c8ec81e67efb41202e419792258d947132a36773fd75f870ec6804b"
+      },
+      "contents": "{\"schema\": \"kenshou.plan-summary/v1\", \"planId\": \"01997f3a-5b7c-7e21-8a44-00000000000a\", \"entries\": [{\"ordinal\": 1, \"scenario\": \"consumer/table/correctness/lease-release\", \"status\": \"completed\", \"attempts\": [{\"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000b\", \"startedAt\": \"2026-11-17T19:01:00Z\", \"finishedAt\": \"2026-11-17T19:01:00Z\", \"outcome\": \"passed\", \"knownDefect\": false, \"childExitCode\": 0}]}, {\"ordinal\": 2, \"scenario\": \"consumer/table/correctness/close-flush\", \"status\": \"completed\", \"attempts\": [{\"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000c\", \"startedAt\": \"2026-11-17T19:02:00Z\", \"finishedAt\": \"2026-11-17T19:02:00Z\", \"outcome\": \"failed\", \"knownDefect\": true, \"childExitCode\": 0}]}, {\"ordinal\": 3, \"scenario\": \"consumer/table/concurrency/writers\", \"status\": \"completed\", \"attempts\": [{\"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000d\", \"startedAt\": \"2026-11-17T19:03:00Z\", \"finishedAt\": \"2026-11-17T19:03:00Z\", \"outcome\": \"failed\", \"knownDefect\": false, \"childExitCode\": 1}]}, {\"ordinal\": 4, \"scenario\": \"consumer/table/correctness/reader-restart\", \"status\": \"pending\", \"attempts\": []}, {\"ordinal\": 5, \"scenario\": \"consumer/echo/correctness/roundtrip\", \"status\": \"completed\", \"attempts\": [{\"runId\": \"01997f3a-5b7c-7e21-8a44-00000000000f\", \"startedAt\": \"2026-11-17T19:05:00Z\", \"finishedAt\": \"2026-11-17T19:05:00Z\", \"outcome\": \"infrastructure-failure\", \"knownDefect\": false, \"childExitCode\": 4}, {\"runId\": \"01997f3a-5b7c-7e21-8a44-000000000011\", \"startedAt\": \"2026-11-17T19:07:00Z\", \"finishedAt\": \"2026-11-17T19:07:00Z\", \"outcome\": \"passed\", \"knownDefect\": false, \"childExitCode\": 0}]}, {\"ordinal\": 6, \"scenario\": \"consumer/table/soak/steady\", \"status\": \"completed\", \"attempts\": [{\"runId\": \"01997f3a-5b7c-7e21-8a44-000000000010\", \"startedAt\": \"2026-11-17T19:06:00Z\", \"finishedAt\": \"2026-11-17T19:06:00Z\", \"outcome\": \"failed\", \"knownDefect\": false, \"childExitCode\": 1}]}], \"counts\": {\"passed\": 2, \"failed\": 2, \"known-defect\": 1}, \"worstOutcome\": \"failed\", \"exitCode\": 1}\n"
+    }
+  ],
+  "comparisons": [
+    {
+      "kind": "comparison",
+      "path": "capture/paired-comparison.json",
+      "sha256": "sha256:30c6bfc261ffb22600899ed362697672eec9d5cbec16bb3260febc6c26b387f5"
+    }
+  ]
+}

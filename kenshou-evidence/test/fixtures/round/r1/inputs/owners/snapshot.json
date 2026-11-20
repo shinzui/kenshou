@@ -1,0 +1,48 @@
+{
+  "schema": "kenshou.owner-snapshot/v1",
+  "observedAt": "2026-11-17T19:00:00Z",
+  "recordKinds": [
+    {
+      "type": "Bug Report",
+      "handleField": "bugId"
+    }
+  ],
+  "citations": [
+    {
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "scenario": "consumer/table/correctness/lease-release",
+      "labels": [
+        "lease-held"
+      ]
+    },
+    {
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "scenario": "consumer/table/correctness/close-flush",
+      "labels": [
+        "flush-deferred"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "source": {
+        "resolver": "mapped",
+        "location": "BUG-2.md",
+        "sha256": "sha256:c950972a9e6cde397ad7f48f3988bf4c422786dc93bd9480f9100cdec9b8e6fe"
+      }
+    },
+    {
+      "answer": "bytes",
+      "links": [],
+      "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "source": {
+        "resolver": "mapped",
+        "location": "BUG-1.md",
+        "sha256": "sha256:081104f907be0278e621096415d553fb02e06c3b2f301459b2d51a801efd8b8c"
+      }
+    }
+  ]
+}

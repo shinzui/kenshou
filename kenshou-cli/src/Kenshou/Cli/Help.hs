@@ -24,7 +24,8 @@ topics =
     HelpTopic "diagnostics" "Leak, stall, and profiling diagnosis" (Text.pack $(embedStringFile "help/diagnostics.md")),
     HelpTopic "evidence" "Durable run records and data links" (Text.pack $(embedStringFile "help/evidence.md")),
     HelpTopic "cells" "Leased cell execution and result verification" (Text.pack $(embedStringFile "help/cells.md")),
-    HelpTopic "owners" "Owner records cited by known defects and findings" (Text.pack $(embedStringFile "help/owners.md"))
+    HelpTopic "owners" "Owner records cited by known defects and findings" (Text.pack $(embedStringFile "help/owners.md")),
+    HelpTopic "rounds" "Frozen baseline evidence and verification rounds" (Text.pack $(embedStringFile "help/rounds.md"))
   ]
 
 data HelpOptions = HelpOptions {topic :: Maybe Text, width :: Maybe Int}

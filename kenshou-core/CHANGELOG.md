@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0.0 - 2026-11-19
+
+### Breaking Changes
+
+- `Kenshou.Plan.Change.ChangeSource` adds `OwnerReproduction`. Exhaustive matches must handle the new constructor. The run-plan codec uses `owner-reproduction` and records the canonical owner reference in the reason.
+- The cohort identity compatibility key now uses the new kernel suite version.
+
+### New Features
+
+- The planner can compare the package versions and sources resolved in two cohort identities.
+
 ## 0.1.1.0 - 2026-11-19
 
 ### New Features

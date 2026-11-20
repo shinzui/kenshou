@@ -1,0 +1,18 @@
+{
+  "schema": "kenshou.component-graph/v1",
+  "components": [
+    {
+      "id": "example",
+      "kind": "library",
+      "repository": "example",
+      "packages": [
+        "fixture-table",
+        "fixture-codec"
+      ],
+      "selectors": [
+        "consumer/**"
+      ]
+    }
+  ],
+  "repositoryPaths": []
+}

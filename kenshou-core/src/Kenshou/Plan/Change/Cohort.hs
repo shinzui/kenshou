@@ -7,10 +7,12 @@ module Kenshou.Plan.Change.Cohort
     readCohortPackages,
     packagesFromDescriptor,
     diffCohorts,
+    diffResolvedCohorts,
   )
 where
 
 import Data.Aeson qualified as Aeson
+import Data.ByteString.Lazy qualified as Lazy
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -64,14 +66,33 @@ packagesFromDescriptor descriptor = Map.fromList do
     )
 
 diffCohorts :: ComponentGraph -> Map Text PackageSource -> Map Text PackageSource -> ([Change], [Warning])
-diffCohorts graph old new = (changes, warnings)
+diffCohorts = diffPackages renderSource
+  where
+    renderSource (FromHackage version) = version
+    renderSource (FromGit _ revision) = "git " <> revision
+
+-- | Compare the package versions and sources actually resolved in each arm.
+diffResolvedCohorts :: ComponentGraph -> Cohort.CohortIdentity -> Cohort.CohortIdentity -> ([Change], [Warning])
+diffResolvedCohorts graph old new = diffPackages renderPackage graph (packages old) (packages new)
+  where
+    packages identity =
+      Map.fromListWith
+        Set.union
+        [ (package.resolvedPackageName, Set.singleton (package.resolvedPackageVersion, Aeson.toJSON package.resolvedPackageSource))
+        | component <- identity.identityComponents,
+          package <- component.resolvedComponentPackages
+        ]
+    renderPackage values = Text.intercalate ", " [version <> " " <> Text.Encoding.decodeUtf8 (Lazy.toStrict (Aeson.encode source)) | (version, source) <- Set.toAscList values]
+
+diffPackages :: (Eq a) => (a -> Text) -> ComponentGraph -> Map Text a -> Map Text a -> ([Change], [Warning])
+diffPackages renderSource graph old new = (changes, warnings)
   where
     packageOwners = Map.fromList [(package, componentValue.id) | componentValue <- graph.components, package <- componentValue.packages]
     names = Map.keysSet old <> Map.keysSet new
     changed = [name | name <- Set.toAscList names, Map.lookup name old /= Map.lookup name new]
     mapped = [(name, owner) | name <- changed, Just owner <- [Map.lookup name packageOwners]]
     changes =
-      [ Change (ComponentRef owner Nothing) CohortDiff (name <> " " <> renderSource (Map.lookup name old) <> " -> " <> renderSource (Map.lookup name new))
+      [ Change (ComponentRef owner Nothing) CohortDiff (name <> " " <> maybe "absent" renderSource (Map.lookup name old) <> " -> " <> maybe "absent" renderSource (Map.lookup name new))
       | (name, owner) <- mapped
       ]
         <> [Change (ComponentRef (ComponentId "all") Nothing) Everything ("unmapped package " <> name) | name <- changed, Map.notMember name packageOwners, name `notElem` graph.ignoredPackages]
@@ -82,6 +103,3 @@ diffCohorts graph old new = (changes, warnings)
         name `notElem` graph.ignoredPackages
       ]
         <> [Warning "ignored-package" ("ignored package changed: " <> name) | name <- changed, name `elem` graph.ignoredPackages]
-    renderSource Nothing = "absent"
-    renderSource (Just (FromHackage version)) = version
-    renderSource (Just (FromGit _ revision)) = "git " <> revision

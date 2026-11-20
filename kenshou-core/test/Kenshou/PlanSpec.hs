@@ -42,6 +42,17 @@ spec = do
     it "rejects recursive wildcards before the final position" do
       parseSelector "acme/**/correctness/*" `shouldBe` Left "** is permitted only as the final segment"
 
+  describe "owner reproduction selection" do
+    it "serializes the owner reference alongside the owner-reproduction change source" do
+      catalog <- readCatalogFile "test/fixtures/plan/catalog-planned.json" >>= expectRight
+      selector <- expectRight (parseSelector "**")
+      let owner = "mori://fixture/owner/okf/bug-reports/concepts/BUG-1"
+          reasons = concatMap (\(Selected _ (reason :| more) _ _) -> reason : more) (selectBySelectors OwnerReproduction owner [selector] catalog)
+      reasons `shouldSatisfy` (not . null)
+      map (\reason -> reason.change.source) reasons `shouldSatisfy` all (== OwnerReproduction)
+      Aeson.encode reasons `shouldSatisfy` (Text.isInfixOf owner . Text.pack . show)
+      Aeson.encode reasons `shouldSatisfy` (Text.isInfixOf "owner-reproduction" . Text.pack . show)
+
   describe "Kenshou.Plan.Catalog" do
     it "decodes the planned scenario catalog" do
       result <- readCatalogFile "test/fixtures/plan/catalog-planned.json"

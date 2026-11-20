@@ -1,0 +1,10 @@
+---
+type: Bug Report
+bugId: BUG-1
+title: Flush deferred
+status: confirmed
+affects: mori://fixture/owner-b
+affectedVersion: "1.0.0"
+---
+
+# Flush deferred

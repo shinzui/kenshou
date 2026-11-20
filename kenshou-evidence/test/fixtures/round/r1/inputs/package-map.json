@@ -1,0 +1,24 @@
+{
+  "schema": "kenshou.owner-package-map/v1",
+  "owners": [
+    {
+      "affects": "mori://fixture/owner-a",
+      "packages": [
+        "fixture-table",
+        "fixture-codec"
+      ],
+      "versionsApplyTo": [
+        "fixture-table"
+      ]
+    },
+    {
+      "affects": "mori://fixture/owner-b",
+      "packages": [
+        "fixture-codec"
+      ],
+      "versionsApplyTo": [
+        "fixture-codec"
+      ]
+    }
+  ]
+}

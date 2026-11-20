@@ -2,6 +2,8 @@
 
 module Kenshou.Plan.Execute
   ( ExecuteOptions (..),
+    ExecutablePlan (..),
+    ExecutableRun (..),
     executePlan,
   )
 where

@@ -42,16 +42,24 @@ import Kenshou.Telemetry.Overhead (OverheadState (..), SlotRun (..), loadOverhea
 import OwnersSpec qualified
 import Paths_kenshou_cli qualified as Package
 import PerfSessionSpec qualified
+import RoundSpec qualified
 import System.Directory (Permissions (..), copyFile, createDirectoryIfMissing, doesFileExist, doesPathExist, getPermissions, listDirectory, makeAbsolute, setPermissions, withCurrentDirectory)
-import System.Environment (lookupEnv, setEnv, unsetEnv)
-import System.Exit (ExitCode (..))
+import System.Environment (getArgs, lookupEnv, setEnv, unsetEnv)
+import System.Exit (ExitCode (..), exitWith)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import System.Timeout (timeout)
 import Test.Hspec (describe, expectationFailure, hspec, it, shouldBe, shouldReturn, shouldSatisfy)
 
 main :: IO ()
-main = hspec do
+main =
+  getArgs >>= \case
+    arguments@("run" : "--spec" : _) -> RoundSpec.runChild arguments >>= exitWith
+    _ -> runSpecs
+
+runSpecs :: IO ()
+runSpecs = hspec do
+  RoundSpec.spec
   PerfSessionSpec.spec
   OwnersSpec.spec
   describe "performance planning CLI" do

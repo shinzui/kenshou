@@ -1,0 +1,100 @@
+{
+  "schema": "kenshou.round/v1",
+  "roundId": "r1",
+  "openedAt": "2026-11-17T19:00:00Z",
+  "mode": "release",
+  "inputs": {
+    "baseline-identity.json": "sha256:fa60bfa3e46d310c272ca25b88643a60b49f6139523bb0c697ce39742a4335c6",
+    "baseline-observations.json": "sha256:b8d61b8edeac09082660c4efb99b959a65c42aa248a6748f92d2cca1765951ad",
+    "candidate-identity.json": "sha256:05a47b23830ca6b0b00eacd356f7421a79910f20c0d86dfb4448baf939cf370b",
+    "catalog.json": "sha256:f35c3bb083fe6002bd0f6c3e43710e007a43456da3c75a22e3c19b4a6e9deb40",
+    "graph.json": "sha256:220efd453127485e01d0949fbaee8480f546a59a15bb954a4f2c171a25c90ad7",
+    "owners/records/081104f907be0278e621096415d553fb02e06c3b2f301459b2d51a801efd8b8c": "sha256:081104f907be0278e621096415d553fb02e06c3b2f301459b2d51a801efd8b8c",
+    "owners/records/c950972a9e6cde397ad7f48f3988bf4c422786dc93bd9480f9100cdec9b8e6fe": "sha256:c950972a9e6cde397ad7f48f3988bf4c422786dc93bd9480f9100cdec9b8e6fe",
+    "owners/snapshot.json": "sha256:3d5c7dc988a89d4006fd2f47c2154bc59615d5d50f687a0967b9b73bd1d62e04",
+    "package-map.json": "sha256:67d5c74afdfec0f457f65fff5f7d4994ed5efe0500c373f2bd17054933fe72af",
+    "scope-overrides.json": "sha256:68d0df52e061812625ad9018bb713d95ca745c2de5f4110b52f35bec7da5d333"
+  },
+  "baselineCohort": {
+    "name": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "candidateCohort": {
+    "name": "released-1.3",
+    "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "baseline": [
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000001",
+      "scenario": "consumer/table/correctness/lease-release",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000001"
+      },
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000002",
+      "scenario": "consumer/table/correctness/close-flush",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000002"
+      },
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000003",
+      "scenario": "consumer/table/concurrency/writers",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000003"
+      },
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000004",
+      "scenario": "consumer/table/correctness/reader-restart",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000004"
+      },
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000005",
+      "scenario": "consumer/echo/correctness/roundtrip",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000005"
+      },
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-000000000006",
+      "scenario": "consumer/table/soak/steady",
+      "source": {
+        "kind": "published-record",
+        "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000006"
+      },
+      "trust": "machine-confirmed"
+    }
+  ],
+  "references": [],
+  "scopeOverrides": [
+    {
+      "scenario": "consumer/table/correctness/lease-release",
+      "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "appliesTo": {
+        "kind": "only-when",
+        "conditions": [
+          {
+            "kind": "version-below",
+            "package": "fixture-table",
+            "version": "1.3.0"
+          }
+        ]
+      },
+      "reason": "The fixture owner reports the fix in 1.3.0 of fixture-table."
+    }
+  ]
+}

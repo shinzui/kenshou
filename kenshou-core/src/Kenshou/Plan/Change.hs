@@ -24,7 +24,7 @@ import Kenshou.Plan.Catalog (ScenarioInfo (..))
 import Kenshou.Plan.Components
 import Kenshou.Plan.Selector
 
-data ChangeSource = Named | CohortDiff | Since | UpstreamDiff | Everything
+data ChangeSource = Named | CohortDiff | Since | UpstreamDiff | Everything | OwnerReproduction
   deriving stock (Eq, Ord, Show)
 
 data Change = Change
@@ -121,7 +121,10 @@ instance ToJSON Change where
   toJSON change = object ["component" .= renderRef change.ref, "source" .= renderChangeSource change.source, "detail" .= change.detail]
 
 instance ToJSON Reason where
-  toJSON reason = object ["component" .= renderRef reason.change.ref, "source" .= renderChangeSource reason.change.source, "via" .= fmap renderRef reason.via, "selector" .= renderSelector reason.selector, "distance" .= reason.distance]
+  toJSON reason =
+    object $
+      ["component" .= renderRef reason.change.ref, "source" .= renderChangeSource reason.change.source, "via" .= fmap renderRef reason.via, "selector" .= renderSelector reason.selector, "distance" .= reason.distance]
+        <> ["detail" .= reason.change.detail | reason.change.source == OwnerReproduction]
 
 renderChangeSource :: ChangeSource -> Text
 renderChangeSource Named = "named"
@@ -129,3 +132,4 @@ renderChangeSource CohortDiff = "cohort-diff"
 renderChangeSource Since = "since"
 renderChangeSource UpstreamDiff = "upstream-diff"
 renderChangeSource Everything = "all"
+renderChangeSource OwnerReproduction = "owner-reproduction"

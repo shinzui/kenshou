@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4.0 - 2026-11-19
+
+### New Features
+
+- `standardCommands` includes `round` with `open`, `plan`, `evaluate`, and `report`. Consumer programs can replace it with `roundCommandWith` to configure evidence sources and dated report paths.
+- `round plan` uses the same selectors and policy options as `plan`. Use `kenshou help rounds` for a walkthrough.
+
 ## 0.1.3.0 - 2026-11-19
 
 - Add the `owners dispositions` subcommand and help for live capture and

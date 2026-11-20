@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.round.v1.schema.json",
+  "title": "Kenshou frozen verification round",
+  "type": "object",
+  "required": ["schema", "roundId", "openedAt", "mode", "inputs", "baselineCohort", "candidateCohort", "baseline", "references", "scopeOverrides"],
+  "properties": {
+    "schema": {"const": "kenshou.round/v1"},
+    "roundId": {"$ref": "#/$defs/name"},
+    "openedAt": {"type": "string", "format": "date-time"},
+    "mode": {"$ref": "#/$defs/mode"},
+    "inputs": {
+      "type": "object",
+      "required": ["owners/snapshot.json", "catalog.json", "package-map.json", "graph.json", "baseline-identity.json", "candidate-identity.json", "baseline-observations.json"],
+      "additionalProperties": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"}
+    },
+    "baselineCohort": {"$ref": "kenshou.dispositions.v1.schema.json#/$defs/cohort"},
+    "candidateCohort": {"$ref": "kenshou.dispositions.v1.schema.json#/$defs/cohort"},
+    "baseline": {"type": "array", "items": {"$ref": "#/$defs/baselineEntry"}},
+    "references": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "scopeOverrides": {"type": "array", "items": {"$ref": "kenshou.round-scope-overrides.v1.schema.json#/$defs/override"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "name": {"type": "string", "pattern": "^(?!\\.{1,2}$)[a-zA-Z0-9._-]+$"},
+    "mode": {"enum": ["release", "change"]},
+    "artifact": {
+      "type": "object",
+      "required": ["kind", "path", "sha256"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "baselineEntry": {
+      "type": "object",
+      "required": ["runId", "source", "scenario", "trust"],
+      "properties": {
+        "runId": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/runId"},
+        "source": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/source"},
+        "scenario": {"type": "string"},
+        "trust": {"enum": ["human-reviewed", "machine-confirmed", "unverified", "local-sealed"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}

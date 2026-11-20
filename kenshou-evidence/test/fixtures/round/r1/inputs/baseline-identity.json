@@ -1,0 +1,33 @@
+{
+  "schema": "kenshou.cohort-identity/v1",
+  "cohort": "released-1.2",
+  "compiler": "ghc-9.12.4",
+  "cabalVersion": "3.16.1.0",
+  "os": "fixture-os",
+  "arch": "fixture-arch",
+  "indexState": null,
+  "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "descriptorSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "components": [
+    {
+      "id": "example",
+      "moriUri": "mori://fixture/owner-a",
+      "packages": [
+        {
+          "name": "fixture-table",
+          "version": "1.2.0",
+          "source": {
+            "type": "hackage"
+          }
+        },
+        {
+          "name": "fixture-codec",
+          "version": "1.0.0",
+          "source": {
+            "type": "hackage"
+          }
+        }
+      ]
+    }
+  ]
+}

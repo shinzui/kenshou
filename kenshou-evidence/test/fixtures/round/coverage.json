@@ -1,0 +1,109 @@
+{
+  "schema": "kenshou.round-coverage/v1",
+  "roundId": "r1",
+  "mode": "release",
+  "arm": "candidate",
+  "planId": "01997f3a-5b7c-7e21-8a44-00000000000a",
+  "owners": {
+    "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2": {
+      "planned": [
+        "consumer/table/correctness/lease-release"
+      ],
+      "omitted": []
+    },
+    "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1": {
+      "planned": [
+        "consumer/table/correctness/close-flush"
+      ],
+      "omitted": []
+    }
+  },
+  "selected": [
+    {
+      "scenario": "consumer/table/correctness/lease-release",
+      "reasons": [
+        {
+          "component": "all",
+          "source": "all",
+          "via": [
+            "all"
+          ],
+          "selector": "**",
+          "distance": 0
+        }
+      ]
+    },
+    {
+      "scenario": "consumer/table/correctness/close-flush",
+      "reasons": [
+        {
+          "component": "all",
+          "source": "all",
+          "via": [
+            "all"
+          ],
+          "selector": "**",
+          "distance": 0
+        }
+      ]
+    },
+    {
+      "scenario": "consumer/table/concurrency/writers",
+      "reasons": [
+        {
+          "component": "all",
+          "source": "all",
+          "via": [
+            "all"
+          ],
+          "selector": "**",
+          "distance": 0
+        }
+      ]
+    },
+    {
+      "scenario": "consumer/table/correctness/reader-restart",
+      "reasons": [
+        {
+          "component": "all",
+          "source": "all",
+          "via": [
+            "all"
+          ],
+          "selector": "**",
+          "distance": 0
+        }
+      ]
+    },
+    {
+      "scenario": "consumer/echo/correctness/roundtrip",
+      "reasons": [
+        {
+          "component": "all",
+          "source": "all",
+          "via": [
+            "all"
+          ],
+          "selector": "**",
+          "distance": 0
+        }
+      ]
+    },
+    {
+      "scenario": "consumer/table/soak/steady",
+      "reasons": [
+        {
+          "component": "all",
+          "source": "all",
+          "via": [
+            "all"
+          ],
+          "selector": "**",
+          "distance": 0
+        }
+      ]
+    }
+  ],
+  "omissions": [],
+  "estimateMinutes": 6
+}

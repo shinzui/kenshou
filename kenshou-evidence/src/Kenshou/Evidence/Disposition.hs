@@ -19,6 +19,9 @@ module Kenshou.Evidence.Disposition
     parseObservationSource,
     parseTrust,
     renderDisposition,
+    renderResult,
+    summaryCounts,
+    conclusionValue,
   )
 where
 
@@ -555,20 +558,21 @@ dispositionsValue input conclusions =
       "conclusions" .= map conclusionValue conclusions,
       "summary" .= object [Key.fromText key .= count | (key, count) <- summaryCounts conclusions]
     ]
+
+conclusionValue :: Conclusion -> Value
+conclusionValue conclusion =
+  object
+    [ "owner" .= conclusion.owner,
+      "claim" .= fmap claimValue conclusion.claim,
+      "cohort" .= fmap (\(name, hash) -> object ["name" .= name, "planHash" .= hash]) conclusion.cohort,
+      "side" .= fmap sideValue conclusion.side,
+      "disposition" .= renderDisposition conclusion.disposition,
+      "reasons" .= map reasonValue conclusion.reasons,
+      "required" .= [object ["scenario" .= scenario, "latest" .= latest] | (scenario, latest) <- Map.toAscList conclusion.required],
+      "considered" .= map classifiedValue conclusion.considered,
+      "incompatible" .= map observationValue conclusion.incompatible
+    ]
   where
-    conclusionValue :: Conclusion -> Value
-    conclusionValue conclusion =
-      object
-        [ "owner" .= conclusion.owner,
-          "claim" .= fmap claimValue conclusion.claim,
-          "cohort" .= fmap (\(name, hash) -> object ["name" .= name, "planHash" .= hash]) conclusion.cohort,
-          "side" .= fmap sideValue conclusion.side,
-          "disposition" .= renderDisposition conclusion.disposition,
-          "reasons" .= map reasonValue conclusion.reasons,
-          "required" .= [object ["scenario" .= scenario, "latest" .= latest] | (scenario, latest) <- Map.toAscList conclusion.required],
-          "considered" .= map classifiedValue conclusion.considered,
-          "incompatible" .= map observationValue conclusion.incompatible
-        ]
     claimValue :: Owner.OwnerRecord -> Value
     claimValue claim = object ["status" .= claim.status, "versions" .= Owner.ownerVersionsValue claim]
     sideValue side = object (["kind" .= renderSide side] <> ["reason" .= why | Unknown why <- [side]])

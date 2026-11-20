@@ -1,0 +1,11 @@
+---
+type: Bug Report
+bugId: BUG-2
+title: Lease remains held
+status: fixed
+affects: mori://fixture/owner-a
+affectedVersion: "1.2.0"
+fixedVersion: "1.3.0"
+---
+
+# Lease remains held

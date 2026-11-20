@@ -6,6 +6,7 @@ module Kenshou.Plan.RunPlan
     TrialInfo (..),
     PlannedRun (..),
     SkipReason (..),
+    renderSkipReason,
     Skipped (..),
     SkeletonRun (..),
     PlanSkeleton (..),

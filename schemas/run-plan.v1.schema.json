@@ -17,13 +17,28 @@
     },
     "inputs": {"type": "object"},
     "policy": {"type": "object", "required": ["maxTier", "kinds", "placement", "dimensionPolicy", "knobPolicy", "trials", "seed"]},
-    "changes": {"type": "array", "items": {"type": "object", "required": ["component", "source", "detail"]}},
+    "changes": {"type": "array", "items": {"type": "object", "required": ["component", "source", "detail"], "properties": {"source": {"$ref": "#/$defs/changeSource"}}}},
     "runs": {"type": "array", "items": {"$ref": "#/$defs/run"}},
     "skipped": {"type": "array", "items": {"type": "object", "required": ["scenario", "reason", "detail"]}},
     "warnings": {"type": "array", "items": {"type": "string"}},
     "estimateMinutes": {"type": "integer", "minimum": 0}
   },
   "$defs": {
+    "changeSource": {"enum": ["named", "cohort-diff", "since", "upstream-diff", "all", "owner-reproduction"]},
+    "reason": {
+      "type": "object",
+      "required": ["component", "source", "via", "selector", "distance"],
+      "properties": {
+        "component": {"type": "string"},
+        "source": {"$ref": "#/$defs/changeSource"},
+        "via": {"type": "array", "items": {"type": "string"}},
+        "selector": {"type": "string"},
+        "distance": {"type": "integer", "minimum": 0},
+        "detail": {"type": "string"}
+      },
+      "if": {"properties": {"source": {"const": "owner-reproduction"}}},
+      "then": {"required": ["detail"]}
+    },
     "run": {
       "type": "object",
       "required": ["ordinal", "runId", "estimateMinutes", "reasons", "trial", "spec"],
@@ -31,7 +46,7 @@
         "ordinal": {"type": "integer", "minimum": 1},
         "runId": {"type": "string", "format": "uuid"},
         "estimateMinutes": {"type": "integer", "minimum": 0},
-        "reasons": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["component", "source", "via", "selector", "distance"]}},
+        "reasons": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/reason"}},
         "trial": {"type": ["object", "null"]},
         "spec": {"$ref": "run-spec-v1.schema.json"}
       },

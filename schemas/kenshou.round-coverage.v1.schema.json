@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.round-coverage.v1.schema.json",
+  "title": "Kenshou round coverage",
+  "type": "object",
+  "required": ["schema", "roundId", "mode", "arm", "planId", "owners", "selected", "omissions", "estimateMinutes"],
+  "properties": {
+    "schema": {"const": "kenshou.round-coverage/v1"},
+    "roundId": {"$ref": "kenshou.round.v1.schema.json#/$defs/name"},
+    "mode": {"$ref": "kenshou.round.v1.schema.json#/$defs/mode"},
+    "arm": {"enum": ["baseline", "candidate"]},
+    "planId": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/runId"},
+    "owners": {"type": "object", "additionalProperties": {"$ref": "#/$defs/ownerCoverage"}},
+    "selected": {"type": "array", "items": {"$ref": "#/$defs/selected"}},
+    "omissions": {"type": "array", "items": {"$ref": "#/$defs/omission"}},
+    "estimateMinutes": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "selected": {
+      "type": "object",
+      "required": ["scenario", "reasons"],
+      "properties": {
+        "scenario": {"type": "string"},
+        "reasons": {"type": "array", "minItems": 1, "items": {"$ref": "run-plan.v1.schema.json#/$defs/reason"}}
+      },
+      "additionalProperties": false
+    },
+    "ownerCoverage": {
+      "type": "object",
+      "required": ["planned", "omitted"],
+      "properties": {
+        "planned": {"type": "array", "items": {"type": "string"}},
+        "omitted": {"type": "array", "items": {"$ref": "#/$defs/omission"}}
+      },
+      "additionalProperties": false
+    },
+    "omission": {
+      "type": "object",
+      "required": ["scenario", "reason", "detail"],
+      "properties": {
+        "scenario": {"type": ["string", "null"]},
+        "reason": {"enum": ["tier", "kind", "placement", "excluded", "unsupported-dimension", "benchmark-without-durable", "unsupported-knob", "over-budget", "not-selected", "not-in-catalog", "unmapped-change", "planned-run-missing", "owner-reproduction-missing"]},
+        "detail": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

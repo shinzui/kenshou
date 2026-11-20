@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.round-scope-overrides.v1.schema.json",
+  "title": "Kenshou round scope overrides",
+  "type": "object",
+  "required": ["schema", "overrides"],
+  "properties": {
+    "schema": {"const": "kenshou.round-scope-overrides/v1"},
+    "overrides": {"type": "array", "items": {"$ref": "#/$defs/override"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "override": {
+      "type": "object",
+      "required": ["scenario", "reference", "appliesTo", "reason"],
+      "properties": {
+        "scenario": {"type": "string"},
+        "reference": {"type": "string"},
+        "appliesTo": {"$ref": "scenario-list-v1.schema.json#/$defs/scope"},
+        "reason": {"type": "string", "pattern": "\\S"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

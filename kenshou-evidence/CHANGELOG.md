@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1.0 - 2026-11-19
+
+### New Features
+
+- Freeze verification rounds with explicit baseline observations and trust, owner snapshots, catalog, package mapping, graph, and both cohort identities. Plan either arm and replay candidate evaluations from frozen inputs.
+- Derive round reports with fix-verification dispositions, scope overrides, failures, missing coverage, and retry-aware observation matching.
+
 ## 0.2.0.0 - 2026-11-19
 
 - Add digest-verified published and sealed run observations, the pure disposition

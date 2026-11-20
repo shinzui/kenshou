@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.round-report.v1.schema.json",
+  "title": "Kenshou round report",
+  "type": "object",
+  "required": ["schema", "roundId", "mode", "roundDigest", "evaluationId", "evaluatedAt", "baseline", "candidate", "owners", "newFailures", "missingCoverage", "plannedRuns", "plan", "executionSummaries", "infrastructureFailures", "inconclusiveRuns", "incompleteEvidence", "incompatibleControls", "scopeOverrides", "separatePerformanceEvidence", "counts", "exitCode"],
+  "properties": {
+    "schema": {"const": "kenshou.round-report/v1"},
+    "roundId": {"$ref": "kenshou.round.v1.schema.json#/$defs/name"},
+    "mode": {"$ref": "kenshou.round.v1.schema.json#/$defs/mode"},
+    "roundDigest": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"},
+    "evaluationId": {"$ref": "kenshou.round.v1.schema.json#/$defs/name"},
+    "evaluatedAt": {"type": "string", "format": "date-time"},
+    "baseline": {"$ref": "#/$defs/arm"},
+    "candidate": {"$ref": "#/$defs/arm"},
+    "owners": {"type": "array", "items": {"$ref": "#/$defs/owner"}},
+    "newFailures": {"type": "array", "items": {"$ref": "#/$defs/failure"}},
+    "missingCoverage": {"type": "array", "items": {"$ref": "kenshou.round-coverage.v1.schema.json#/$defs/omission"}},
+    "plannedRuns": {"type": "array", "items": {"$ref": "#/$defs/plannedRun"}},
+    "plan": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/plan"}]},
+    "executionSummaries": {"$ref": "#/$defs/artifacts"},
+    "infrastructureFailures": {"$ref": "#/$defs/observations"},
+    "inconclusiveRuns": {"$ref": "#/$defs/observations"},
+    "incompleteEvidence": {"type": "array", "items": {"$ref": "#/$defs/incomplete"}},
+    "incompatibleControls": {"type": "array", "items": {"$ref": "#/$defs/control"}},
+    "scopeOverrides": {"type": "array", "items": {"$ref": "#/$defs/override"}},
+    "separatePerformanceEvidence": {"$ref": "#/$defs/artifacts"},
+    "counts": {
+      "type": "object",
+      "required": ["verifiedFixed", "stillReproduces", "reproducesAsExpected", "notReproduced", "regressed", "differentFailure", "notYetReleased", "notRun", "unverifiable", "newFailures", "missing", "infrastructure", "inconclusive", "incomplete", "incompatibleControls"],
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "exitCode": {"enum": [0, 1, 3]}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "observations": {"type": "array", "items": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/observation"}},
+    "artifacts": {"type": "array", "items": {"$ref": "kenshou.round.v1.schema.json#/$defs/artifact"}},
+    "arm": {
+      "type": "object",
+      "required": ["cohort", "observations"],
+      "properties": {
+        "cohort": {"$ref": "kenshou.dispositions.v1.schema.json#/$defs/cohort"},
+        "observations": {"$ref": "#/$defs/observations"}
+      },
+      "additionalProperties": false
+    },
+    "owner": {
+      "type": "object",
+      "required": ["owner", "baseline", "candidate", "transition"],
+      "properties": {
+        "owner": {"type": "string"},
+        "baseline": {"type": "array", "items": {"$ref": "kenshou.dispositions.v1.schema.json#/$defs/conclusion"}},
+        "candidate": {"$ref": "kenshou.dispositions.v1.schema.json#/$defs/conclusion"},
+        "transition": {
+          "type": "object",
+          "required": ["from", "to"],
+          "properties": {"from": {"type": "array", "items": {"type": "string"}}, "to": {"type": "string"}},
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "failure": {
+      "type": "object",
+      "required": ["label", "observation"],
+      "properties": {"label": {"type": "string"}, "observation": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/observation"}},
+      "additionalProperties": false
+    },
+    "incomplete": {
+      "type": "object",
+      "required": ["reason", "observation"],
+      "properties": {"reason": {"type": "string"}, "observation": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/observation"}},
+      "additionalProperties": false
+    },
+    "plannedRun": {
+      "type": "object",
+      "required": ["ordinal", "scenario", "runId", "attempts", "observations"],
+      "properties": {
+        "ordinal": {"type": "integer", "minimum": 1},
+        "scenario": {"type": "string"},
+        "runId": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/runId"},
+        "attempts": {"type": "array", "items": {"type": "object", "required": ["runId", "startedAt", "outcome", "knownDefect", "childExitCode"]}},
+        "observations": {"$ref": "#/$defs/observations"}
+      },
+      "additionalProperties": false
+    },
+    "plan": {
+      "type": "object",
+      "required": ["name", "runPlan", "coverage"],
+      "properties": {
+        "name": {"$ref": "kenshou.round.v1.schema.json#/$defs/name"},
+        "runPlan": {"$ref": "kenshou.round.v1.schema.json#/$defs/artifact"},
+        "coverage": {"$ref": "kenshou.round.v1.schema.json#/$defs/artifact"}
+      },
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "required": ["scenario", "catalogRevision", "reason", "baseline", "candidate"],
+      "properties": {
+        "scenario": {"type": "string"},
+        "catalogRevision": {"type": ["integer", "null"]},
+        "reason": {"enum": ["incompatible-revision", "missing-baseline-control"]},
+        "baseline": {"$ref": "#/$defs/observations"},
+        "candidate": {"$ref": "#/$defs/observations"}
+      },
+      "additionalProperties": false
+    },
+    "override": {
+      "type": "object",
+      "required": ["override", "declaredScope", "conclusions"],
+      "properties": {
+        "override": {"$ref": "kenshou.round-scope-overrides.v1.schema.json#/$defs/override"},
+        "declaredScope": {"$ref": "scenario-list-v1.schema.json#/$defs/scope"},
+        "conclusions": {"type": "array", "items": {"type": "object", "required": ["owner", "arm", "cohort", "disposition"]}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

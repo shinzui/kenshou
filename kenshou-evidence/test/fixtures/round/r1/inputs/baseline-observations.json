@@ -1,0 +1,186 @@
+[
+  {
+    "runId": "01997f3a-5b7c-7e21-8a44-000000000001",
+    "source": {
+      "kind": "published-record",
+      "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000001"
+    },
+    "scenario": "consumer/table/correctness/lease-release",
+    "scenarioRevision": 2,
+    "startedAt": "2026-11-17T16:00:00Z",
+    "outcome": "failed",
+    "labels": {
+      "kind": "verified",
+      "values": [
+        "lease-held"
+      ]
+    },
+    "packages": [
+      {
+        "name": "fixture-table",
+        "version": "1.2.0",
+        "source": "hackage"
+      },
+      {
+        "name": "fixture-codec",
+        "version": "1.0.0",
+        "source": "hackage"
+      }
+    ],
+    "cohortName": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "trust": "machine-confirmed"
+  },
+  {
+    "runId": "01997f3a-5b7c-7e21-8a44-000000000002",
+    "source": {
+      "kind": "published-record",
+      "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000002"
+    },
+    "scenario": "consumer/table/correctness/close-flush",
+    "scenarioRevision": 2,
+    "startedAt": "2026-11-17T16:01:00Z",
+    "outcome": "failed",
+    "labels": {
+      "kind": "verified",
+      "values": [
+        "flush-deferred"
+      ]
+    },
+    "packages": [
+      {
+        "name": "fixture-table",
+        "version": "1.2.0",
+        "source": "hackage"
+      },
+      {
+        "name": "fixture-codec",
+        "version": "1.0.0",
+        "source": "hackage"
+      }
+    ],
+    "cohortName": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "trust": "machine-confirmed"
+  },
+  {
+    "runId": "01997f3a-5b7c-7e21-8a44-000000000003",
+    "source": {
+      "kind": "published-record",
+      "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000003"
+    },
+    "scenario": "consumer/table/concurrency/writers",
+    "scenarioRevision": 2,
+    "startedAt": "2026-11-17T16:03:00Z",
+    "outcome": "passed",
+    "labels": {
+      "kind": "verified",
+      "values": []
+    },
+    "packages": [
+      {
+        "name": "fixture-table",
+        "version": "1.2.0",
+        "source": "hackage"
+      },
+      {
+        "name": "fixture-codec",
+        "version": "1.0.0",
+        "source": "hackage"
+      }
+    ],
+    "cohortName": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "trust": "machine-confirmed"
+  },
+  {
+    "runId": "01997f3a-5b7c-7e21-8a44-000000000004",
+    "source": {
+      "kind": "published-record",
+      "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000004"
+    },
+    "scenario": "consumer/table/correctness/reader-restart",
+    "scenarioRevision": 2,
+    "startedAt": "2026-11-17T16:04:00Z",
+    "outcome": "passed",
+    "labels": {
+      "kind": "verified",
+      "values": []
+    },
+    "packages": [
+      {
+        "name": "fixture-table",
+        "version": "1.2.0",
+        "source": "hackage"
+      },
+      {
+        "name": "fixture-codec",
+        "version": "1.0.0",
+        "source": "hackage"
+      }
+    ],
+    "cohortName": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "trust": "machine-confirmed"
+  },
+  {
+    "runId": "01997f3a-5b7c-7e21-8a44-000000000005",
+    "source": {
+      "kind": "published-record",
+      "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000005"
+    },
+    "scenario": "consumer/echo/correctness/roundtrip",
+    "scenarioRevision": 2,
+    "startedAt": "2026-11-17T16:05:00Z",
+    "outcome": "passed",
+    "labels": {
+      "kind": "verified",
+      "values": []
+    },
+    "packages": [
+      {
+        "name": "fixture-table",
+        "version": "1.2.0",
+        "source": "hackage"
+      },
+      {
+        "name": "fixture-codec",
+        "version": "1.0.0",
+        "source": "hackage"
+      }
+    ],
+    "cohortName": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "trust": "machine-confirmed"
+  },
+  {
+    "runId": "01997f3a-5b7c-7e21-8a44-000000000006",
+    "source": {
+      "kind": "published-record",
+      "reference": "mori://fixture/consumer/okf/verification/concepts/runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-000000000006"
+    },
+    "scenario": "consumer/table/soak/steady",
+    "scenarioRevision": 2,
+    "startedAt": "2026-11-17T16:06:00Z",
+    "outcome": "passed",
+    "labels": {
+      "kind": "verified",
+      "values": []
+    },
+    "packages": [
+      {
+        "name": "fixture-table",
+        "version": "1.2.0",
+        "source": "hackage"
+      },
+      {
+        "name": "fixture-codec",
+        "version": "1.0.0",
+        "source": "hackage"
+      }
+    ],
+    "cohortName": "released-1.2",
+    "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "trust": "machine-confirmed"
+  }
+]

@@ -48,7 +48,7 @@ import Kenshou.Core.Id (ScenarioId, renderRunId)
 import Kenshou.Core.Scenario (CohortScope, KnownDefect (..), individualKnownDefects)
 import Kenshou.Evidence.Disposition (decodeCoverage, observationSourceValue, observationValue, parseObservation, parseObservationSource, parseTrust)
 import Kenshou.Evidence.Observation (Observation (..), ObservationSource, Trust, renderTrust)
-import Kenshou.Evidence.Owner (OwnerStatus)
+import Kenshou.Evidence.Owner (OwnerStatus (..))
 import Kenshou.Evidence.Owner.Reconcile (PackageMap, decodePackageMap)
 import Kenshou.Evidence.Owner.Snapshot (readSnapshot)
 import Kenshou.Evidence.Round.Storage
@@ -121,9 +121,9 @@ data InputCapture = FromInputs FilePath | Fresh FreshInputs
 
 data FreshInputs = FreshInputs
   { owners :: FilePath,
-    catalog :: ByteString,
+    loadCatalog :: IO ByteString,
     packageMap :: FilePath,
-    graph :: ByteString,
+    loadGraph :: IO ByteString,
     baselineIdentity :: FilePath,
     candidateIdentity :: FilePath,
     loadBaseline :: IO (Either Text [Observation]),
@@ -163,6 +163,8 @@ openRound options = runRoundIO do
 captureInputs :: FreshInputs -> RoundIO [(FilePath, ByteString)]
 captureInputs fresh = do
   owners <- readTree fresh.owners
+  catalog <- lift fresh.loadCatalog
+  graph <- lift fresh.loadGraph
   observations <- ExceptT (first RoundInput <$> fresh.loadBaseline)
   required <-
     lift $
@@ -183,8 +185,8 @@ captureInputs fresh = do
     [("owners" </> name, bytes) | (name, bytes) <- owners]
       <> required
       <> optional
-      <> [ ("catalog.json", fresh.catalog),
-           ("graph.json", fresh.graph),
+      <> [ ("catalog.json", catalog),
+           ("graph.json", graph),
            ("baseline-observations.json", LBS.toStrict (encode (map observationValue observations)))
          ]
 
@@ -217,8 +219,9 @@ readRoundWithDigest path = runRoundIO do
 decodeInputs :: FilePath -> Map FilePath ByteString -> RoundIO (RoundInputs, [ScopeOverride], [ArtifactReference])
 decodeInputs path files = do
   -- Validate the path before the snapshot reader opens any of its record files.
-  _ <- required "owners/snapshot.json" Right
+  ownerIndex <- required "owners/snapshot.json" Right
   owners <- ExceptT (first RoundInput <$> readSnapshot (path </> "owners"))
+  unless (owners.snapshotDigest == Just (sha256Hex ownerIndex)) (failRound "owner snapshot changed while reading round inputs")
   catalog <- required "catalog.json" decodeCatalog
   unless (Set.size (Set.fromList (map (.id) catalog)) == length catalog) (failRound "catalog has duplicate scenario identifiers")
   packageMap <- required "package-map.json" decodePackageMap

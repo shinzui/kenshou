@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kenshou-cli
-version: 0.1.3.0
+version: 0.1.4.0
 synopsis: Operator command library for the Kenshou verification harness
 description: Operator and automation interface for the Kenshou verification harness.
 license: BSD-3-Clause
@@ -66,7 +66,10 @@ library
     Kenshou.Cli.Registry
     Kenshou.Cli.Version
 
-  other-modules: Paths_kenshou_cli
+  other-modules:
+    Kenshou.Cli.PlanOptions
+    Paths_kenshou_cli
+
   autogen-modules: Paths_kenshou_cli
   build-depends:
     aeson >=2.2 && <2.3,
@@ -79,9 +82,9 @@ library
     githash >=0.1.7 && <0.2,
     hasql >=1.10 && <1.11,
     kenshou-check ^>=0.1.0.0,
-    kenshou-core ^>=0.1.1.0,
+    kenshou-core ^>=0.2.0.0,
     kenshou-diagnose ^>=0.1.0.0,
-    kenshou-evidence ^>=0.2.0.0,
+    kenshou-evidence ^>=0.2.1.0,
     kenshou-measure ^>=0.1.0.0,
     kenshou-remote ^>=0.1.0.0,
     kenshou-telemetry ^>=0.1.0.0,
@@ -107,6 +110,7 @@ test-suite kenshou-cli-test
     OwnersSpec
     Paths_kenshou_cli
     PerfSessionSpec
+    RoundSpec
 
   autogen-modules: Paths_kenshou_cli
   build-depends:
@@ -118,8 +122,8 @@ test-suite kenshou-cli-test
     filepath,
     hspec >=2.11 && <2.12,
     kenshou-cli,
-    kenshou-core ^>=0.1.1.0,
-    kenshou-evidence ^>=0.2.0.0,
+    kenshou-core ^>=0.2.0.0,
+    kenshou-evidence ^>=0.2.1.0,
     kenshou-measure ^>=0.1.0.0,
     kenshou-remote ^>=0.1.0.0,
     kenshou-telemetry ^>=0.1.0.0,

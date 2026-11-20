@@ -1,0 +1,85 @@
+{
+  "schema": "kenshou.scenario-list/v1",
+  "roles": [],
+  "scenarios": [
+    {
+      "id": "consumer/table/correctness/lease-release",
+      "revision": 2,
+      "summary": "lease release",
+      "tier": "smoke",
+      "placement": "either",
+      "knobs": [],
+      "knownDefect": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "summary": "lease release",
+        "expectedFailures": [
+          "lease-held"
+        ],
+        "appliesTo": {
+          "kind": "all-cohorts"
+        }
+      }
+    },
+    {
+      "id": "consumer/table/correctness/close-flush",
+      "revision": 2,
+      "summary": "close flush",
+      "tier": "smoke",
+      "placement": "either",
+      "knobs": [],
+      "knownDefect": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+      "knownDefectDeclaration": {
+        "kind": "single",
+        "reference": "mori://fixture/owner-b/okf/bug-reports/concepts/BUG-1",
+        "summary": "close flush",
+        "expectedFailures": [
+          "flush-deferred"
+        ],
+        "appliesTo": {
+          "kind": "only-when",
+          "conditions": [
+            {
+              "kind": "version-below",
+              "package": "fixture-codec",
+              "version": "2.0.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "consumer/table/concurrency/writers",
+      "revision": 2,
+      "summary": "writers",
+      "tier": "smoke",
+      "placement": "either",
+      "knobs": []
+    },
+    {
+      "id": "consumer/table/correctness/reader-restart",
+      "revision": 2,
+      "summary": "reader restart",
+      "tier": "smoke",
+      "placement": "either",
+      "knobs": []
+    },
+    {
+      "id": "consumer/echo/correctness/roundtrip",
+      "revision": 2,
+      "summary": "roundtrip",
+      "tier": "smoke",
+      "placement": "either",
+      "knobs": []
+    },
+    {
+      "id": "consumer/table/soak/steady",
+      "revision": 2,
+      "summary": "steady",
+      "tier": "smoke",
+      "placement": "either",
+      "knobs": []
+    }
+  ]
+}
