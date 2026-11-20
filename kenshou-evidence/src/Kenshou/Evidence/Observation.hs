@@ -63,7 +63,8 @@ data Observation = Observation
     packages :: [ScopePackage],
     cohortName :: Text,
     planHash :: Text,
-    trust :: Trust
+    trust :: Trust,
+    replay :: Maybe Value
   }
   deriving stock (Eq, Show)
 
@@ -112,7 +113,7 @@ loadPublishedObservations locate root = do
             "human-reviewed" -> HumanReviewed
             "machine-confirmed" -> MachineConfirmed
             _ -> Unverified
-          observation = Observation runId source scenario Nothing entry.startedAt outcome (LabelsUnavailable "run-data-missing") (map componentPackage components) cohortName ("sha256:" <> hash) trust
+          observation = Observation runId source scenario Nothing entry.startedAt outcome (LabelsUnavailable "run-data-missing") (map componentPackage components) cohortName ("sha256:" <> hash) trust Nothing
       pure (observation, links)
 
     componentPackage :: ComponentRef -> ScopePackage
@@ -165,7 +166,8 @@ loadSealedObservation root = fmap (first (\(SourceError message) -> Text.pack ro
               packages = cohortScopePackages cohort,
               cohortName = unCohortName cohort.identityCohort,
               planHash = unPlanHash cohort.identityPlanHash,
-              trust = LocalSealed
+              trust = LocalSealed,
+              replay = Nothing
             }
 
 -- | Prefer the published record when a run is also available locally.

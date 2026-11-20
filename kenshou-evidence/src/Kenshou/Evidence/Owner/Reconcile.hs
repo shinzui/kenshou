@@ -14,6 +14,8 @@ module Kenshou.Evidence.Owner.Reconcile
     OwnerPackages (..),
     PackageMap (..),
     decodePackageMap,
+    parsePackageMap,
+    packageMapValue,
     ownerPackages,
     choosePackage,
 
@@ -81,18 +83,20 @@ data PackageMap = PackageMap
 -- list that is a subset of it; no key may appear twice.
 decodePackageMap :: ByteString -> Either Text PackageMap
 decodePackageMap bytes = do
-  value <- first Text.pack (Aeson.eitherDecodeStrict' bytes)
-  first Text.pack (parseEither parser value)
+  document <- first Text.pack (Aeson.eitherDecodeStrict' bytes)
+  first Text.pack (parseEither parsePackageMap document)
+
+parsePackageMap :: Value -> Parser PackageMap
+parsePackageMap = withObject "owner package map" \document -> do
+  schema <- document .: "schema"
+  when (schema /= ("kenshou.owner-package-map/v1" :: Text)) (fail "schema must be kenshou.owner-package-map/v1")
+  owners <- document .: "owners" >>= traverse ownerEntry
+  located <- document .:? "sources" .!= [] >>= traverse sourceEntry
+  byAffects <- unique "affects" [(key, packages) | (Left key, packages) <- owners]
+  byReference <- unique "reference" [(key, packages) | (Right key, packages) <- owners]
+  sources <- unique "scenario" located
+  pure PackageMap {byAffects, byReference, sources}
   where
-    parser = withObject "owner package map" \document -> do
-      schema <- document .: "schema"
-      when (schema /= ("kenshou.owner-package-map/v1" :: Text)) (fail "schema must be kenshou.owner-package-map/v1")
-      owners <- document .: "owners" >>= traverse ownerEntry
-      located <- document .:? "sources" .!= [] >>= traverse sourceEntry
-      byAffects <- unique "affects" [(key, packages) | (Left key, packages) <- owners]
-      byReference <- unique "reference" [(key, packages) | (Right key, packages) <- owners]
-      sources <- unique "scenario" located
-      pure PackageMap {byAffects, byReference, sources}
     ownerEntry = withObject "owner entry" \item -> do
       affects <- item .:? "affects"
       reference <- item .:? "reference"
@@ -114,6 +118,17 @@ decodePackageMap bytes = do
     unique label pairs = case [key | (key, count) <- Map.toList (Map.fromListWith (+) [(key, 1 :: Int) | (key, _) <- pairs]), count > 1] of
       [] -> pure (Map.fromList pairs)
       repeated -> fail ("duplicate " <> label <> " " <> show repeated)
+
+packageMapValue :: PackageMap -> Value
+packageMapValue mapping =
+  object
+    [ "schema" .= ("kenshou.owner-package-map/v1" :: Text),
+      "owners" .= (entries "affects" mapping.byAffects <> entries "reference" mapping.byReference),
+      "sources" .= [object (["scenario" .= scenario, "path" .= path] <> ["line" .= number | Just number <- [line]]) | (scenario, (path, line)) <- Map.toList mapping.sources]
+    ]
+  where
+    entries key values =
+      [object [key .= name, "packages" .= owner.packages, "versionsApplyTo" .= owner.versionsApplyTo] | (name, owner) <- Map.toList values]
 
 -- | The packages for an owner record: the entry keyed by the record's reference,
 -- otherwise the entry keyed by its @affects@ value.

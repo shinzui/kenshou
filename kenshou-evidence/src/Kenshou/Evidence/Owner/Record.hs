@@ -124,6 +124,7 @@ data OwnerReason
     DuplicateTargetUnresolved Text
   | -- | The record says it is a duplicate but names no target.
     DuplicateTargetAbsent
+  | FrozenOwnerReason Text Text (Maybe Text)
   deriving stock (Eq, Show)
 
 reasonCode :: OwnerReason -> Text
@@ -141,6 +142,7 @@ reasonCode = \case
   DuplicateCycle _ -> "duplicate-cycle"
   DuplicateTargetUnresolved _ -> "duplicate-target-unresolved"
   DuplicateTargetAbsent -> "duplicate-target-absent"
+  FrozenOwnerReason code _ _ -> code
 
 reasonMessage :: OwnerReason -> Text
 reasonMessage = \case
@@ -157,6 +159,7 @@ reasonMessage = \case
   DuplicateCycle members -> "duplicate chain is a cycle: " <> Text.intercalate " -> " members
   DuplicateTargetUnresolved target -> "duplicate target does not resolve to a record: " <> target
   DuplicateTargetAbsent -> "record is a duplicate but names no duplicateOf target"
+  FrozenOwnerReason _ message _ -> message
   where
     quoted value = "\"" <> value <> "\""
 
@@ -165,6 +168,7 @@ reasonField :: OwnerReason -> Maybe Text
 reasonField = \case
   MissingField name -> Just name
   MalformedField name _ -> Just name
+  FrozenOwnerReason _ _ field -> field
   _ -> Nothing
 
 -- | The handle a concept carries: the value of the handle field of its own type

@@ -1,0 +1,77 @@
+{
+  "schema": "kenshou.disposition-input/v1",
+  "capturedAt": "2026-11-17T19:00:00Z",
+  "catalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "packageMapDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "owners": {
+    "schema": "kenshou.owner-status/v1",
+    "observedAt": "2026-11-17T18:00:00Z",
+    "snapshot": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "records": [
+      {
+        "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "resolution": "resolved", "reasons": [], "kind": "Bug Report",
+        "handle": "BUG-2", "title": "Lease survives release", "status": "fixed",
+        "affects": "mori://fixture/owner-a", "duplicateOf": null,
+        "versions": {
+          "affected": {"raw": "1.2.0", "state": "released"},
+          "fixed": {"raw": "1.3.0", "state": "released"},
+          "lastWorking": {"raw": null, "state": "absent"}
+        },
+        "canonical": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+        "aliases": [], "citedBy": [], "source": null, "links": []
+      }
+    ]
+  },
+  "catalog": {
+    "schema": "kenshou.scenario-list/v1",
+    "roles": [],
+    "scenarios": [
+      {
+        "id": "consumer/table/correctness/lease-release", "revision": 2,
+        "summary": "Release a lease", "tier": "smoke", "placement": "either", "knobs": [],
+        "knownDefectDeclaration": {
+          "kind": "single", "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+          "summary": "Lease survives release", "expectedFailures": ["lease-held"],
+          "appliesTo": {"kind": "only-when", "conditions": [{"kind": "version-below", "package": "fixture-table", "version": "1.3.0"}]}
+        }
+      }
+    ]
+  },
+  "packageMap": {
+    "schema": "kenshou.owner-package-map/v1",
+    "owners": [{"affects": "mori://fixture/owner-a", "packages": ["fixture-table"], "versionsApplyTo": ["fixture-table"]}]
+  },
+  "observations": [
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e53",
+      "source": {"kind": "published-record", "reference": "runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e53"},
+      "scenario": "consumer/table/correctness/lease-release", "scenarioRevision": 2,
+      "startedAt": "2026-11-17T16:00:00Z", "outcome": "failed",
+      "labels": {"kind": "verified", "values": ["lease-held"]},
+      "packages": [{"name": "fixture-table", "version": "1.2.0", "source": "hackage"}],
+      "cohortName": "released-1.2", "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e54",
+      "source": {"kind": "published-record", "reference": "runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e54"},
+      "scenario": "consumer/table/correctness/lease-release", "scenarioRevision": 2,
+      "startedAt": "2026-11-17T17:00:00Z", "outcome": "passed",
+      "labels": {"kind": "verified", "values": []},
+      "packages": [{"name": "fixture-table", "version": "1.3.0", "source": "hackage"}],
+      "cohortName": "released-1.3", "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "trust": "machine-confirmed"
+    },
+    {
+      "runId": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55",
+      "source": {"kind": "sealed-run", "path": "scratch/runs/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55"},
+      "scenario": "consumer/table/correctness/lease-release", "scenarioRevision": 2,
+      "startedAt": "2026-11-17T17:05:00Z", "outcome": "passed",
+      "labels": {"kind": "verified", "values": []},
+      "packages": [{"name": "fixture-table", "version": "1.3.0", "source": "hackage"}],
+      "cohortName": "local", "planHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "trust": "local-sealed"
+    }
+  ]
+}

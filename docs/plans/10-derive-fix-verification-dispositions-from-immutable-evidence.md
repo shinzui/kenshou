@@ -79,7 +79,7 @@ run that exited 0 while reproducing an expected defect is `reproduces-as-expecte
   directories into observations with trust and digest-verified failure labels; a failed run
   whose labels cannot be verified is kept and marked as such. The evidence suite passed all
   55 tests, including exit-code independence, digest mismatch, refutation, and deduplication.
-- [ ] M2: `deriveDispositions` is a pure function over a `kenshou.disposition-input/v1`
+- [x] M2 (2026-11-19): `deriveDispositions` is a pure function over a `kenshou.disposition-input/v1`
   document; the rule-matrix tests cover every disposition, the precedence rules, duplicate
   attribution, groups, Git cohorts, and unparseable claims; a pass that does not mention the
   defect is attributed through the catalog.
@@ -193,6 +193,14 @@ fixtures and publish their own runs. The evidence suite passed with the replacem
   so adding fields to them breaks any consumer that builds or matches them positionally.
   Date: 2026-11-18
 
+
+- Decision: Pool the labels of all declarations that resolve to the same owner and scenario,
+  and keep each declaration's reference and scope evaluation in the report. When declarations
+  choose different mapped packages, the cohort's side is unknown.
+  Rationale: Duplicate aliases can converge in one scenario. Counting them once keeps the
+  owner/cohort summary correct, and a single outcome cannot settle incompatible version
+  mappings.
+  Date: 2026-11-19
 
 ## Outcomes & Retrospective
 
@@ -676,14 +684,14 @@ data ClassifiedObservation = ClassifiedObservation
   { observation :: Observation,
     result :: ObservationResult,
     otherFailures :: [Text],
-    scope :: ScopeEvaluation
+    scope :: [(Text, ScopeEvaluation)]
   }
 
 data Conclusion = Conclusion
   { owner :: Text,
     cohort :: Maybe (Text, Text),
     disposition :: Disposition,
-    reasons :: [Text],
+    reasons :: [DispositionReason],
     considered :: [ClassifiedObservation],
     incompatible :: [Observation]
   }

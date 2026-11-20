@@ -22,6 +22,7 @@ extra-source-files:
   test/fixtures/consumer-records/*.json
   test/fixtures/consumer-records/*.md
   test/fixtures/consumer-records/SOURCE
+  test/fixtures/dispositions/*.json
   test/fixtures/owners/*.json
   test/fixtures/owners/owner-a/bug-reports/*.md
   test/fixtures/owners/owner-b/bug-reports/*.md
@@ -71,6 +72,7 @@ library
     Kenshou.Evidence.Check
     Kenshou.Evidence.Cli
     Kenshou.Evidence.Config
+    Kenshou.Evidence.Disposition
     Kenshou.Evidence.Frontmatter
     Kenshou.Evidence.History
     Kenshou.Evidence.HistoryCli
@@ -115,6 +117,7 @@ test-suite kenshou-evidence-test
   hs-source-dirs: test
   main-is: Main.hs
   other-modules:
+    DispositionSpec
     OwnerSpec
     ReconcileSpec
 

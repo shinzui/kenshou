@@ -26,6 +26,8 @@ module Kenshou.Evidence.Owner
 
     -- * Encoding
     ownerStatusValue,
+    parseOwnerStatus,
+    ownerVersionsValue,
     citationValue,
     parseCitation,
     provenanceValue,
@@ -47,6 +49,7 @@ module Kenshou.Evidence.Owner
 where
 
 import Control.Exception (IOException, try)
+import Control.Monad (unless)
 import Data.Aeson (Value (..), object, (.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
@@ -311,21 +314,88 @@ entryValue entry =
       "status" .= (entry.record >>= (.status)),
       "affects" .= (entry.record >>= (.affects)),
       "duplicateOf" .= (entry.record >>= (.duplicateOf)),
-      "versions" .= fmap versionsValue entry.record,
+      "versions" .= fmap ownerVersionsValue entry.record,
       "canonical" .= entry.canonical,
       "aliases" .= entry.aliases,
       "citedBy" .= [Object (KeyMap.fromList (citerPairs citation <> maybe [] (\alias -> ["via" .= alias]) via)) | (citation, via) <- entry.citedBy],
       "source" .= fmap provenanceValue entry.source,
       "links" .= fmap linkValue entry.links
     ]
+
+ownerVersionsValue :: OwnerRecord -> Value
+ownerVersionsValue record =
+  object
+    [ "affected" .= claimValue record.affectedVersion,
+      "fixed" .= claimValue record.fixedVersion,
+      "lastWorking" .= claimValue record.lastWorkingVersion
+    ]
   where
-    versionsValue record =
-      object
-        [ "affected" .= claimValue record.affectedVersion,
-          "fixed" .= claimValue record.fixedVersion,
-          "lastWorking" .= claimValue record.lastWorkingVersion
-        ]
     claimValue claim = object ["raw" .= versionClaimRaw claim, "state" .= versionClaimState claim]
+
+-- | Recover the claims and resolution recorded in a frozen status document.
+-- Diagnostic messages are captured as rendered text and replayed verbatim.
+parseOwnerStatus :: Value -> Parser OwnerStatus
+parseOwnerStatus = withObject "owner status" \document -> do
+  schema <- document .: "schema"
+  unless (schema == ("kenshou.owner-status/v1" :: Text)) (fail "unsupported owner-status schema")
+  status <- OwnerStatus <$> document .: "observedAt" <*> document .: "snapshot" <*> (document .: "records" >>= traverse parseEntry)
+  let references = Set.fromList (map (\(entry :: OwnerEntry) -> entry.reference) status.records)
+  unless (Set.size references == length status.records) (fail "owner status has duplicate references")
+  pure status
+  where
+    parseEntry :: Value -> Parser OwnerEntry
+    parseEntry = withObject "owner entry" \entry -> do
+      reference <- entry .: "reference"
+      resolution <-
+        entry .: "resolution" >>= \case
+          ("resolved" :: Text) -> pure Resolved
+          "unresolved" -> pure Unresolved
+          "not-a-record" -> pure NotARecord
+          _ -> fail "unknown owner resolution"
+      reasons <- entry .: "reasons" >>= traverse parseReason
+      kind <- entry .: "kind"
+      record <- traverse (parseRecord entry reasons) kind
+      canonical <- entry .: "canonical"
+      aliases <- entry .: "aliases"
+      citedBy <-
+        entry .: "citedBy"
+          >>= traverse
+            ( withObject "citer" \citer -> do
+                via <- citer .:? "via"
+                citation <- parseCitation (Object (KeyMap.insert "reference" (String (fromMaybe reference via)) citer))
+                pure (citation, via)
+            )
+      source <- entry .: "source" >>= traverse parseProvenance
+      links <- entry .: "links" >>= traverse parseLink
+      pure OwnerEntry {reference, resolution, reasons, record, canonical, aliases, citedBy, source, links}
+
+    parseReason = withObject "owner reason" \reason ->
+      FrozenOwnerReason <$> reason .: "code" <*> reason .: "message" <*> reason .:? "field"
+
+    parseRecord entry reasons kind = do
+      (affectedVersion, fixedVersion, lastWorkingVersion) <-
+        entry .: "versions"
+          >>= withObject
+            "owner versions"
+            ( \versions ->
+                (,,) <$> (versions .: "affected" >>= parseClaim) <*> (versions .: "fixed" >>= parseClaim) <*> (versions .: "lastWorking" >>= parseClaim)
+            )
+      handle <- entry .: "handle"
+      title <- entry .: "title"
+      status <- entry .: "status"
+      affects <- entry .: "affects"
+      duplicateOf <- entry .: "duplicateOf"
+      let malformedFields = [field | reason <- reasons, reasonCode reason == "malformed-field", Just field <- [reasonField reason]]
+      pure OwnerRecord {kind, handle, title, status, affects, affectedVersion, fixedVersion, lastWorkingVersion, duplicateOf, malformedFields}
+
+    parseClaim = withObject "version claim" \claim -> do
+      state <- claim .: "state"
+      raw <- claim .: "raw"
+      let version = case (state :: Text, raw) of
+            ("malformed", Nothing) -> ClaimMalformed
+            _ -> maybe ClaimAbsent classifyVersion raw
+      unless (versionClaimState version == state) (fail "owner version state does not match its raw claim")
+      pure version
 
 reasonValue :: OwnerReason -> Value
 reasonValue reason = object (["code" .= reasonCode reason, "message" .= reasonMessage reason] <> maybe [] (\field -> ["field" .= field]) (reasonField reason))

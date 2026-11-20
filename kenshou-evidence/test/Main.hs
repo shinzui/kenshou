@@ -16,6 +16,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Time (UTCTime (..), fromGregorian)
+import DispositionSpec qualified
 import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cli.Config (ConfigInputs (..))
 import Kenshou.Core.Compat (renderResourceInputs)
@@ -58,6 +59,7 @@ main :: IO ()
 main = hspec do
   OwnerSpec.spec
   ReconcileSpec.spec
+  DispositionSpec.spec
   -- Verbatim data from the first consumer: what it has already sealed must keep
   -- decoding, and its comparison keys must not change when it adopts this release.
   describe "consumer compatibility" do
