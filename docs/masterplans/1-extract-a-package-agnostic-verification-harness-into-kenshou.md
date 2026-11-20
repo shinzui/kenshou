@@ -21,6 +21,11 @@ provenance:
       at: 2026-10-28T17:14:50Z
       mode: "implement"
       note: "EP-6 completed: ADR, terminology, guides, improvement-request, and friction-log bundles; adoption guide walked end to end"
+    - model: "gpt-6.2-sol"
+      harness: "codex-cli"
+      at: 2026-11-20T20:49:17Z
+      mode: "update"
+      note: "Record the first public release and the outstanding consumer adoption gate."
 ---
 
 # Extract a package-agnostic verification harness into kenshou
@@ -155,7 +160,7 @@ cross-repository decisions are in `mori://shinzui/keiro-runtime-kenshou`:
 | 4 | Move residual layer knowledge out of the toolkits and make evidence targets configuration | docs/plans/4-move-residual-layer-knowledge-out-of-the-toolkits-and-make-evidence-targets-configuration.md | EP-2 | EP-3 | Complete |
 | 5 | Prove the harness boundary with a synthetic layer and a coupling guard | docs/plans/5-prove-the-harness-boundary-with-a-synthetic-layer-and-a-coupling-guard.md | EP-2, EP-3, EP-4 | None | Complete |
 | 6 | Carry the harness decisions, vocabulary, and adoption guide into kenshou documentation | docs/plans/6-carry-the-harness-decisions-vocabulary-and-adoption-guide-into-kenshou-documentation.md | EP-1 | EP-2, EP-3, EP-4, EP-5 | Complete |
-| 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | In Progress |
+| 7 | Publish the first kenshou release and prepare the consumer adoption path | docs/plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md | EP-5, EP-6 | None | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -306,14 +311,13 @@ records under `kenshou-evidence/test/fixtures/consumer-records/`, and proves it 
 injected name. EP-2 also removes the three migration libraries, so `plan-check` rejects them
 from that point on.
 
-Cross-repository adoption gate, owned by EP-7 and executed later in
-`mori://shinzui/keiro-runtime-kenshou`. Acceptance criterion AC-4 of IR-1 (the Keiro suite
-produces equivalent verdicts after the refactor) can only be checked where the layer packages
-live. EP-7 produces the adoption checklist, the divergence audit comparing the generic
-packages at the pinned import revision with the consumer's head, and the published release.
-The consumer's adoption plan then deletes its local packages, relocates the three oracles and
-the Keiro attestations into its layer packages, and runs the smoke and change suites against
-the last pre-adoption baseline.
+The cross-repository adoption gate runs where the Keiro layer packages live, in
+`mori://shinzui/keiro-runtime-kenshou`. EP-7 supplies the release, divergence audit,
+and adoption guide. The consumer removed the generic copies and moved the Keiro
+attestations and oracles in
+`mori://shinzui/keiro-runtime-kenshou/plans/26-adopt-the-extracted-kenshou-harness`.
+It still needs to switch its eight Git-pinned packages to Hackage, verify the
+released cohort, and compare smoke and change runs with the pre-adoption baseline.
 
 
 ## Progress
@@ -343,18 +347,15 @@ five OKF bundles, registered with Mori and validated in `just verify`:
 
 The adoption guide was walked end to end from a scratch project outside the checkout.
 
-Phase D (EP-7) is in progress. The nine packages are release-ready:
-- `cabal check` is clean;
-- nine tarballs build from scratch;
-- the divergence audit is clean;
-- the consumer adoption guide, DOC-2, is checked in.
+Phase D (EP-7) is complete (2026-11-20). All nine packages and their documentation
+are available at `0.1.0.0`, and the annotated `v0.1.0.0` tag points to the qualified
+source commit. Both clean Cabal probes passed at index-state `2026-11-20T20:48:12Z`.
+DOC-2 records the pin and links to the verified Nix hashes.
 
-Tagging and publication to Hackage wait on the user's confirmation. The test suites pass
-only in the repository; IR-1 records why. The CI run on a pushed commit is still unobserved.
-
-- [ ] Cross-repository adoption gate: the consumer's adoption plan exists in
-  `mori://shinzui/keiro-runtime-kenshou` and the smoke suite passes against the published
-  release with unchanged verdicts.
+- [ ] Cross-repository adoption gate. Verify the released cohort in
+  `mori://shinzui/keiro-runtime-kenshou`. Run the smoke and change suites on the
+  published release and confirm matching verdicts and comparison keys against the
+  pre-adoption baseline before moving Kenshou from Experimental to Active.
 
 
 ## Surprises & Discoveries
@@ -481,9 +482,7 @@ exec-plan skill's FRICTION.md).
 
 ## Outcomes & Retrospective
 
-Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
-Compare the result against the original vision. Before marking the MasterPlan complete,
-distill durable project context from this MasterPlan and its child ExecPlans into
-docs/adr/. Keep task-local execution and coordination details here.
-
-(To be filled during and after implementation.)
+The extracted harness builds from Hackage in a standalone project. The Keiro
+consumer already assembles its layers against the extracted Git-pinned packages.
+The remaining integration work is to move that cohort to the published
+archives and verify the baseline comparison before changing the Mori lifecycle.

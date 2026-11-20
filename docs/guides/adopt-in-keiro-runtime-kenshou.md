@@ -20,10 +20,10 @@ recorded in
 and `mori://shinzui/keiro-runtime-kenshou/okf/adrs/concepts/ADR-24`.
 
 The remaining adoption step switches the eight packages from Git revision
-`b90da77822002de46dfe310ab378f3ccd44cb1db` to Hackage `0.1.0.0`. Use the publication
-index-state in the [release plan](../plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md)
-once all nine packages are public. The ninth, `kenshou-synthetic`, supplies the
-example executable. For the assembly contract, see
+`b90da77822002de46dfe310ab378f3ccd44cb1db` to Hackage `0.1.0.0`. All nine
+packages are available at Hackage index-state `2026-11-20T20:48:12Z`.
+The ninth, `kenshou-synthetic`, supplies the example executable.
+For the assembly contract, see
 [Adopt kenshou in a project](adopting-kenshou-in-a-project.md).
 
 The paths and commands below are relative to the consumer checkout. Artifact-level
@@ -133,8 +133,9 @@ tracks the repository-level fixtures read by some test suites. Keep that overrid
 for the first release. The separate tarball SHA-256 in the lock identifies the
 archive in the payload's cohort identity.
 
-Compare the eight source hashes in each lock with the published hashes in the
-release plan. Run `just payload-check released` and `just payload-check head`
+Compare the eight source hashes in each lock with the
+[published source hashes](../plans/7-publish-the-first-kenshou-release-and-prepare-the-consumer-adoption-path.md#published-source-hashes).
+Run `just payload-check released` and `just payload-check head`
 to check the resulting Nix identities against their descriptors.
 
 ## Verify the adoption

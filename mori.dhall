@@ -11,7 +11,7 @@ in  Schema.Project::{
       , language = Schema.Language.Haskell
       , lifecycle = Schema.Lifecycle.Experimental
       , description = Some
-          "Package-agnostic verification harness for Haskell systems: the scenario kernel plus the correctness, measurement, diagnostics, telemetry, evidence, and remote-cell toolkits, extracted from mori://shinzui/keiro-runtime-kenshou so any project can register its own layer suites."
+          "Package-agnostic verification harness for Haskell systems: the scenario kernel plus the correctness, measurement, diagnostics, telemetry, evidence, and remote-cell toolkits, extracted from mori://shinzui/keiro-runtime-kenshou so any project can register its own layer suites. First release: v0.1.0.0."
       , domains = [ "Testing", "Benchmarking", "Verification" ]
       , owners = [ "shinzui" ]
       }

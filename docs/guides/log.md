@@ -2,6 +2,8 @@
 
 ## 2026-11-20
 
+* **Update**: Recorded the first release's Hackage index-state and linked its eight verified Nix source hashes in DOC-2.
+
 * **Update**: Reworked DOC-2 for the consumer's installed Git pin and the remaining Cabal, Nix and verification steps for Hackage adoption.
 
 * **Update**: Walk through a frozen verification round from capture through candidate evaluation and report.

@@ -2,6 +2,15 @@
 
 ## 2026-11-20
 
+* **Update**: FRIC-6 accepted: Accepted the registry propagation delay and documented the Cabal index check.
+
+
+* **Addition**: FRIC-6 records slowdown environment friction with https://hackage.haskell.org/: Published packages take time to reach the signed Hackage index
+
+
+* **Update**: FRIC-5 accepted: Accepted the isolated strict check for the family request because the committed baseline reproduces the IR-5 diagnostic.
+
+
 * **Addition**: FRIC-5 records detour tooling friction with mori://shinzui/haskell-nix/okf/improvement-requests: Existing request blocks strict validation of the registry bundle
 
 

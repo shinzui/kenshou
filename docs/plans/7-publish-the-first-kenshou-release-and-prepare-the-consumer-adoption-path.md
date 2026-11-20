@@ -57,33 +57,33 @@ It restores the run records referenced by the repository's verification fixtures
 
 ## Progress
 
-- [ ] **M1. Qualify a reproducible release commit.** The fixture repair is committed at
+- [x] **M1. Qualify a reproducible release commit (2026-11-20).** The fixture repair is committed at
   `599f6b43a9e0aaeab9fdf2aa35f2fc0ab3c8ae93` on the October source line, in a
   detached local worktree. On 2026-11-20 a fresh clone at that commit passed
   `nix develop --no-write-lock-file -c just verify` on GHC 9.12.4. It reported
   496 examples, zero failures and two pending. All nine packages passed
   `cabal check` and all nine rebuilt source archives matched the Hackage candidates
-  byte for byte. The tag awaits maintainer approval.
-- [ ] **M2. Publish and prove installation.** On 2026-11-20 all nine versioned release
-  pages returned HTTP 404. Nine named Haddock archives built from the release
-  commit and each contains rendered Kenshou module pages. Haddock reported missing
-  comments and unresolved cross-module links. After authorization, publish the
-  staged sources and documentation, record the Hackage index-state, and run both probes.
-  A scratch project using downloaded candidates already built both probes on GHC 9.12.4.
-  Core printed `"0.1.0.0"` and CLI printed `6` (registered self-test bundles).
-- [ ] **M3. Register the release.** Mori lists nine packages with lifecycle
-  `Experimental`. The owner checkout contains
+  byte for byte. The published annotated tag `v0.1.0.0` peels to that exact commit.
+- [x] **M2. Publish and prove installation (2026-11-20).** All nine `0.1.0.0` package pages and
+  their rendered module pages went live on 2026-11-20 at 20:48 UTC. Every public
+  tarball matches its staged source byte for byte. All nine appear at Hackage
+  index-state `2026-11-20T20:48:12Z`. The core and CLI probes printed
+  `"0.1.0.0"` and `6`, respectively, on GHC 9.12.4. Both solver plans confirm
+  Hackage tarball sources for all Kenshou packages.
+  Haddock reported missing comments and unresolved cross-module links during generation.
+- [x] **M3. Register the release (2026-11-20).** The validated Mori registration
+  reports `First release: v0.1.0.0.`, nine packages and lifecycle
+  `Experimental`. The registry owner checkout contains
   `mori://shinzui/haskell-nix/okf/improvement-requests/concepts/IR-6` at local commit
   `bb9ab1b`. The request passed strict validation in isolation and its canonical URI
-  resolves after local Mori registration. Register the release after publication.
-- [ ] **M4. Verify the consumer handoff.** The checked-in [adoption guide](../guides/adopt-in-keiro-runtime-kenshou.md)
+  resolves after local Mori registration.
+- [x] **M4. Verify the consumer handoff (2026-11-20).** The [adoption guide](../guides/adopt-in-keiro-runtime-kenshou.md)
   now documents the Git-to-Hackage switch and passed `just guides-validate` (two
   concepts). The 2026-11-20 read-only audit found no imported path changes before
   `481c1e0` and only the migration through consumer head `62a5648`.
-  The CLI candidate inventory matched the expected twelve consumer-only modules,
-  and all eight candidate source hashes were computed with Nix. Repeat the
-  inventory and hash checks against the published archives and record the index-state
-  in DOC-2.
+  Comparing `cabal get kenshou-cli-0.1.0.0` with the pre-migration consumer tree
+  left the expected twelve consumer-only modules. All eight unpacked source hashes
+  were verified against Hackage. DOC-2 records the index-state and links to the hashes.
   The consumer owns the switch and its smoke, change-suite and baseline comparison runs.
 
 ## Surprises & Discoveries
@@ -142,6 +142,11 @@ It restores the run records referenced by the repository's verification fixtures
   existing IR-5 review metadata. IR-6 passed strict profile and log enforcement in
   isolation. The full bundle passed profile and log enforcement in standard mode.
 
+- [FRIC-6](../friction-log/6-published-packages-take-time-to-reach-the-signed-hackage-index.md)
+  records that Cabal initially received a pre-release index and then one containing
+  only the first upload. The package pages, tarballs and documentation were already
+  accessible. Check that all nine versions are indexed before pinning the timestamp.
+
 - Divergence audit, 2026-10-28, run in the consumer checkout after `git fetch origin`.
   `origin/master` was `2129bb9`, three commits past the pin: `9ea967a` (seihou modules),
   `6514438` (nix-haskell-flake update), and `2129bb9` (a research document). None touches an
@@ -170,7 +175,6 @@ It restores the run records referenced by the repository's verification fixtures
   `Kenshou.Cli.Attest.Keiro*` modules. The candidate `kenshou-cli` also exports
   `Kenshou.Cli.Registry` and `Kenshou.Cli.Attest`, so the consumer migration relocated its own
   modules of those names.
-- The Hackage pin and Nix prefetch in DOC-2 require publication.
 - In the October rehearsal the nine tarballs, unpacked into an empty project with the harness cohort, build every
   library, executable, and test suite. This proves every Template Haskell embed is shipped.
   Their test suites still fail there:
@@ -219,6 +223,9 @@ It restores the run records referenced by the repository's verification fixtures
 - On 2026-10-28 the user authorized candidate uploads. The plan recorded an annotated local
   tag at `78f1f7a` and reserved permanent publication for a separate confirmation.
 
+- On 2026-11-20 the maintainer authorized tagging and publication of the qualified
+  October release commit `599f6b43a9e0aaeab9fdf2aa35f2fc0ab3c8ae93`.
+
 - Decision: Release 0.1.0.0 with test suites that pass only in the repository checkout, and
   tell Nix builders to use `dontCheck`. Do not restructure the imported tests in this plan.
   Rationale: Hackage does not run test suites, so publication is unaffected. About eighty
@@ -241,8 +248,34 @@ It restores the run records referenced by the repository's verification fixtures
 The release commit restores seven evidence records and their five index or log
 files outside the package tarballs. The Git-pinned consumer uses the same package
 sources, and the maintained guide describes the remaining source switch.
-The clean checkout, source archives and documentation are qualified. Permanent
-publication and the published-index checks await maintainer approval.
+The first release and its documentation are public. Both clean Cabal projects
+build and run at the recorded index-state. The remaining adoption tests belong
+to the consumer and are tracked by the parent MasterPlan.
+
+[FRIC-5](../friction-log/5-existing-request-blocks-strict-validation-of-the-registry-bundle.md)
+was accepted after isolating strict validation of IR-6 and confirming the
+pre-existing diagnostic on IR-5.
+
+[FRIC-6](../friction-log/6-published-packages-take-time-to-reach-the-signed-hackage-index.md)
+was accepted after the signed index caught up. The release procedure now checks
+that it contains all nine versions before pinning the timestamp.
+
+### Published source hashes
+
+All entries identify the unpacked Hackage `0.1.0.0` sources used in Nix. Each
+public archive also matched its reviewed candidate byte for byte.
+
+| Package | Unpacked source hash |
+| --- | --- |
+| `kenshou-core-0.1.0.0` | `sha256-04mq0i04uwxd1hoG6uL5X3WgTbUGzK6CR4Dht/yDTlI=` |
+| `kenshou-check-0.1.0.0` | `sha256-cZxQRn3XrvqnmAbTu/oiPMZo5Aa+AcoRWL2PAL40DVg=` |
+| `kenshou-measure-0.1.0.0` | `sha256-qLRAww1eAnMz17I7R9sEo/tP+l7KFHm3WtSrUxPaSXo=` |
+| `kenshou-diagnose-0.1.0.0` | `sha256-WG1Ls6vgccGAkhqQkDbxuDfADG0ci5E4p7ItCFGPHw0=` |
+| `kenshou-telemetry-0.1.0.0` | `sha256-xE/AiB4P/J34Fitx/5Fu2yTZw3aT4XcrJgML0DDp5cQ=` |
+| `kenshou-evidence-0.1.0.0` | `sha256-j9CBBqNPYbAKXPnKb+2sV9n1KE3j+tBHr+6S7iCNCU0=` |
+| `kenshou-remote-0.1.0.0` | `sha256-kb8hKXfwGtAPKQhqtSCQbhNA90OScze2Xmei4Xtp8Cg=` |
+| `kenshou-cli-0.1.0.0` | `sha256-figP9Dsd+Uolotz9GwT2N+KQg9a0LnVTkUh+txxSxAU=` |
+
 
 ## Context and Orientation
 
@@ -379,10 +412,12 @@ done
 cabal update
 ```
 
-Record the reported Hackage index-state at or after the final publication. Open all
-nine versioned pages and a module documentation link on each. Run the following outside
-this checkout in the same development environment, setting `release_index` to the
-recorded UTC timestamp. Each small executable imports a module from its direct dependency.
+Wait for `cabal update` and `cabal list --simple-output '^kenshou-'` to show all
+nine `0.1.0.0` packages. Record the index-state that includes the last upload.
+Open all nine versioned pages and a module documentation link on each. Run the
+following outside this checkout in the same development environment, setting
+`release_index` to the recorded UTC timestamp. Each small executable imports a
+module from its direct dependency.
 
 ```bash
 : "${release_index:?set the recorded Hackage index-state}"
