@@ -14,6 +14,11 @@ build-type: Simple
 extra-doc-files: CHANGELOG.md
 tested-with: ghc >=9.12 && <9.13
 extra-source-files:
+  test/fixtures/attestation/computations/*.md
+  test/fixtures/attestation/index.md
+  test/fixtures/attestation/profile.dhall
+  test/fixtures/attestation/references/attesters/*.sh
+  test/fixtures/attestation/references/executors/*.sh
   test/fixtures/consumer-records/*.json
   test/fixtures/consumer-records/*.md
   test/fixtures/consumer-records/SOURCE
@@ -69,6 +74,7 @@ library
     Kenshou.Evidence.Frontmatter
     Kenshou.Evidence.History
     Kenshou.Evidence.HistoryCli
+    Kenshou.Evidence.Observation
     Kenshou.Evidence.Owner
     Kenshou.Evidence.Owner.Cli
     Kenshou.Evidence.Owner.Reconcile

@@ -30,8 +30,9 @@ import Kenshou.Evidence.Attest (AttestOptions (..), AttestResult (..), Recomputa
 import Kenshou.Evidence.Bundle (BundleWriteError (..), BundleWriteResult (..), comparisonRecordPath, runRecordPath, writeAttestationRecord, writeRunRecord, writeRunRecordWith)
 import Kenshou.Evidence.Check (CheckOptions (..), Finding (..), checkBundle, checkBundleWithStore, checkDocument)
 import Kenshou.Evidence.Config (EvidenceDefaults (..), bundleRootKey, dataBaseUriKey, projectKey, resolveEvidenceDefaults)
-import Kenshou.Evidence.Frontmatter (AttestationCheck (..), AttestationEvidence (..), EvidenceRecord (..), comparisonFromDocument, comparisonToDocument, recordFromDocument, recordToDocument)
+import Kenshou.Evidence.Frontmatter (AttestationCheck (..), AttestationEvidence (..), EvidenceRecord (..), attestationToDocument, comparisonFromDocument, comparisonToDocument, recordFromDocument, recordToDocument)
 import Kenshou.Evidence.History (HistoryDocument (..), HistoryEntry (..), HistoryQuery (..), deriveBaseline, history)
+import Kenshou.Evidence.Observation qualified as Observation
 import Kenshou.Evidence.Publish (PublishError (..), PublishOptions (..), UploadMode (..), publishComparisonData, publishRunData)
 import Kenshou.Evidence.Record (RecordError (..), RecordInput (..), RecordOptions (..), RecordOutcome (..), buildRunRecord, recordComparison, recordRunWith)
 import Kenshou.Evidence.Source (ComparisonSource (..), ComparisonView (..), RunResultView (..), RunSource (..), VerifiedFile (..), loadComparisonSource, loadRunSource)
@@ -177,7 +178,7 @@ main = hspec do
                 ]
         createDirectoryIfMissing True runDirectory
         createDirectoryIfMissing True bundle
-        callProcess "cp" ["-R", "../fixtures/consumer-baseline/docs/verification/.", bundle]
+        callProcess "cp" ["-R", "test/fixtures/attestation/.", bundle]
         writeRunFixture runDirectory
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
@@ -320,7 +321,7 @@ main = hspec do
         callProcess "git" ["-C", attester, "add", "README"]
         callProcess "git" ["-C", attester, "commit", "-qm", "test: create clean attester"]
         revision <- Text.strip . Text.pack <$> readProcess "git" ["-C", attester, "rev-parse", "HEAD"] ""
-        callProcess "cp" ["-R", "../fixtures/consumer-baseline/docs/verification/.", bundle]
+        callProcess "cp" ["-R", "test/fixtures/attestation/.", bundle]
         writeCellRunFixture runDirectory outerPath cellRunId revision False
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
@@ -360,7 +361,7 @@ main = hspec do
         callProcess "git" ["-C", attester, "add", "README"]
         callProcess "git" ["-C", attester, "commit", "-qm", "test: create clean attester"]
         revision <- Text.strip . Text.pack <$> readProcess "git" ["-C", attester, "rev-parse", "HEAD"] ""
-        callProcess "cp" ["-R", "../fixtures/consumer-baseline/docs/verification/.", bundle]
+        callProcess "cp" ["-R", "test/fixtures/attestation/.", bundle]
         writeRunFixtureWithRevision runDirectory revision
         source <- loadRunSource runDirectory >>= either (fail . show) pure
         store <- memoryStore
@@ -377,6 +378,78 @@ main = hspec do
           checkBundle (CheckOptions bundle Nothing False False) `shouldReturn` Right []
         confirmedRun <- Text.IO.readFile (bundle </> recordPath) >>= either (fail . show) pure . parseDocument
         length (readVerified confirmedRun.frontmatter) `shouldBe` 1
+
+  describe "run observations" do
+    it "reads labels only from digest-verified data and uses current attestation trust" do
+      withSystemTempDirectory "kenshou-observations" \root -> do
+        let bundle = root </> "bundle"
+            run = root </> "run"
+            runData = root </> "data"
+        createDirectoryIfMissing True bundle
+        createDirectoryIfMissing True run
+        writeRunFixture run
+        let changeResult labels exitCode = do
+              value <- ByteString.readFile (run </> "run-result.json") >>= either fail pure . Aeson.eitherDecodeStrict'
+              fields <- case value of
+                Object fields -> pure fields
+                _ -> fail "expected a run result object"
+              let fields' =
+                    KeyMap.insert "scenarioRevision" (toJSON (2 :: Int))
+                      . KeyMap.insert "outcome" (String "failed")
+                      . KeyMap.insert "exitCode" (toJSON (exitCode :: Int))
+                      $ maybe (KeyMap.delete "failures" fields) (\items -> KeyMap.insert "failures" (toJSON (items :: [Text])) fields) labels
+              LazyByteString.writeFile (run </> "run-result.json") (encode (Object fields'))
+              identifier <- either (fail . show) pure (parseRunId "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55")
+              manifest <- writeManifest run identifier Map.empty
+              LazyByteString.writeFile (run </> "manifest.json") (encode manifest)
+            loadLocal = Observation.loadSealedObservation run >>= either (fail . Text.unpack) pure
+            loadPublished locator = do
+              loaded <- Observation.loadPublishedObservations locator bundle >>= either (fail . Text.unpack) pure
+              case loaded of
+                [observation] -> pure observation
+                _ -> fail "expected one published run observation"
+        changeResult (Just ["lease-held"]) 0
+        sealed <- loadLocal
+        sealed.trust `shouldBe` Observation.LocalSealed
+        sealed.labels `shouldBe` Observation.LabelsVerified ["lease-held"]
+        changeResult (Just ["lease-held"]) 1
+        loadLocal `shouldReturn` sealed
+        source <- loadRunSource run >>= either (fail . show) pure
+        store <- memoryStore
+        links <- publishRunData store (PublishOptions "gs://bucket/runs" UploadMissing False False) run source >>= either (fail . show) pure
+        record <- either (fail . show) pure (buildRunRecord (RecordInput Baseline (UTCTime (fromGregorian 2026 9 26) 0) False Nothing [] Nothing testSubjects Nothing) source links)
+        path <- either (fail . show) pure (runRecordPath record)
+        createDirectoryIfMissing True (takeDirectory (bundle </> path))
+        Text.IO.writeFile (bundle </> path) (serializeDocument (recordToDocument record))
+        let attestRun filename verdict time =
+              Text.IO.writeFile (bundle </> filename) . serializeDocument . attestationToDocument $
+                AttestationEvidence "Attestation" "Observed trust" time record.runId ("/" <> Text.pack path) (Revision (Text.replicate 40 "f")) time verdict [] [] Nothing ""
+        attestRun "confirmed.md" "confirmed" "2026-09-26T00:00:02Z"
+        let locator = Observation.objectStoreRunData store
+        published <- loadPublished locator
+        published.trust `shouldBe` Observation.MachineConfirmed
+        published.labels `shouldBe` sealed.labels
+        published.scenarioRevision `shouldBe` Just 2
+        published.packages `shouldBe` sealed.packages
+        Observation.mergeObservations [published] [sealed] `shouldBe` [published]
+        missing <- loadPublished (Observation.directoryRunData runData)
+        missing.labels `shouldBe` Observation.LabelsUnavailable "run-data-missing"
+        let resultPath = runData </> Text.unpack record.runId </> "run-result.json"
+        createDirectoryIfMissing True (takeDirectory resultPath)
+        ByteString.writeFile resultPath "{}"
+        tampered <- loadPublished (Observation.directoryRunData runData)
+        tampered.labels `shouldBe` Observation.LabelsUnavailable "run-data-digest-mismatch"
+        tampered.scenarioRevision `shouldBe` Nothing
+        attestRun "refuted.md" "refuted" "2026-09-26T00:00:03Z"
+        refuted <- loadPublished locator
+        refuted.trust `shouldBe` Observation.Unverified
+        changeResult Nothing 1
+        absent <- loadLocal
+        absent.labels `shouldBe` Observation.LabelsUnavailable "labels-absent"
+        absent.scenarioRevision `shouldBe` Just 2
+        changeResult (Just []) 1
+        empty <- loadLocal
+        empty.labels `shouldBe` Observation.LabelsVerified []
 
   describe "evidence configuration" do
     it "uses built-ins, ordered YAML, environment, then named flags" do

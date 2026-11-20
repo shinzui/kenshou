@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-18T01:55:31Z
       mode: "update"
       note: "Addressed the 2026-11-18 review: sibling-defect classification, signal-bearing latest, total rule list, absent labels, version step."
+    - model: "gpt-6.2-sol"
+      harness: "codex-cli"
+      at: 2026-11-20T02:20:36Z
+      mode: "implement"
+      note: "Implement observation loading, deterministic derivation, and the dispositions command."
 ---
 
 # Derive fix-verification dispositions from immutable evidence
@@ -70,9 +75,10 @@ run that exited 0 while reproducing an expected defect is `reproduces-as-expecte
 
 ## Progress
 
-- [ ] M1: the observation loader turns published evidence records and sealed local run
+- [x] M1 (2026-11-19): the observation loader turns published evidence records and sealed local run
   directories into observations with trust and digest-verified failure labels; a failed run
-  whose labels cannot be verified is kept and marked as such; loader tests pass.
+  whose labels cannot be verified is kept and marked as such. The evidence suite passed all
+  55 tests, including exit-code independence, digest mismatch, refutation, and deduplication.
 - [ ] M2: `deriveDispositions` is a pure function over a `kenshou.disposition-input/v1`
   document; the rule-matrix tests cover every disposition, the precedence rules, duplicate
   attribution, groups, Git cohorts, and unparseable claims; a pass that does not mention the
@@ -85,7 +91,10 @@ run that exited 0 while reproducing an expected defect is `reproduces-as-expecte
 
 ## Surprises & Discoveries
 
-(None yet.)
+The comparison and attestation tests copied an incomplete verification bundle. Its
+attestations referred to run files excluded by the root gitignore (FRIC-4 in
+[docs/friction-log/](../friction-log/)). The three tests now use package-local computation
+fixtures and publish their own runs. The evidence suite passed with the replacement.
 
 
 ## Decision Log

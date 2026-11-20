@@ -65,7 +65,9 @@ data RunResultView = RunResultView
     resultFingerprint :: !Value,
     resultCompatibility :: !Value,
     resultSummaries :: !(Maybe Value),
-    resultKnownDefect :: !(Maybe Value)
+    resultKnownDefect :: !(Maybe Value),
+    resultFailures :: !(Maybe [Text]),
+    resultScenarioRevision :: !(Maybe Int)
   }
   deriving stock (Eq, Show)
 
@@ -89,6 +91,8 @@ instance FromJSON RunResultView where
       <*> value .: "compatibility"
       <*> value .:? "summaries"
       <*> value .:? "knownDefect"
+      <*> value .:? "failures"
+      <*> value .:? "scenarioRevision"
 
 data CellEvidence = CellEvidence
   { cellManifest :: !CellManifest,
@@ -175,7 +179,10 @@ load root = do
   manifest <- readJson (root </> "manifest.json")
   spec <- readJson (root </> "run-spec.json")
   files <- verifyFiles root manifest (spec.environment.placement == RunOnCell)
-  result <- readJson (root </> "run-result.json")
+  resultBytes <- lift (ByteString.readFile (root </> "run-result.json"))
+  unless (any (\file -> file.relativePath == "run-result.json" && file.digest == sha256Bytes resultBytes) files) $
+    reject "run-result.json does not match the verified manifest"
+  result <- either (reject . ("run-result.json: " <>) . Text.pack) pure (eitherDecodeStrict' resultBytes)
   when (manifest.runId /= result.resultRunId) (reject "manifest and run result identify different runs")
   when (spec.runId /= Just result.resultRunId) (reject "run spec and run result identify different runs")
   when (spec.scenario /= result.resultScenario) (reject "run spec and run result identify different scenarios")

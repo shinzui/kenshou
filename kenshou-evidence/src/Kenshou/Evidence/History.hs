@@ -4,6 +4,7 @@ module Kenshou.Evidence.History
     HistoryDocument (..),
     HistoryEntry (..),
     history,
+    historyEntries,
     deriveBaseline,
   )
 where
@@ -90,14 +91,20 @@ queryValue query =
 
 history :: Text -> FilePath -> HistoryQuery -> IO (Either HistoryError HistoryDocument)
 history bundleUri root query = do
+  loaded <- historyEntries root
+  pure do
+    allEntries <- loaded
+    let withBaselines = [entry {derivedBaseline = deriveBaseline allEntries entry} | entry <- allEntries]
+    Right (HistoryDocument bundleUri query (filter (matches query) withBaselines))
+
+-- | Entries and their trust, before scenario filtering or baseline derivation.
+historyEntries :: FilePath -> IO (Either HistoryError [HistoryEntry])
+historyEntries root = do
   walked <- walkBundle root
   pure do
     concepts <- either (Left . HistoryError . Text.pack . show) Right walked
     let attested = attestationIndex concepts
-        allEntries = sortOn (\entry -> (entry.startedAt, entry.concept)) (mapMaybe (runEntry attested) concepts)
-        withBaselines = [entry {derivedBaseline = deriveBaseline allEntries entry} | entry <- allEntries]
-        selected = filter (matches query) withBaselines
-    Right (HistoryDocument bundleUri query selected)
+    pure (sortOn (\entry -> (entry.startedAt, entry.concept)) (mapMaybe (runEntry attested) concepts))
 
 deriveBaseline :: [HistoryEntry] -> HistoryEntry -> Maybe Text
 deriveBaseline entries current
