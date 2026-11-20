@@ -6,7 +6,7 @@ generated:
   by: "codex/gpt-6.1-sol"
   at: "2026-11-17T15:52:19Z"
 requestId: IR-5
-status: proposed
+status: in-progress
 origin: mori://shinzui/keiro-runtime-kenshou/masterplans/2-close-the-verification-and-repair-loop-for-the-keiro-runtime-in-rounds
 dependencies:
   - ref: mori://shinzui/kenshou/okf/improvement-requests/concepts/IR-4
@@ -110,3 +110,12 @@ and [ADR-5](../adr/0005-comparison-verdicts-require-controlled-benchmark-evidenc
 Synthetic end-to-end acceptance belongs here; consumer adoption and the real
 release-refresh evidence remain with that consumer. No target implementation
 plan or shipped release is claimed by this request.
+
+## Implementation
+
+[ExecPlan 11](../plans/11-run-verification-rounds-against-frozen-baseline-evidence.md)
+implements the generic round command and library, including offline adoption,
+arm-specific planning, create-only candidate evaluations, and replayable
+reports. The synthetic consumer verifies the public command contributions
+through the executor. Consumer adoption and the first release refresh are
+tracked in their originating plans.

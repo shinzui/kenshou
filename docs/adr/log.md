@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-20
+
+* **Create**: ADR-24 defines frozen round baselines, arm-bound plans and replayable candidate evaluations.
+
 * **Addition**: Recorded that fix dispositions are derived from frozen owner claims, catalog declarations, and compatible trusted observations (ADR-23).
 
 ## 2026-11-19

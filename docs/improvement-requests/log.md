@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-20
+
+* **Update**: Implement the generic frozen verification round protocol for IR-5 under ExecPlan 11.
+
 * **Update**: Implemented the observation loader, disposition derivation, and owners dispositions under docs/plans/10-derive-fix-verification-dispositions-from-immutable-evidence.md (IR-4).
 
 ## 2026-11-19

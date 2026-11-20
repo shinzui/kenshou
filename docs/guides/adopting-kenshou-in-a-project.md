@@ -562,6 +562,59 @@ travels with the observation in the frozen input.
 
 See [ADR-23](../adr/0023-derive-fix-dispositions-from-frozen-evidence.md).
 
+## Compare verification rounds
+
+Run `"$K" cohort show --json` when each arm is active and save the two
+outputs as `baseline-identity.json` and `candidate-identity.json`. Keep the
+published baseline run IDs or canonical concept references in a JSON array
+named `baseline-runs.json`. A baseline can include runs from several plans.
+Use the package map from scope reconciliation, and capture the owner snapshot
+explicitly.
+
+```bash
+"$K" owners snapshot --out owners-at-refresh
+"$K" round open --id refresh-1 --out refresh-1 --mode release \
+  --owners owners-at-refresh --package-map owner-package-map.json \
+  --baseline-identity baseline-identity.json --candidate-identity candidate-identity.json \
+  --baseline-runs baseline-runs.json
+"$K" round plan --round refresh-1 --arm candidate --out local-smoke \
+  --max-tier smoke --placement local --seed 42
+```
+
+The round copies and checks the inputs it will need for replay. The registered
+catalog and component graph are the defaults. Pass `--catalog` and `--graph`
+to use captured versions. If you already have a manual capture in the round
+input layout, use `--from-inputs DIR` in place of the source options. Release
+mode covers the full catalog before policy filters. Use change mode to start
+from owner reproductions and scenario coverage affected by the cohort change.
+
+Activate the candidate cohort, then run the plan with the normal executor.
+
+```bash
+"$K" execute --plan refresh-1/plans/local-smoke.run-plan.json --out execution
+"$K" round evaluate --round refresh-1 --id first --plan local-smoke --runs execution
+"$K" round report --round refresh-1 --evaluation first --write-report refresh-first.md
+```
+
+A [round evaluation](../terminology/round-evaluation.md) captures the
+observations and execution attempts that support the report. Sealed local runs
+have `local-sealed` trust and can support `not-reproduced`. To establish
+`verified-fixed`, publish and attest the candidate runs and create another
+evaluation using `--candidate-runs` with their explicit IDs. Include
+`--runs execution` again to retain the executor's attempt list. A new
+evaluation leaves the first report reproducible with its original trust.
+
+Use `round report --json` for automation. Exit 1 signals a blocking finding.
+Exit 3 signals omitted work or insufficient comparable evidence. Add
+`--comparison PATH` to the evaluation to cite an existing controlled comparison.
+Those links retain the comparison's own evidence and verdict.
+
+With `withCommand (roundCommandWith config)`, reuse your `OwnerConfig` in
+`RoundConfig.owners` and optionally set `reportPath` to choose a Markdown
+destination from the round ID and UTC evaluation date. Reports create output
+files once. See [ADR-24](../adr/0024-freeze-round-baselines-and-candidate-evaluations.md)
+and `"$K" help rounds`.
+
 ## Where to read next
 
 - [The architecture decisions](../adr/index.md) record why the harness works

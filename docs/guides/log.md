@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-20
+
+* **Update**: Walk through a frozen verification round from capture through candidate evaluation and report.
+
 * **Update**: Added capture and replay of fix-verification dispositions to the adoption guide (DOC-1).
 
 ## 2026-11-19

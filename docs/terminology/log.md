@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-20
+
+* **Create**: Define round and round evaluation (TERM-39 and TERM-40).
+
 * **Addition**: Defined observation (TERM-37) and disposition (TERM-38).
 
 ## 2026-11-19

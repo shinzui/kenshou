@@ -34,6 +34,8 @@ okf_version: "0.2"
 - [owner snapshot](owner-snapshot.md) - A create-once directory holding the exact owner-record bytes, their digests, the citations, and the enrichment links from which an owner status can be reported again.
 - [paired comparison](paired-comparison.md) - A controlled performance comparison of interleaved baseline and candidate run trials.
 - [phase](phase.md) - A timed part of a run's workload lifecycle, named warm-up, steady, or drain.
+- [round evaluation](round-evaluation.md) - A named capture of the candidate evidence used to report on a verification round.
+- [round](round.md) - A frozen baseline, pair of cohort identities, and set of inputs for verification reruns.
 - [run plan](run-plan.md) - A versioned schedule of selected runs with fixed specifications, reasons, and identities.
 - [run specification](run-specification.md) - A versioned input document that selects a scenario and supplies the values and environment for one execution.
 - [run](run.md) - One identified execution of a scenario whose inputs, outcome, and artifacts are saved together.

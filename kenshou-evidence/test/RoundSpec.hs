@@ -186,6 +186,14 @@ spec = describe "verification rounds" do
       Report.renderRoundReportText report `shouldSatisfy` Text.isInfixOf "machine-confirmed failed revision=2 exit=0"
       (definition, inputs, digest) <- R.readRoundWithDigest roundDir >>= right
       evaluation <- Report.readEvaluation roundDir "e1" definition digest >>= right
+      let firstAttempt = "01997f3a-5b7c-7e21-8a44-00000000000f"
+          retryOnly = evaluation {Report.candidate = filter ((/= firstAttempt) . (.runId)) evaluation.candidate}
+      afterRetry <- right (Report.roundReport definition inputs retryOnly)
+      let retryValue = Report.roundReportValue afterRetry
+      field "missingCoverage" retryValue `shouldBe` field "missingCoverage" value
+      [retryCoverage] <- pure [run | run <- rows (field "plannedRuns" retryValue), field "scenario" run == field "scenario" retried]
+      map (field "runId") (rows (field "observations" retryCoverage)) `shouldBe` [Aeson.String "01997f3a-5b7c-7e21-8a44-000000000011"]
+      field "attempts" retryCoverage `shouldBe` field "attempts" retried
       noOverride <- right (Report.roundReport definition {scopeOverrides = []} inputs evaluation)
       field "verifiedFixed" (field "counts" (Report.roundReportValue noOverride)) `shouldBe` Aeson.toJSON (0 :: Int)
       BS.writeFile (root </> "newer-history.json") "[\"newer-evidence\"]"

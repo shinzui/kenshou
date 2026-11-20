@@ -92,11 +92,12 @@ one run with incomplete evidence, and exits 1 because of the new failure.
   plan. The core and evidence tests cover both modes, both arm identities, owner reasons and
   omissions. The CLI acceptance test executes the emitted plan and compares its policy with
   `plan`. `plan --help` is byte-identical.
-- [ ] M3: `round evaluate` freezes an evaluation; `round report` derives baseline and candidate
-  dispositions from it with plan 10's function and prints text, `kenshou.round-report/v1` JSON,
-  and an optional dated Markdown report; the fixture replay has the expected counts and is unchanged by newer
-  observations; a synthetic consumer runs open, plan, execute, and report through public
-  command contributions; `just verify` passes.
+- [x] M3 (2026-11-19): `round evaluate` freezes candidate evidence and execution attempts.
+  `round report` derives owner dispositions in text, JSON, and optional dated Markdown.
+  The fixture reports one verified fix, expected reproduction with child exit 0, new
+  failure, missing scenario, infrastructure failure, and incomplete observation. Replay is
+  byte-identical and the retry accounts for its planned run with only the retry observation
+  present. The synthetic consumer exercises the full command flow. `just verify` passes.
 
 
 ## Surprises & Discoveries
@@ -213,7 +214,23 @@ package explicitly, while the mode remains `change`.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+The four round subcommands are available through `standardCommands` and
+`roundCommandWith`. Operators can adopt a capture, plan either frozen arm, and
+compare new evaluations without rereading previously frozen sources. The shared
+disposition engine, component graph, and ordinary executor govern the results.
+[ADR-24](../adr/0024-freeze-round-baselines-and-candidate-evaluations.md) records
+the round's durable contract.
+
+The fixture exits 1 for its new failure. The public CLI walkthrough confirms exit 4
+before evaluation, identical JSON on replay, and exit 2 for reopening an existing
+round. The CLI acceptance test checks that owner and sealed run bytes stay identical
+and that an existing Markdown report is refused. `cabal sdist --list-only` includes
+the new test modules, fixture, and CLI help topic. `just verify` passes including the
+coupling guard and documentation profiles. The CLI suite has two pre-existing pending
+performance examples. No friction entries were opened for this plan.
+
+The package versions are `kenshou-core 0.2.0.0`, `kenshou-evidence 0.2.1.0`, and
+`kenshou-cli 0.1.4.0`. The commits are local on the current branch.
 
 
 ## Context and Orientation
@@ -790,3 +807,8 @@ empty evaluation by mistake. Scope overrides gained a file format and a defined 
 derivation. Missing coverage is now judged through the execution's attempt list, because a
 retried run gets a new run identifier. The plan also states that sealed local runs cannot yield
 `verified-fixed`, what `--select` means in `round plan`, and its version step.
+
+2026-11-19: Published each plan and coverage as one paired directory with the
+specified flat paths. Recorded missing baseline controls and prevented baseline
+passes from satisfying candidate reruns when the cohort hash is shared. The
+evaluation retains captured plan and summary JSON bytes with their digests.
