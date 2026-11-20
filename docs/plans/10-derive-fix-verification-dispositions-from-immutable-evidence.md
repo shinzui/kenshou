@@ -78,15 +78,17 @@ run that exited 0 while reproducing an expected defect is `reproduces-as-expecte
 - [x] M1 (2026-11-19): the observation loader turns published evidence records and sealed local run
   directories into observations with trust and digest-verified failure labels; a failed run
   whose labels cannot be verified is kept and marked as such. The evidence suite passed all
-  55 tests, including exit-code independence, digest mismatch, refutation, and deduplication.
+  55 examples, including exit-code independence, digest mismatch, refutation, and deduplication.
 - [x] M2 (2026-11-19): `deriveDispositions` is a pure function over a `kenshou.disposition-input/v1`
   document; the rule-matrix tests cover every disposition, the precedence rules, duplicate
   attribution, groups, Git cohorts, and unparseable claims; a pass that does not mention the
   defect is attributed through the catalog.
-- [ ] M3: `owners dispositions` captures a frozen input, derives from it, and prints text and
+- [x] M3 (2026-11-19): `owners dispositions` captures a frozen input, derives from it, and prints text and
   `kenshou.dispositions/v1` JSON; replaying a frozen input twice yields equal JSON after newer
   evidence and changed owner files appear; a synthetic consumer drives it through the public
-  extension points; `just verify` passes.
+  extension points. The CLI test confirmed byte-identical replays, a changed live report,
+  and unchanged source digests across each command. The fixture matches the golden JSON
+  and both schemas. `just verify` passed on the final source and fixtures.
 
 
 ## Surprises & Discoveries
@@ -193,7 +195,6 @@ fixtures and publish their own runs. The evidence suite passed with the replacem
   so adding fields to them breaks any consumer that builds or matches them positionally.
   Date: 2026-11-18
 
-
 - Decision: Pool the labels of all declarations that resolve to the same owner and scenario,
   and keep each declaration's reference and scope evaluation in the report. When declarations
   choose different mapped packages, the cohort's side is unknown.
@@ -202,9 +203,34 @@ fixtures and publish their own runs. The evidence suite passed with the replacem
   mappings.
   Date: 2026-11-19
 
+- Decision: Capture a consumer's domain replay as an optional JSON annotation on the
+  observation. Each disposition reason has a code and can cite specific run IDs or scenarios.
+  Rationale: The annotation survives offline replay while disposition rules continue to use the
+  recorded outcome, verified labels, and attestation trust. Structured references let tools
+  follow the evidence behind a regression, an unreadable failure, or incomplete coverage.
+  Date: 2026-11-19
+
+
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+`kenshou owners dispositions` captures a read-only report from an owner snapshot, a
+catalog, a package map, and published or sealed run observations. Its create-once input
+replays byte-identically after the evidence bundle and owner sources change. The API,
+schemas, and CLI are available in `kenshou-evidence` 0.2.0.0 and `kenshou-cli` 0.1.3.0
+in this repository.
+
+`nix develop --no-write-lock-file -c just verify` exited 0. The evidence suite ran 63
+examples and the CLI suite ran 49 examples with zero failures, including the capture and
+replay integration. The run also verified the fixture against both JSON schemas, checked
+the generated report against the golden, and validated the documentation and package
+boundaries.
+
+FRIC-4 in [docs/friction-log/](../friction-log/) was resolved by moving the failing
+comparison and attestation tests to a package-local fixture. The version test now
+compares the CLI version to Cabal metadata.
+
+[ADR-23](../adr/0023-derive-fix-dispositions-from-frozen-evidence.md) records the durable
+rules for scope, trust, reproduction, and immutable replay.
 
 
 ## Context and Orientation
@@ -490,8 +516,10 @@ is the job of the round report in plan 11.
 Add fields to plan 8's `OwnerConfig` for a default run-data locator and default evidence
 locations, so that a consumer can configure where its run data lives in its own program rather
 than on every command line. A consumer whose scenarios need a domain-specific replay step
-contributes it through this configuration as a function applied to an observation after
-loading; the generic loader imports no consumer oracle.
+contributes it through `replayObservation`, which can attach a JSON value to an observation
+during capture. `runDataLocator`, `evidenceBundle`, `evidenceBundleUri`, and
+`sealedRunRoots` supply evidence locations. A replay reads the captured annotation from
+the input without calling the consumer.
 
 In `kenshou-cli/test/Main.hs`, extend the synthetic consumer from plan 8: generate a bundle, run
 directories, a snapshot, a catalog, and a package map in a temporary directory; run `owners
@@ -533,20 +561,13 @@ F=kenshou-evidence/test/fixtures/dispositions
 "$K" owners dispositions --input "$F/input.json"
 ```
 
-The report contains blocks of this shape:
+The fixture reports one owner across three cohorts. The release below the fix
+`reproduces-as-expected`, the confirmed pass on the fixed release is `verified-fixed`, and
+the local pass on a separately resolved cohort is `not-reproduced` with `insufficient-trust`.
+The text summary is:
 
 ```text
-mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2   status=fixed  fixedVersion=1.3.0
-  cohort released-1.3 (sha256:…)   fixed-side   verified-fixed
-    consumer/table/correctness/lease-release   passed   machine-confirmed   run 01997f3a-…
-  cohort released-1.2 (sha256:…)   affected-side   reproduces-as-expected
-    consumer/table/correctness/lease-release   reproduced [lease-held]   machine-confirmed   run 01997f2b-…
-
-mori://fixture/owner-a/okf/bug-reports/concepts/BUG-3   status=fixed  fixedVersion=2.0.0
-  cohort local (sha256:…)   fixed-side   not-reproduced   insufficient-trust
-    consumer/table/correctness/reader-restart   passed   local-sealed   run 01997f4c-…
-
-summary: verifiedFixed=1 stillReproduces=1 reproducesAsExpected=2 notReproduced=3 regressed=1 differentFailure=1 notYetReleased=1 notRun=1 unverifiable=3
+summary verifiedFixed=1 stillReproduces=0 reproducesAsExpected=1 notReproduced=1 regressed=0 differentFailure=0 notYetReleased=0 notRun=0 unverifiable=0
 ```
 
 Confirm that replay is deterministic:
@@ -636,7 +657,8 @@ data Observation = Observation
     packages :: [ScopePackage],
     cohortName :: Text,
     planHash :: Text,
-    trust :: Trust
+    trust :: Trust,
+    replay :: Maybe Value
   }
 
 type RunDataLocator = Text -> DataLink -> IO (Maybe ByteString)
@@ -684,14 +706,25 @@ data ClassifiedObservation = ClassifiedObservation
   { observation :: Observation,
     result :: ObservationResult,
     otherFailures :: [Text],
-    scope :: [(Text, ScopeEvaluation)]
+    scope :: [(Text, ScopeEvaluation)],
+    reproductionInScope :: Bool
+  }
+
+data DispositionReason = DispositionReason
+  { code :: Text,
+    runs :: [Text],
+    scenarios :: [ScenarioId],
+    detail :: Maybe Text
   }
 
 data Conclusion = Conclusion
   { owner :: Text,
+    claim :: Maybe OwnerRecord,
     cohort :: Maybe (Text, Text),
+    side :: Maybe CohortSide,
     disposition :: Disposition,
     reasons :: [DispositionReason],
+    required :: Map ScenarioId (Maybe Text),
     considered :: [ClassifiedObservation],
     incompatible :: [Observation]
   }
@@ -719,3 +752,8 @@ determination honors plan 9's new `versionsApplyTo`. An absent `failures` field 
 unavailable labels instead of an empty list, the exit-code test moved to the loader where it can
 be written, the frontmatter key for data links was corrected to `data`, and the version step is
 stated.
+
+2026-11-19: Implementation pools declarations that resolve to the same owner and records each
+scope separately. Consumer replay annotations and structured evidence references travel in the
+versioned documents. The runnable fixture covers expected reproduction, confirmed repair, and a
+local pass, and the evidence suite covers the rest of the decision table.

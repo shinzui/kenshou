@@ -17,6 +17,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Time (addUTCTime, getCurrentTime)
+import Data.Version (showVersion)
 import Kenshou.Cli (Program (..), runWithArgsWith, selfTestAssembly)
 import Kenshou.Cli.Cohort (resolveDefaultCohortIdentity)
 import Kenshou.Cli.Version (appVersionWithGit)
@@ -39,6 +40,7 @@ import Kenshou.Remote.Store (Bucket (..), ObjectName (..), ObjectStore (..), Pre
 import Kenshou.Remote.Store.File (newFileStore)
 import Kenshou.Telemetry.Overhead (OverheadState (..), SlotRun (..), loadOverheadState)
 import OwnersSpec qualified
+import Paths_kenshou_cli qualified as Package
 import PerfSessionSpec qualified
 import System.Directory (Permissions (..), copyFile, createDirectoryIfMissing, doesFileExist, doesPathExist, getPermissions, listDirectory, makeAbsolute, setPermissions, withCurrentDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -727,7 +729,7 @@ main = hspec do
 
   describe "version" do
     it "includes the cabal package version and a short revision" do
-      appVersionWithGit `shouldSatisfy` Text.isPrefixOf "kenshou v0.1.2.0 ("
+      appVersionWithGit `shouldSatisfy` Text.isPrefixOf ("kenshou v" <> Text.pack (showVersion Package.version) <> " (")
       Text.dropAround (`elem` ['(', ')']) (Text.takeWhileEnd (/= ' ') appVersionWithGit)
         `shouldSatisfy` (\revision -> revision == "dirty" || Text.length revision == 7)
 

@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.dispositions.v1.schema.json",
+  "title": "Derived fix-verification dispositions",
+  "type": "object",
+  "required": ["schema", "capturedAt", "snapshot", "catalogDigest", "packageMapDigest", "conclusions", "summary"],
+  "properties": {
+    "schema": {"const": "kenshou.dispositions/v1"},
+    "capturedAt": {"type": "string", "format": "date-time"},
+    "snapshot": {"oneOf": [{"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"}, {"type": "null"}]},
+    "catalogDigest": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"},
+    "packageMapDigest": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"},
+    "conclusions": {"type": "array", "items": {"$ref": "#/$defs/conclusion"}},
+    "summary": {
+      "type": "object",
+      "required": ["verifiedFixed", "stillReproduces", "reproducesAsExpected", "notReproduced", "regressed", "differentFailure", "notYetReleased", "notRun", "unverifiable"],
+      "minProperties": 9,
+      "maxProperties": 9,
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "conclusion": {
+      "type": "object",
+      "required": ["owner", "claim", "cohort", "side", "disposition", "reasons", "required", "considered", "incompatible"],
+      "properties": {
+        "owner": {"type": "string"},
+        "claim": {"oneOf": [{"$ref": "#/$defs/claim"}, {"type": "null"}]},
+        "cohort": {"oneOf": [{"$ref": "#/$defs/cohort"}, {"type": "null"}]},
+        "side": {"oneOf": [{"$ref": "#/$defs/side"}, {"type": "null"}]},
+        "disposition": {"enum": ["verified-fixed", "still-reproduces", "reproduces-as-expected", "not-reproduced", "regressed", "different-failure", "not-yet-released", "not-run", "unverifiable"]},
+        "reasons": {"type": "array", "items": {"$ref": "#/$defs/reason"}},
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scenario", "latest"],
+            "properties": {
+              "scenario": {"type": "string"},
+              "latest": {"oneOf": [{"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/runId"}, {"type": "null"}]}
+            },
+            "additionalProperties": false
+          }
+        },
+        "considered": {"type": "array", "items": {"$ref": "#/$defs/classified"}},
+        "incompatible": {"type": "array", "items": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/observation"}}
+      },
+      "additionalProperties": false
+    },
+    "cohort": {
+      "type": "object",
+      "required": ["name", "planHash"],
+      "properties": {
+        "name": {"type": "string"},
+        "planHash": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "side": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["fixed-side", "affected-side", "open", "unreleased-fix", "unknown"]},
+        "reason": {"type": "string"}
+      },
+      "if": {"properties": {"kind": {"const": "unknown"}}},
+      "then": {"required": ["reason"]},
+      "else": {"not": {"required": ["reason"]}},
+      "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "required": ["status", "versions"],
+      "properties": {
+        "status": {"type": ["string", "null"]},
+        "versions": {
+          "type": "object",
+          "required": ["affected", "fixed", "lastWorking"],
+          "properties": {
+            "affected": {"$ref": "kenshou.owner-status.v1.schema.json#/$defs/claim"},
+            "fixed": {"$ref": "kenshou.owner-status.v1.schema.json#/$defs/claim"},
+            "lastWorking": {"$ref": "kenshou.owner-status.v1.schema.json#/$defs/claim"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "reason": {
+      "type": "object",
+      "required": ["code", "runs", "scenarios"],
+      "properties": {
+        "code": {"type": "string"},
+        "runs": {"type": "array", "items": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/runId"}},
+        "scenarios": {"type": "array", "items": {"type": "string"}},
+        "detail": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "classified": {
+      "type": "object",
+      "required": ["observation", "result", "otherFailures", "scope"],
+      "properties": {
+        "observation": {"$ref": "kenshou.disposition-input.v1.schema.json#/$defs/observation"},
+        "result": {"enum": ["passed", "reproduced", "different-failure", "sibling-defect", "labels-unavailable", "no-signal"]},
+        "otherFailures": {"type": "array", "items": {"type": "string"}},
+        "scope": {"type": "array", "items": {"$ref": "#/$defs/scope"}}
+      },
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "required": ["reference", "evaluation"],
+      "properties": {
+        "reference": {"type": "string"},
+        "evaluation": {
+          "type": "object",
+          "required": ["applies", "conditions"],
+          "properties": {"applies": {"type": "boolean"}, "conditions": {"type": "array", "items": {"$ref": "#/$defs/condition"}}},
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "condition": {
+      "type": "object",
+      "required": ["condition", "result"],
+      "properties": {
+        "condition": {"$ref": "scenario-list-v1.schema.json#/$defs/condition"},
+        "result": {"enum": ["holds", "fails", "package-missing", "malformed-version"]},
+        "malformed": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

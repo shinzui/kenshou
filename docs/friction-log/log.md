@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-20
+
+* **Update**: FRIC-4 resolved: Verified all three tests and the evidence suite on the new fixture.
+
 * **Addition**: FRIC-4 records detour environment friction with mori://shinzui/kenshou: Evidence tests copy a bundle with missing run records
 
 ## 2026-11-19

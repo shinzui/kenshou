@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3.0 - 2026-11-19
+
+- Add the `owners dispositions` subcommand and help for live capture and
+  deterministic replay. Use `kenshou-evidence` 0.2.
+
 ## 0.1.2.0 - 2026-11-19
 
 ### New Features

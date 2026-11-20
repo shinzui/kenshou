@@ -5,7 +5,7 @@ module OwnersSpec (spec) where
 
 import Control.Exception (finally)
 import Control.Monad (forM, forM_)
-import Data.Aeson (Value (..))
+import Data.Aeson (Value (..), object, (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -15,9 +15,12 @@ import Data.Foldable (toList)
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
+import Data.Time (UTCTime, addUTCTime)
+import Data.Time.Format.ISO8601 (iso8601ParseM)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import Kenshou.Cli (Program (..), runWithArgsWith, selfTestAssembly, withCommand)
 import Kenshou.Core.Bundle (LayerBundle, mkBundle)
@@ -26,12 +29,21 @@ import Kenshou.Core.Cli (CliCommand (..))
 import Kenshou.Core.Defect (defectValue)
 import Kenshou.Core.Dimension (noDimensions)
 import Kenshou.Core.Env (noEnvironment)
-import Kenshou.Core.Id (mkLayerId, parseScenarioId)
+import Kenshou.Core.Id (mkLayerId, parseRunId, parseScenarioId)
+import Kenshou.Core.Manifest (writeManifest)
+import Kenshou.Core.Outcome (Outcome (..))
 import Kenshou.Core.Phase (zeroPhases)
 import Kenshou.Core.Scenario (CohortScope (..), KnownDefect (..), PackageCondition (..), Placement (..), Scenario (..), Tier (..), passed)
+import Kenshou.Evidence.Bundle (runRecordPath, writeRunRecordWith)
+import Kenshou.Evidence.Observation qualified as Observation
 import Kenshou.Evidence.Owner (Citer (..), OwnerCitation (..), OwnerEntry (..), OwnerLink (..), OwnerRecord (..), OwnerResolver, OwnerSource (..), RecordKind (..))
 import Kenshou.Evidence.Owner.Cli (OwnerConfig (..), OwnerEnrichment (..), defaultOwnerConfig, ownersCommandWith)
 import Kenshou.Evidence.Owner.Resolver (memoryResolver)
+import Kenshou.Evidence.Publish (PublishOptions (..), UploadMode (..), publishRunData)
+import Kenshou.Evidence.Record (RecordInput (..), buildRunRecord)
+import Kenshou.Evidence.Source (loadRunSource)
+import Kenshou.Evidence.Store (ObjectStore, memoryStore)
+import Kenshou.Evidence.Types (Purpose (..))
 import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions, listDirectory, setOwnerExecutable, setPermissions)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode (..))
@@ -207,6 +219,159 @@ spec = describe "owners command" do
                        (String "selftest/kernel/correctness/known-defect", String "mori://shinzui/kenshou/plans/2-open-the-kernel-layer-identity-and-schema-composition-to-registered-suites", String "no-owner-claim")
                      ]
       doesFileExist marker `shouldReturn` False
+
+  it "captures and replays dispositions through a consumer's evidence locations and replay hook" $
+    withSystemTempDirectory "kenshou-dispositions-cli" \root -> do
+      store <- memoryStore
+      replayCalls <- newIORef (0 :: Int)
+      let owners = root </> "owners"
+          snapshot = root </> "snapshot"
+          currentSnapshot = root </> "snapshot-current"
+          evidence = root </> "evidence"
+          runs = root </> "local"
+          ownerFile = owners </> "lease.md"
+          findings = root </> "findings.json"
+          catalog = root </> "catalog.json"
+          packageMap = root </> "package-map.json"
+          coverage = root </> "coverage.json"
+          frozen = root </> "input.json"
+          reference = ownerX "BUG-1"
+          scenario = "consumer/table/correctness/lease-release"
+          bundleUri = "mori://fixture/consumer/okf/verification"
+          config =
+            defaultOwnerConfig
+              { evidenceBundle = Just evidence,
+                evidenceBundleUri = Just bundleUri,
+                runDataLocator = Just (Observation.objectStoreRunData store),
+                sealedRunRoots = [runs],
+                replayObservation = \run -> do
+                  atomicModifyIORef' replayCalls (\count -> (count + 1, ()))
+                  pure (Right (Just (object ["replayedRun" .= run.runId])))
+              }
+          program = selfTestAssembly {commands = withCommand (ownersCommandWith config) selfTestAssembly.commands}
+          invoke args = quietly (runWithArgsWith program ("owners" : args))
+          freezeOwner directory = fst <$> invoke ["snapshot", "--out", directory, "--no-git-provenance", "--findings", findings, "--map", "mori://fixture/owner-x/okf/bug-reports=" <> owners]
+          live directory = ["dispositions", "--snapshot", directory, "--catalog", catalog, "--package-map", packageMap, "--coverage", coverage, "--json"]
+          replay = ["dispositions", "--input", frozen, "--json"]
+          forOwner document = [item | item <- toArray (field "conclusions" document), field "owner" item == String reference]
+          summaryCount key document = field key (field "summary" document)
+      createDirectoryIfMissing True owners
+      createDirectoryIfMissing True evidence
+      createDirectoryIfMissing True runs
+      writeBugReport ownerFile "BUG-1" "fixed" ["fixedVersion: 2.0.0"]
+      ByteString.writeFile findings (findingsDocument [("F-1", [reference])])
+      ByteString.writeFile catalog (catalogDocument [catalogScenario scenario reference (OnlyWhen (VersionBelow "fixture-writer" "2.0.0" :| []))])
+      ByteString.writeFile packageMap (packageMapDocument [object ["reference" .= reference, "packages" .= ["fixture-writer" :: Text], "versionsApplyTo" .= ["fixture-writer" :: Text]]])
+      Aeson.encodeFile coverage (Map.singleton reference [scenario :: Text])
+      freezeOwner snapshot `shouldReturn` ExitSuccess
+      firstAt <- maybe (fail "invalid fixture time") pure (iso8601ParseM "2026-11-17T17:00:00Z")
+      let firstId = "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e54"
+          nextId = "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55"
+      publishDispositionFixture store evidence runs firstId scenario firstAt Passed
+      beforeCapture <- digests root
+      (status, captured) <- invoke (live snapshot <> ["--write-input", frozen])
+      status `shouldBe` ExitSuccess
+      capturedValue <- decodeValue captured
+      [conclusion] <- pure (forOwner capturedValue)
+      field "disposition" conclusion `shouldBe` String "verified-fixed"
+      summaryCount "verifiedFixed" capturedValue `shouldBe` Number 1
+      [observed] <- pure (map (field "observation") (toArray (field "considered" conclusion)))
+      field "replay" observed `shouldBe` object ["replayedRun" .= firstId]
+      field "reference" (field "source" observed) `shouldSatisfy` \case
+        String reference' -> Text.isPrefixOf (bundleUri <> "/concepts/") reference'
+        _ -> False
+      readIORef replayCalls `shouldReturn` 1
+      (filter ((/= "input.json") . fst) <$> digests root) `shouldReturn` beforeCapture
+      frozenBytes <- ByteString.readFile frozen
+      fst <$> invoke (live snapshot <> ["--write-input", frozen]) `shouldReturn` ExitFailure 2
+      ByteString.readFile frozen `shouldReturn` frozenBytes
+      fst <$> invoke (replay <> ["--bundle", evidence]) `shouldReturn` ExitFailure 2
+      fst <$> invoke ["dispositions", "--input", root </> "absent.json"] `shouldReturn` ExitFailure 4
+
+      publishDispositionFixture store evidence runs nextId scenario (addUTCTime 1 firstAt) Failed
+      writeBugReport ownerFile "BUG-1" "confirmed" []
+      freezeOwner currentSnapshot `shouldReturn` ExitSuccess
+      beforeReplay <- digests root
+      countBeforeReplay <- readIORef replayCalls
+      invoke replay `shouldReturn` (ExitSuccess, captured)
+      invoke replay `shouldReturn` (ExitSuccess, captured)
+      readIORef replayCalls `shouldReturn` countBeforeReplay
+      (laterStatus, later) <- invoke (live snapshot)
+      laterStatus `shouldBe` ExitSuccess
+      laterValue <- decodeValue later
+      summaryCount "regressed" laterValue `shouldBe` Number 1
+      (currentStatus, current) <- invoke (live currentSnapshot)
+      currentStatus `shouldBe` ExitSuccess
+      currentValue <- decodeValue current
+      summaryCount "stillReproduces" currentValue `shouldBe` Number 1
+      digests root `shouldReturn` beforeReplay
+
+-- | Create and publish a sealed result. The consumer replay uses the real
+-- memory object store, including the recorded digest and attestation path.
+publishDispositionFixture :: ObjectStore -> FilePath -> FilePath -> Text -> Text -> UTCTime -> Outcome -> IO ()
+publishDispositionFixture store bundle runRoot identifier scenario started outcome = do
+  let directory = runRoot </> Text.unpack identifier
+      runSpec = object ["schema" .= ("kenshou.run-spec/v1" :: Text), "runId" .= identifier, "scenario" .= scenario, "seed" .= (7 :: Int)]
+      planHash = "sha256:" <> Text.replicate 64 "a"
+      revision = Text.replicate 40 "a"
+      result =
+        object
+          [ "schema" .= ("kenshou.run-result/v1" :: Text),
+            "runId" .= identifier,
+            "scenario" .= scenario,
+            "scenarioRevision" .= (1 :: Int),
+            "outcome" .= outcome,
+            "failures" .= (["lease-held" :: Text | outcome == Failed]),
+            "tier" .= ("smoke" :: Text),
+            "seed" .= (7 :: Int),
+            "spec" .= object ["sha256" .= sha256Hex (ByteString.toStrict (Aeson.encode runSpec))],
+            "timings" .= object ["startedAt" .= started, "endedAt" .= started],
+            "cohort"
+              .= object
+                [ "schema" .= ("kenshou.cohort-identity/v1" :: Text),
+                  "cohort" .= ("fixture" :: Text),
+                  "compiler" .= ("ghc" :: Text),
+                  "cabalVersion" .= ("3.14" :: Text),
+                  "os" .= ("darwin" :: Text),
+                  "arch" .= ("aarch64" :: Text),
+                  "planHash" .= planHash,
+                  "descriptorSha256" .= planHash,
+                  "components"
+                    .= [ object
+                           [ "id" .= ("consumer" :: Text),
+                             "moriUri" .= ("mori://fixture/consumer" :: Text),
+                             "packages" .= [object ["name" .= ("fixture-writer" :: Text), "version" .= ("2.0.0" :: Text), "source" .= object ["type" .= ("hackage" :: Text)]]]
+                           ]
+                       ]
+                ],
+            "fingerprint"
+              .= object
+                [ "host" .= object ["os" .= ("darwin" :: Text), "arch" .= ("aarch64" :: Text), "cpuModel" .= ("fixture" :: Text), "logicalCores" .= (4 :: Int), "memoryBytes" .= (4096 :: Int)],
+                  "runtime" .= object ["ghc" .= ("9.12.4" :: Text)],
+                  "kenshou" .= object ["revision" .= revision, "dirty" .= False]
+                ],
+            "compatibility" .= object ["comparisonKey" .= planHash]
+          ]
+  createDirectoryIfMissing True directory
+  Aeson.encodeFile (directory </> "run-spec.json") runSpec
+  Aeson.encodeFile (directory </> "run-result.json") result
+  runId <- either (fail . Text.unpack) pure (parseRunId identifier)
+  writeManifest directory runId Map.empty >>= Aeson.encodeFile (directory </> "manifest.json")
+  source <- loadRunSource directory >>= either (fail . show) pure
+  links <- publishRunData store (PublishOptions "gs://fixture/data" UploadMissing False False) directory source >>= either (fail . show) pure
+  let input = RecordInput Release started False Nothing [] Nothing Map.empty (Just "mori://fixture/consumer")
+  record <- either (fail . show) pure (buildRunRecord input source links)
+  path <- either (fail . show) pure (runRecordPath record)
+  _ <- writeRunRecordWith (const (pure (Right ()))) bundle record >>= either (fail . show) pure
+  ByteString.writeFile (bundle </> Text.unpack identifier <> "-attestation.md") . Text.Encoding.encodeUtf8 . Text.unlines $
+    [ "---",
+      "type: Attestation",
+      "title: Confirmed sealed fixture",
+      "run: /" <> Text.pack path,
+      "verdict: confirmed",
+      "attestedAt: 2026-11-17T18:00:00Z",
+      "---"
+    ]
 
 ownerX :: Text -> Text
 ownerX handle = "mori://fixture/owner-x/okf/bug-reports/concepts/" <> handle

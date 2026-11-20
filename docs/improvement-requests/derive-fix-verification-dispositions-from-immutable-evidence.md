@@ -6,7 +6,8 @@ generated:
   by: "codex/gpt-6.1-sol"
   at: "2026-11-17T15:52:19Z"
 requestId: IR-4
-status: proposed
+status: in-progress
+targetPlan: docs/plans/10-derive-fix-verification-dispositions-from-immutable-evidence.md
 origin: mori://shinzui/keiro-runtime-kenshou/masterplans/2-close-the-verification-and-repair-loop-for-the-keiro-runtime-in-rounds
 dependencies:
   - ref: mori://shinzui/kenshou/okf/improvement-requests/concepts/IR-2
@@ -104,6 +105,12 @@ rule matrix uses synthetic data; the consumer owns its real mappings and oracles
 
 Read [ADR-12](../adr/0012-keep-verification-records-immutable-and-derive-baselines.md)
 and [ADR-11](../adr/0011-distinguish-documented-limitations-from-known-defects.md).
-This request does not change the shared evidence record shape or assign a target
-implementation plan. Any later record-shape change must preserve old evidence
-and follow the shared contract's release process.
+Any later record-shape change must preserve old evidence and follow the shared
+contract's release process.
+
+## Implementation
+
+[ExecPlan 10](../plans/10-derive-fix-verification-dispositions-from-immutable-evidence.md)
+delivers the observation loader, pure derivation API, and `owners dispositions`
+command. The input and report schemas support repeatable offline replay. The package
+changes are in the working repository ahead of publication.

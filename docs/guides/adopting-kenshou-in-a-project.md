@@ -528,6 +528,40 @@ records, and never changes failure labels; apply a proposal as a reviewed edit.
 [ADR-22](../adr/0022-evaluate-known-defect-scopes-once-and-propose-corrections.md)
 explains why corrections are only proposals.
 
+## Verify fixes from run evidence
+
+Once you have an owner snapshot and a package map, derive a report from an
+evidence bundle and save the inputs you used.
+
+```bash
+"$K" owners dispositions --snapshot owner-snapshot --package-map package-map.json \
+  --bundle docs/verification --run-data downloaded-runs --write-input dispositions-input.json
+"$K" owners dispositions --input dispositions-input.json --json
+```
+
+The download directory holds each linked result at
+`downloaded-runs/RUN_ID/run-result.json`. The command verifies the result against
+the record's digest. Include a directory of sealed local runs with `--runs DIR`.
+Use `--catalog FILE` to fix the scenario declarations to a saved catalog and
+`--coverage FILE` to set the required scenarios for an owner. The coverage file
+is a JSON object whose keys are canonical owner references and whose values
+are arrays of scenario IDs. By default, all the owner's declared reproduction
+scenarios are required.
+
+The report explains the disposition using the owner claim and the observations.
+Only compatible confirmed passes can verify a released fix. The saved input
+captures the report's evidence, trust, and claims. Replay reads that file alone.
+
+When assembling the program with `ownersCommandWith`, set `evidenceBundle`,
+`evidenceBundleUri`, `sealedRunRoots`, and `runDataLocator` on
+`defaultOwnerConfig` to supply your evidence locations. Use `objectStoreRunData`
+to fetch linked results through an existing `ObjectStore`, or provide a locator
+for your own storage. A `replayObservation` callback can attach a JSON result
+from your domain replay. The callback runs during capture, and its result
+travels with the observation in the frozen input.
+
+See [ADR-23](../adr/0023-derive-fix-dispositions-from-frozen-evidence.md).
+
 ## Where to read next
 
 - [The architecture decisions](../adr/index.md) record why the harness works

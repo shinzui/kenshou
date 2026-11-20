@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0.0 - 2026-11-19
+
+- Add digest-verified published and sealed run observations, the pure disposition
+  derivation, and versioned capture and replay for `owners dispositions`.
+- Breaking API change for positional constructors and matches. `RunResultView`
+  adds optional failure labels and scenario revision. `OwnerConfig` adds locations,
+  a data locator, and an observation replay hook. Existing run-result files remain
+  readable.
+
 ## 0.1.2.0 - 2026-11-19
 
 ### New Features

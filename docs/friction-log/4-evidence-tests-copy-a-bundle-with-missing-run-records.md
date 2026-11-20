@@ -6,13 +6,18 @@ generated:
   by: "codex-cli/gpt-6.2-sol"
   at: "2026-11-20T02:20:59Z"
 frictionId: FRIC-4
-status: logged
+status: "resolved"
 impact: detour
 kind: environment
 origin: "mori://shinzui/kenshou"
 affects: "mori://shinzui/kenshou"
 plan: "docs/plans/10-derive-fix-verification-dispositions-from-immutable-evidence.md"
 workaround: "Generate a minimal test bundle with computation definitions. Each affected test publishes its own runs and attestations."
+resolution: "The comparison and attestation tests now generate their evidence in a minimal package-local bundle, independent of the vendored run paths."
+amended:
+  - by: "codex-cli/gpt-6.2-sol"
+    at: "2026-11-20T02:37:38Z"
+    change: "Verified all three tests and the evidence suite on the new fixture."
 ---
 # Evidence tests copy a bundle with missing run records
 

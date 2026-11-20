@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-20
+* **Update**: Implemented the observation loader, disposition derivation, and owners dispositions under docs/plans/10-derive-fix-verification-dispositions-from-immutable-evidence.md (IR-4).
+
 ## 2026-11-19
 * **Update**: IR-3 is in progress under docs/plans/9-reconcile-known-defect-scopes-with-owner-version-claims.md; complete declarations in the catalog, the single scope evaluator, and owners reconcile are implemented.
 

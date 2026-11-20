@@ -1,0 +1,287 @@
+{
+  "capturedAt": "2026-11-17T19:00:00Z",
+  "catalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "conclusions": [
+    {
+      "claim": {
+        "status": "fixed",
+        "versions": {
+          "affected": {
+            "raw": "1.2.0",
+            "state": "released"
+          },
+          "fixed": {
+            "raw": "1.3.0",
+            "state": "released"
+          },
+          "lastWorking": {
+            "raw": null,
+            "state": "absent"
+          }
+        }
+      },
+      "cohort": {
+        "name": "released-1.2",
+        "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "considered": [
+        {
+          "observation": {
+            "cohortName": "released-1.2",
+            "labels": {
+              "kind": "verified",
+              "values": [
+                "lease-held"
+              ]
+            },
+            "outcome": "failed",
+            "packages": [
+              {
+                "name": "fixture-table",
+                "source": "hackage",
+                "version": "1.2.0"
+              }
+            ],
+            "planHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "runId": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e53",
+            "scenario": "consumer/table/correctness/lease-release",
+            "scenarioRevision": 2,
+            "source": {
+              "kind": "published-record",
+              "reference": "runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e53"
+            },
+            "startedAt": "2026-11-17T16:00:00Z",
+            "trust": "machine-confirmed"
+          },
+          "otherFailures": [],
+          "result": "reproduced",
+          "scope": [
+            {
+              "evaluation": {
+                "applies": true,
+                "conditions": [
+                  {
+                    "condition": {
+                      "kind": "version-below",
+                      "package": "fixture-table",
+                      "version": "1.3.0"
+                    },
+                    "result": "holds"
+                  }
+                ]
+              },
+              "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2"
+            }
+          ]
+        }
+      ],
+      "disposition": "reproduces-as-expected",
+      "incompatible": [],
+      "owner": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "reasons": [],
+      "required": [
+        {
+          "latest": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e53",
+          "scenario": "consumer/table/correctness/lease-release"
+        }
+      ],
+      "side": {
+        "kind": "affected-side"
+      }
+    },
+    {
+      "claim": {
+        "status": "fixed",
+        "versions": {
+          "affected": {
+            "raw": "1.2.0",
+            "state": "released"
+          },
+          "fixed": {
+            "raw": "1.3.0",
+            "state": "released"
+          },
+          "lastWorking": {
+            "raw": null,
+            "state": "absent"
+          }
+        }
+      },
+      "cohort": {
+        "name": "released-1.3",
+        "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "considered": [
+        {
+          "observation": {
+            "cohortName": "released-1.3",
+            "labels": {
+              "kind": "verified",
+              "values": []
+            },
+            "outcome": "passed",
+            "packages": [
+              {
+                "name": "fixture-table",
+                "source": "hackage",
+                "version": "1.3.0"
+              }
+            ],
+            "planHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "runId": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e54",
+            "scenario": "consumer/table/correctness/lease-release",
+            "scenarioRevision": 2,
+            "source": {
+              "kind": "published-record",
+              "reference": "runs/consumer/2026/11/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e54"
+            },
+            "startedAt": "2026-11-17T17:00:00Z",
+            "trust": "machine-confirmed"
+          },
+          "otherFailures": [],
+          "result": "passed",
+          "scope": [
+            {
+              "evaluation": {
+                "applies": false,
+                "conditions": [
+                  {
+                    "condition": {
+                      "kind": "version-below",
+                      "package": "fixture-table",
+                      "version": "1.3.0"
+                    },
+                    "result": "fails"
+                  }
+                ]
+              },
+              "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2"
+            }
+          ]
+        }
+      ],
+      "disposition": "verified-fixed",
+      "incompatible": [],
+      "owner": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "reasons": [],
+      "required": [
+        {
+          "latest": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e54",
+          "scenario": "consumer/table/correctness/lease-release"
+        }
+      ],
+      "side": {
+        "kind": "fixed-side"
+      }
+    },
+    {
+      "claim": {
+        "status": "fixed",
+        "versions": {
+          "affected": {
+            "raw": "1.2.0",
+            "state": "released"
+          },
+          "fixed": {
+            "raw": "1.3.0",
+            "state": "released"
+          },
+          "lastWorking": {
+            "raw": null,
+            "state": "absent"
+          }
+        }
+      },
+      "cohort": {
+        "name": "local",
+        "planHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "considered": [
+        {
+          "observation": {
+            "cohortName": "local",
+            "labels": {
+              "kind": "verified",
+              "values": []
+            },
+            "outcome": "passed",
+            "packages": [
+              {
+                "name": "fixture-table",
+                "source": "hackage",
+                "version": "1.3.0"
+              }
+            ],
+            "planHash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+            "runId": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55",
+            "scenario": "consumer/table/correctness/lease-release",
+            "scenarioRevision": 2,
+            "source": {
+              "kind": "sealed-run",
+              "path": "scratch/runs/01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55"
+            },
+            "startedAt": "2026-11-17T17:05:00Z",
+            "trust": "local-sealed"
+          },
+          "otherFailures": [],
+          "result": "passed",
+          "scope": [
+            {
+              "evaluation": {
+                "applies": false,
+                "conditions": [
+                  {
+                    "condition": {
+                      "kind": "version-below",
+                      "package": "fixture-table",
+                      "version": "1.3.0"
+                    },
+                    "result": "fails"
+                  }
+                ]
+              },
+              "reference": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2"
+            }
+          ]
+        }
+      ],
+      "disposition": "not-reproduced",
+      "incompatible": [],
+      "owner": "mori://fixture/owner-a/okf/bug-reports/concepts/BUG-2",
+      "reasons": [
+        {
+          "code": "insufficient-trust",
+          "runs": [
+            "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55"
+          ],
+          "scenarios": [
+            "consumer/table/correctness/lease-release"
+          ]
+        }
+      ],
+      "required": [
+        {
+          "latest": "01997f3a-5b7c-7e21-8a44-0d6c2f9b1e55",
+          "scenario": "consumer/table/correctness/lease-release"
+        }
+      ],
+      "side": {
+        "kind": "fixed-side"
+      }
+    }
+  ],
+  "packageMapDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "schema": "kenshou.dispositions/v1",
+  "snapshot": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "summary": {
+    "differentFailure": 0,
+    "notReproduced": 1,
+    "notRun": 0,
+    "notYetReleased": 0,
+    "regressed": 0,
+    "reproducesAsExpected": 1,
+    "stillReproduces": 0,
+    "unverifiable": 0,
+    "verifiedFixed": 1
+  }
+}

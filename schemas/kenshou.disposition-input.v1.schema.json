@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kenshou.invalid/schemas/kenshou.disposition-input.v1.schema.json",
+  "title": "Frozen input for fix-verification dispositions",
+  "type": "object",
+  "required": ["schema", "capturedAt", "owners", "catalog", "catalogDigest", "packageMap", "packageMapDigest", "observations"],
+  "properties": {
+    "schema": {"const": "kenshou.disposition-input/v1"},
+    "capturedAt": {"type": "string", "format": "date-time"},
+    "owners": {"$ref": "kenshou.owner-status.v1.schema.json"},
+    "catalog": {"$ref": "#/$defs/catalog"},
+    "catalogDigest": {"$ref": "#/$defs/digest"},
+    "packageMap": {"$ref": "kenshou.owner-package-map.v1.schema.json"},
+    "packageMapDigest": {"$ref": "#/$defs/digest"},
+    "coverage": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "runId": {"type": "string", "format": "uuid"},
+    "catalog": {
+      "type": "object",
+      "required": ["schema", "scenarios"],
+      "properties": {
+        "schema": {"const": "kenshou.scenario-list/v1"},
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "revision"],
+            "properties": {
+              "id": {"type": "string"},
+              "revision": {"type": "integer"},
+              "knownDefectDeclaration": {"oneOf": [{"type": "null"}, {"$ref": "scenario-list-v1.schema.json#/$defs/defect"}]}
+            }
+          }
+        },
+        "roles": {"type": "array"}
+      }
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "reference"],
+          "properties": {"kind": {"const": "published-record"}, "reference": {"type": "string"}},
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind", "path"],
+          "properties": {"kind": {"const": "sealed-run"}, "path": {"type": "string"}},
+          "additionalProperties": false
+        }
+      ]
+    },
+    "labels": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "values"],
+          "properties": {"kind": {"const": "verified"}, "values": {"type": "array", "items": {"type": "string"}}},
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["kind", "reason"],
+          "properties": {"kind": {"const": "unavailable"}, "reason": {"type": "string"}},
+          "additionalProperties": false
+        }
+      ]
+    },
+    "package": {
+      "type": "object",
+      "required": ["name", "version", "source"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "source": {"enum": ["hackage", "git", "other"]},
+        "revision": {"type": "string"}
+      },
+      "if": {"properties": {"source": {"const": "git"}}},
+      "then": {"required": ["revision"]},
+      "else": {"not": {"required": ["revision"]}},
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": ["runId", "source", "scenario", "scenarioRevision", "startedAt", "outcome", "labels", "packages", "cohortName", "planHash", "trust"],
+      "properties": {
+        "runId": {"$ref": "#/$defs/runId"},
+        "source": {"$ref": "#/$defs/source"},
+        "scenario": {"type": "string"},
+        "scenarioRevision": {"type": ["integer", "null"]},
+        "startedAt": {"type": "string", "format": "date-time"},
+        "outcome": {"enum": ["passed", "failed", "inconclusive", "infrastructure-failure", "errored"]},
+        "labels": {"$ref": "#/$defs/labels"},
+        "packages": {"type": "array", "items": {"$ref": "#/$defs/package"}},
+        "cohortName": {"type": "string"},
+        "planHash": {"$ref": "#/$defs/digest"},
+        "trust": {"enum": ["human-reviewed", "machine-confirmed", "unverified", "local-sealed"]},
+        "replay": {"description": "Optional consumer replay result captured alongside the immutable observation."}
+      },
+      "additionalProperties": false
+    }
+  }
+}

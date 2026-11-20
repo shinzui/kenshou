@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-20
+* **Addition**: Recorded that fix dispositions are derived from frozen owner claims, catalog declarations, and compatible trusted observations (ADR-23).
+
 ## 2026-11-19
 * **Addition**: Recorded the single known-defect scope evaluator and reconciliation that only proposes corrections from an explicit consumer package map (ADR-22).
 

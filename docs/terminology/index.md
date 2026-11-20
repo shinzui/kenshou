@@ -17,6 +17,7 @@ okf_version: "0.2"
 - [component graph](component-graph.md) - The checked-in map of build and runtime dependencies used to select verification after a change.
 - [diagnosis](diagnosis.md) - A recomputable explanation of a suspected leak or stall from saved samples and captures.
 - [dimension](dimension.md) - A named verification axis whose supported values select a run's instrumentation or PostgreSQL mode.
+- [disposition](disposition.md) - The evidence-based conclusion about one owner's defect for a resolved cohort.
 - [evidence record](evidence-record.md) - An OKF account of a run or comparison whose claim is fixed and whose raw artifacts are digest-pinned.
 - [fact ledger](fact-ledger.md) - An append-only record of scenario actions and observations consumed by independent correctness checks.
 - [fault window](fault-window.md) - A recorded interval in which Kenshou deliberately disturbs a runtime or its environment.
@@ -26,6 +27,7 @@ okf_version: "0.2"
 - [layer bundle](layer-bundle.md) - The unit a suite registers with the harness for one layer, carrying its scenarios, worker roles, and contributions such as migration sets, resource providers, oracles, and an evidence subject.
 - [layer identifier](layer-identifier.md) - The open, validated name of a layer of the system a suite verifies, which is the first segment of every scenario identifier in that layer.
 - [named resource](named-resource.md) - A piece of infrastructure besides PostgreSQL that a scenario requires by name and that a registered provider acquires around each run.
+- [observation](observation.md) - A captured reading of a published evidence record or a sealed local run for fix verification.
 - [oracle](oracle.md) - An independent source of expected state used to judge a scenario's observed behavior.
 - [outcome](outcome.md) - The reported execution state of a run, distinct from whether its failure blocks a gate.
 - [owner record](owner-record.md) - A bug report or improvement request, kept in the repository that owns a behavior, that a known defect or a consumer finding cites by its canonical concept URI.

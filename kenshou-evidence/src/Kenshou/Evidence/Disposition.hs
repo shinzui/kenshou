@@ -18,7 +18,7 @@ where
 
 import Control.Applicative ((<|>))
 import Control.Monad (unless)
-import Data.Aeson (Value, eitherDecodeStrict', object, withObject, (.!=), (.:), (.:?), (.=))
+import Data.Aeson (Value, eitherDecodeStrict', object, withObject, (.!=), (.:), (.:!), (.:?), (.=))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.Types (Parser, parseEither)
 import Data.Bifunctor (first)
@@ -344,7 +344,10 @@ concludeCohort base earlierPasses evidence =
       | not (Map.null requiredLatest) =
           (if evidence.side == Just UnreleasedFix then NotYetReleased else NotReproduced, [reason "incomplete-coverage" [] missing])
       | otherwise = (Unverifiable, unusable)
-    unusable =
+    unusable = case unusableEvidence of
+      [] -> [reason "incomplete-coverage" [] missing]
+      reasons' -> reasons'
+    unusableEvidence =
       [ forRuns code runs
       | (result, code) <- [(ResultNoSignal, "no-signal"), (ResultSiblingDefect, "sibling-defect")],
         let runs = filter ((== result) . (.result)) newestFirst,
@@ -460,7 +463,7 @@ parseObservation = withObject "observation" \item ->
     <*> item .: "cohortName"
     <*> (item .: "planHash" >>= digest)
     <*> (item .: "trust" >>= parseTrust)
-    <*> item .:? "replay"
+    <*> item .:! "replay"
   where
     parseSource = withObject "observation source" \source ->
       source .: "kind" >>= \case
@@ -613,7 +616,13 @@ renderDispositionsText conclusions =
         <> renderScenarioId run.scenario
         <> "  "
         <> result
+        <> labelText run
         <> "  "
         <> renderTrust run.trust
         <> "  run "
         <> run.runId
+
+    labelText :: Observation -> Text
+    labelText run = case run.labels of
+      LabelsVerified labels | run.outcome == Failed, not (null labels) -> " [" <> Text.intercalate ", " labels <> "]"
+      _ -> ""

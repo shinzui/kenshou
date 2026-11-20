@@ -15,29 +15,48 @@ module Kenshou.Evidence.Owner.Cli
 where
 
 import Control.Exception (IOException, SomeException, displayException, try)
-import Control.Monad (forM, forM_)
-import Data.Aeson (encode)
+import Control.Monad (filterM, forM, forM_)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT)
+import Data.Aeson (Value, encode, toJSON)
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as ByteString
 import Data.ByteString.Lazy.Char8 qualified as LazyByteString
+import Data.List (sort)
+import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text.IO
 import Data.Time (getCurrentTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
 import Kenshou.Core.Bundle (allScenarios)
+import Kenshou.Core.Canonical (canonicalEncode, sha256Hex)
 import Kenshou.Core.Cli (CliCommand (..), CliEnv (..), CliGroup (Analysis))
+import Kenshou.Core.Cli.Config (ConfigInputs (..))
 import Kenshou.Core.Id (renderScenarioId)
+import Kenshou.Evidence.Config (EvidenceDefaults (..), resolveEvidenceDefaults)
+import Kenshou.Evidence.Disposition qualified as Disposition
+import Kenshou.Evidence.Observation qualified as Run
 import Kenshou.Evidence.Owner
 import Kenshou.Evidence.Owner.Reconcile (ScopeFinding (..), Severity (..), decodePackageMap, reconcileScopes, reconciliationValue, renderReconciliationText)
 import Kenshou.Evidence.Owner.Record (reasonCode, reasonMessage, versionClaimRaw, versionClaimState)
 import Kenshou.Evidence.Owner.Resolver (chainResolvers, mappedResolver, moriResolver, withGitProvenance)
 import Kenshou.Evidence.Owner.Snapshot (SnapshotError (..), readSnapshot, writeSnapshot)
-import Kenshou.Plan.Catalog (decodeCatalog, fromScenario)
+import Kenshou.Plan.Catalog (CatalogDocument (..), decodeCatalog, fromScenario)
 import Options.Applicative
-import System.Directory (doesPathExist)
+import Settei qualified
+import Settei.Env (envSnapshot)
+import Settei.Optparse (DiagnosticMode (NoDiagnostic))
+import System.Directory (doesDirectoryExist, doesPathExist, listDirectory, makeAbsolute)
+import System.Environment (getEnvironment)
 import System.Exit (ExitCode (..))
-import System.IO (stderr)
+import System.FilePath (takeDirectory, (</>))
+import System.IO (hFlush, stderr)
+import System.IO.Error (isAlreadyExistsError)
+import System.IO.Temp (withTempFile)
+import System.Posix.Files (createLink)
 
 -- | A consumer action that attaches labelled links (plan or tracker references,
 -- say) to a resolved record. Its results appear under @links@ and never affect
@@ -51,11 +70,29 @@ data OwnerConfig = OwnerConfig
   { sources :: [OwnerSource],
     resolver :: Maybe OwnerResolver,
     recordKinds :: [RecordKind],
-    enrichments :: [OwnerEnrichment]
+    enrichments :: [OwnerEnrichment],
+    evidenceBundle :: Maybe FilePath,
+    evidenceBundleUri :: Maybe Text,
+    runDataLocator :: Maybe Run.RunDataLocator,
+    sealedRunRoots :: [FilePath],
+    -- | Results of a consumer's domain replay are included in the frozen input.
+    -- The run's digest-verified labels, outcome and attestation trust still govern verification.
+    replayObservation :: Run.Observation -> IO (Either Text (Maybe Value))
   }
 
 defaultOwnerConfig :: OwnerConfig
-defaultOwnerConfig = OwnerConfig {sources = [], resolver = Nothing, recordKinds = [], enrichments = []}
+defaultOwnerConfig =
+  OwnerConfig
+    { sources = [],
+      resolver = Nothing,
+      recordKinds = [],
+      enrichments = [],
+      evidenceBundle = Nothing,
+      evidenceBundleUri = Nothing,
+      runDataLocator = Nothing,
+      sealedRunRoots = [],
+      replayObservation = const (pure (Right Nothing))
+    }
 
 ownersCommand :: CliCommand
 ownersCommand = ownersCommandWith defaultOwnerConfig
@@ -71,6 +108,7 @@ ownersCommandWith config =
         subparser
           ( command "status" (info (statusHandler config <$> statusParser <**> helper) (progDesc "Report every cited owner record, live or from a snapshot"))
               <> command "snapshot" (info (snapshotHandler config <$> snapshotParser <**> helper) (progDesc "Freeze the owner records' bytes into a new directory"))
+              <> command "dispositions" (info (dispositionsHandler config <$> dispositionsParser <**> helper) (progDesc "Derive fix verification from a frozen input or capture current evidence"))
               <> command "reconcile" (info (reconcileHandler <$> reconcileParser <**> helper) (progDesc "Compare known-defect scopes with a snapshot's owner version claims and propose corrections"))
           )
     }
@@ -203,6 +241,118 @@ reconcileHandler options environment = do
     readInput path = do
       result <- try (ByteString.readFile path) :: IO (Either IOException ByteString)
       pure (either (\problem -> Left ("cannot read " <> Text.pack path <> ": " <> Text.pack (displayException problem))) Right result)
+
+data DispositionMode = Replay FilePath | Capture CaptureOptions
+
+data CaptureOptions = CaptureOptions
+  { snapshot :: FilePath,
+    packageMap :: FilePath,
+    catalog :: Maybe FilePath,
+    bundle :: Maybe FilePath,
+    runData :: Maybe FilePath,
+    runs :: [FilePath],
+    coverage :: Maybe FilePath,
+    writeInput :: Maybe FilePath
+  }
+
+dispositionsParser :: Parser (DispositionMode, Bool)
+dispositionsParser =
+  (,)
+    <$> (Replay <$> filePath "input" "FILE" "Replay only this frozen disposition input" <|> Capture <$> capture)
+    <*> switch (long "json" <> help "Emit kenshou.dispositions/v1 JSON")
+  where
+    filePath optionName placeholder description =
+      strOption (long optionName <> metavar placeholder <> help description)
+    capture =
+      CaptureOptions
+        <$> filePath "snapshot" "DIR" "Read this verified owner snapshot"
+        <*> filePath "package-map" "FILE" "Map owners to resolved packages"
+        <*> optional (filePath "catalog" "FILE" "Read scenario declarations from this catalog")
+        <*> optional (filePath "bundle" "DIR" "Read published runs and attestations from this bundle")
+        <*> optional (filePath "run-data" "DIR" "Read linked results from DIR/RUN_ID/run-result.json")
+        <*> many (filePath "runs" "DIR" "Read sealed local runs from the subdirectories of DIR, repeatable")
+        <*> optional (filePath "coverage" "FILE" "Override required scenarios by owner reference")
+        <*> optional (filePath "write-input" "FILE" "Save the frozen input to a new file")
+
+dispositionsHandler :: OwnerConfig -> (DispositionMode, Bool) -> CliEnv -> IO ExitCode
+dispositionsHandler config (mode, json) environment = do
+  loaded <- try @IOException (runExceptT load)
+  case either (Left . Text.pack . displayException) id loaded of
+    Left message -> failure (prefix <> message)
+    Right (input, output) -> do
+      written <- try @IOException (forM_ output (uncurry writeFrozenInput))
+      case written of
+        Left problem
+          | isAlreadyExistsError problem -> usage (prefix <> "refusing to overwrite an existing input file")
+          | otherwise -> failure (prefix <> Text.pack (displayException problem))
+        Right () -> do
+          let conclusions = Disposition.deriveDispositions input
+          if json
+            then LazyByteString.putStrLn (encode (Disposition.dispositionsValue input conclusions))
+            else Text.IO.putStr (Disposition.renderDispositionsText conclusions)
+          pure ExitSuccess
+  where
+    prefix = "kenshou owners dispositions: "
+    load = case mode of
+      Replay path -> do
+        input <- readDispositionFile Disposition.decodeDispositionInput path
+        pure (input, Nothing)
+      Capture options -> do
+        captured <- captureDispositions config environment options
+        let frozen = prettyJson (Disposition.dispositionInputValue captured)
+        input <- except (Disposition.decodeDispositionInput frozen)
+        pure (input, fmap (,frozen) options.writeInput)
+
+captureDispositions :: OwnerConfig -> CliEnv -> CaptureOptions -> ExceptT Text IO Disposition.DispositionInput
+captureDispositions config environment options = do
+  owners <- ExceptT (readSnapshot options.snapshot)
+  (packageMap, packageMapDigest) <- readWithDigest decodePackageMap options.packageMap
+  (catalog, catalogDigest) <- case options.catalog of
+    Nothing -> do
+      let document = CatalogDocument (map fromScenario (allScenarios environment.registry))
+      pure (document.scenarios, sha256Hex (canonicalEncode (toJSON document)))
+    Just path -> readWithDigest decodeCatalog path
+  coverage <- maybe (pure Map.empty) (readDispositionFile Disposition.decodeCoverage) options.coverage
+  processEnvironment <- lift getEnvironment
+  settings <- ExceptT (resolveEvidenceDefaults (envSnapshot [(Text.pack name, Text.pack setting) | (name, setting) <- processEnvironment]) (ConfigInputs [] [] NoDiagnostic))
+  defaults <- except (first Settei.renderErrorsText settings.answer)
+  bundle <- lift (makeAbsolute (fromMaybe (Text.unpack defaults.bundleRoot) (options.bundle <|> config.evidenceBundle)))
+  let bundleUri = config.evidenceBundleUri <|> defaults.bundleUri
+      locator = fromMaybe (\_ _ -> pure Nothing) (fmap Run.directoryRunData options.runData <|> config.runDataLocator)
+      localRoots = if null options.runs then config.sealedRunRoots else options.runs
+  published <- ExceptT (Run.loadPublishedObservations locator bundle)
+  directories <- lift (concat <$> traverse runDirectories localRoots)
+  local <- traverse (ExceptT . Run.loadSealedObservation) directories
+  observations <- traverse (withReplay bundle bundleUri) (Run.mergeObservations published local)
+  capturedAt <- lift (Text.pack . iso8601Show <$> getCurrentTime)
+  pure Disposition.DispositionInput {capturedAt, owners, catalog, catalogDigest, packageMap, packageMapDigest, coverage, observations}
+  where
+    readWithDigest decoder path = readDispositionFile (\bytes -> (,sha256Hex bytes) <$> decoder bytes) path
+    runDirectories root = do
+      absolute <- makeAbsolute root
+      entries <- sort <$> listDirectory absolute
+      filterM doesDirectoryExist [absolute </> entry | entry <- entries]
+    withReplay bundle bundleUri (observation :: Run.Observation) = do
+      let qualified = case observation.source of
+            Run.PublishedRecord concept ->
+              let reference = maybe (Text.pack (bundle </> Text.unpack concept <> ".md")) (\uri -> uri <> "/concepts/" <> concept) bundleUri
+               in observation {Run.source = Run.PublishedRecord reference}
+            Run.SealedRun _ -> observation
+      replay <- ExceptT (config.replayObservation qualified)
+      pure qualified {Run.replay = replay}
+
+readDispositionFile :: (ByteString -> Either Text a) -> FilePath -> ExceptT Text IO a
+readDispositionFile decode path =
+  ExceptT (first (\message -> Text.pack path <> ": " <> message) . decode <$> ByteString.readFile path)
+
+-- Install a fully written file without replacing an existing path, even when
+-- two captures race to write the same output.
+writeFrozenInput :: FilePath -> ByteString -> IO ()
+writeFrozenInput path contents =
+  withTempFile (takeDirectory path) ".kenshou-disposition-input-" \temporary handle -> do
+    ByteString.hPut handle contents
+    hFlush handle
+    createLink temporary path
 
 data Observation = Observation
   { kinds :: [RecordKind],

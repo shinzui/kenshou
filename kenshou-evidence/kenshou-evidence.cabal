@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kenshou-evidence
-version: 0.1.2.0
+version: 0.2.0.0
 synopsis: Historic verification records and durable object storage
 description: Evidence types and storage boundaries for Kenshou run records.
 license: BSD-3-Clause
