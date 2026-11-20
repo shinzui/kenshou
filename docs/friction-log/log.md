@@ -2,6 +2,9 @@
 
 ## 2026-11-20
 
+* **Addition**: FRIC-5 records detour tooling friction with mori://shinzui/haskell-nix/okf/improvement-requests: Existing request blocks strict validation of the registry bundle
+
+
 * **Update**: FRIC-4 resolved: Verified all three tests and the evidence suite on the new fixture.
 
 * **Addition**: FRIC-4 records detour environment friction with mori://shinzui/kenshou: Evidence tests copy a bundle with missing run records

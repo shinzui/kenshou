@@ -8,5 +8,5 @@ okf_version: "0.2"
 
 # Guide
 
-- [Adopt the kenshou release in keiro-runtime-kenshou](adopt-in-keiro-runtime-kenshou.md) - Replace the Keiro verification suite's local copies of the harness with the published kenshou packages and prove that no verdict or comparison key changed.
+- [Adopt the kenshou release in keiro-runtime-kenshou](adopt-in-keiro-runtime-kenshou.md) - Switch the Keiro verification suite's eight Git-pinned harness packages to Hackage and verify that verdicts and comparison keys match the pre-adoption baseline.
 - [Adopt kenshou in a project](adopting-kenshou-in-a-project.md) - Add the kenshou packages to a cabal project, register a layer bundle, assemble the verification executable, and run a first scenario.

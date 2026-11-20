@@ -2,6 +2,8 @@
 
 ## 2026-11-20
 
+* **Update**: Reworked DOC-2 for the consumer's installed Git pin and the remaining Cabal, Nix and verification steps for Hackage adoption.
+
 * **Update**: Walk through a frozen verification round from capture through candidate evaluation and report.
 
 * **Update**: Added capture and replay of fix-verification dispositions to the adoption guide (DOC-1).
